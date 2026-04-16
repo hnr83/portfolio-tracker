@@ -9,7 +9,7 @@ async function getPortfolioSummary() {
       SUM(cost_value_ars) AS total_cost_ars,
       SUM(pnl_usd) AS total_pnl_usd,
       SUM(pnl_ars) AS total_pnl_ars,
-      SAFE_DIVIDE(SUM(pnl_usd), NULLIF(SUM(cost_value_usd), 0)) AS total_pnl_pct
+      SAFE_DIVIDE(SUM(pnl_usd), NULLIF(SUM(cost_value_usd), 0)) * 100 AS total_pnl_pct
     FROM \`project-a4c11095-2051-4d2c-b3c.portfolio.vw_portfolio_valued\`
   `);
 

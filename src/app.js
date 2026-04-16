@@ -4,6 +4,7 @@ const cors = require('cors');
 
 const portfolioRoutes = require('./routes/portfolioRoutes');
 const jobRoutes = require('./routes/jobRoutes');
+const transactionRoutes = require('./routes/transactionRoutes');
 
 const app = express();
 
@@ -26,6 +27,7 @@ app.get('/api/jobs/test2', (req, res) => {
 
 app.use('/api/portfolio', portfolioRoutes);
 app.use('/api/jobs', jobRoutes);
+app.use('/api/transactions', transactionRoutes);
 
 const PORT = process.env.PORT || 3000;
 
