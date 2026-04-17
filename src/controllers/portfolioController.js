@@ -157,6 +157,60 @@ async function getPositions(req, res) {
   }
 }
 
+async function getHistory(req, res) {
+  try {
+    const range = (req.query.range || "6M").toUpperCase();
+
+    let dateFilter = "";
+    switch (range) {
+      case "1M":
+        dateFilter = "snapshot_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH)";
+        break;
+      case "3M":
+        dateFilter = "snapshot_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH)";
+        break;
+      case "6M":
+        dateFilter = "snapshot_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 6 MONTH)";
+        break;
+      case "YTD":
+        dateFilter = "snapshot_date >= DATE_TRUNC(CURRENT_DATE(), YEAR)";
+        break;
+      case "1A":
+        dateFilter = "snapshot_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 1 YEAR)";
+        break;
+      case "MAX":
+      default:
+        dateFilter = "1=1";
+        break;
+    }
+
+    const query = `
+      SELECT
+        snapshot_date,
+        market_value_usd,
+        market_value_ars,
+        cost_value_usd,
+        cost_value_ars,
+        total_pnl_usd,
+        total_pnl_ars,
+        total_pnl_pct,
+        investments_usd,
+        liquidity_usd,
+        crypto_usd
+      FROM \`project-a4c11095-2051-4d2c-b3c.portfolio.portfolio_snapshots\`
+      WHERE ${dateFilter}
+      ORDER BY snapshot_date ASC
+    `;
+
+    const rows = await runQuery(query);
+
+    res.json(rows);
+  } catch (error) {
+    console.error("Error in getHistory:", error);
+    res.status(500).json({ error: "Error fetching history" });
+  }
+}
+
 async function getInvestments(req, res) {
   try {
     const query = `
@@ -304,4 +358,5 @@ module.exports = {
   getHoldings,
   getMovements,
   getMarket,
+  getHistory,
 };
