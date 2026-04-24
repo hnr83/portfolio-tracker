@@ -64,13 +64,75 @@ async function getSummary(req, res) {
   try {
     const query = `
       SELECT
-        SUM(market_value_usd) AS total_market_usd,
-        SUM(market_value_ars) AS total_market_ars,
-        SUM(cost_value_usd) AS total_cost_usd,
-        SUM(cost_value_ars) AS total_cost_ars,
-        SUM(pnl_usd) AS total_pnl_usd,
-        SUM(pnl_ars) AS total_pnl_ars,
-        SAFE_DIVIDE(SUM(pnl_usd), NULLIF(SUM(cost_value_usd), 0)) AS total_pnl_pct
+        -- Totales generales
+        SUM(CAST(market_value_usd AS FLOAT64)) AS total_market_usd,
+        SUM(CAST(market_value_ars AS FLOAT64)) AS total_market_ars,
+
+        SUM(CAST(cost_value_usd AS FLOAT64)) AS total_cost_usd,
+        SUM(CAST(cost_value_ars AS FLOAT64)) AS total_cost_ars,
+
+        -- Investments (PORTFOLIO)
+        SUM(
+          CASE
+            WHEN category = 'PORTFOLIO'
+            THEN CAST(market_value_usd AS FLOAT64)
+            ELSE 0
+          END
+        ) AS investments_market_usd,
+
+        SUM(
+          CASE
+            WHEN category = 'PORTFOLIO'
+            THEN CAST(market_value_ars AS FLOAT64)
+            ELSE 0
+          END
+        ) AS investments_market_ars,
+
+        SUM(
+          CASE
+            WHEN category = 'PORTFOLIO'
+            THEN CAST(cost_value_usd AS FLOAT64)
+            ELSE 0
+          END
+        ) AS investments_cost_usd,
+
+        -- PnL SOLO investments
+        SUM(
+          CASE
+            WHEN category = 'PORTFOLIO'
+            THEN CAST(pnl_usd AS FLOAT64)
+            ELSE 0
+          END
+        ) AS total_pnl_usd,
+
+        SUM(
+          CASE
+            WHEN category = 'PORTFOLIO'
+            THEN CAST(pnl_ars AS FLOAT64)
+            ELSE 0
+          END
+        ) AS total_pnl_ars,
+
+        SAFE_DIVIDE(
+          SUM(
+            CASE
+              WHEN category = 'PORTFOLIO'
+              THEN CAST(pnl_usd AS FLOAT64)
+              ELSE 0
+            END
+          ),
+          NULLIF(
+            SUM(
+              CASE
+                WHEN category = 'PORTFOLIO'
+                THEN CAST(cost_value_usd AS FLOAT64)
+                ELSE 0
+              END
+            ),
+            0
+          )
+        ) AS total_pnl_pct
+
       FROM \`project-a4c11095-2051-4d2c-b3c.portfolio.vw_portfolio_valued\`
     `;
 
@@ -87,6 +149,96 @@ async function getSummary(req, res) {
 async function getHoldings(req, res) {
   try {
     const query = `
+      WITH base AS (
+        SELECT
+          CASE
+            WHEN category IN ('CASH', 'FX') THEN normalized_ticker
+            ELSE ticker
+          END AS ticker,
+
+          CASE
+            WHEN category IN ('CASH', 'FX') THEN 'LIQUIDITY'
+            ELSE category
+          END AS category,
+
+          normalized_ticker,
+          CAST(quantity_net AS FLOAT64) AS quantity_net,
+          CAST(cost_net AS FLOAT64) AS cost_net,
+          CAST(market_price AS FLOAT64) AS market_price,
+          price_currency,
+          price_source,
+          underlying_ticker,
+          CAST(ratio_numerator AS FLOAT64) AS ratio_numerator,
+          CAST(ratio_denominator AS FLOAT64) AS ratio_denominator,
+          CAST(underlying_price_usd AS FLOAT64) AS underlying_price_usd,
+          CAST(usdars AS FLOAT64) AS usdars,
+          CAST(market_value_usd AS FLOAT64) AS market_value_usd,
+          CAST(market_value_ars AS FLOAT64) AS market_value_ars,
+          CAST(cost_value_usd AS FLOAT64) AS cost_value_usd,
+          CAST(cost_value_ars AS FLOAT64) AS cost_value_ars,
+          CAST(pnl_usd AS FLOAT64) AS pnl_usd,
+          CAST(pnl_ars AS FLOAT64) AS pnl_ars,
+          CAST(pnl_pct AS FLOAT64) AS pnl_pct
+        FROM \`project-a4c11095-2051-4d2c-b3c.portfolio.vw_portfolio_valued\`
+        WHERE market_value_usd IS NOT NULL
+      ),
+
+      grouped AS (
+        SELECT
+          ticker,
+          category,
+          normalized_ticker,
+
+          SUM(quantity_net) AS quantity_net,
+          SUM(cost_net) AS cost_net,
+
+          ANY_VALUE(market_price) AS market_price,
+          ANY_VALUE(price_currency) AS price_currency,
+          ANY_VALUE(price_source) AS price_source,
+
+          ANY_VALUE(underlying_ticker) AS underlying_ticker,
+          ANY_VALUE(ratio_numerator) AS ratio_numerator,
+          ANY_VALUE(ratio_denominator) AS ratio_denominator,
+          ANY_VALUE(underlying_price_usd) AS underlying_price_usd,
+          ANY_VALUE(usdars) AS usdars,
+
+          SUM(market_value_usd) AS market_value_usd,
+          SUM(market_value_ars) AS market_value_ars,
+          SUM(cost_value_usd) AS cost_value_usd,
+          SUM(cost_value_ars) AS cost_value_ars,
+          SUM(pnl_usd) AS pnl_usd,
+          SUM(pnl_ars) AS pnl_ars,
+
+          SAFE_DIVIDE(SUM(pnl_usd), NULLIF(SUM(cost_value_usd), 0)) AS pnl_pct,
+
+          CASE
+            WHEN category = 'PORTFOLIO'
+            THEN SAFE_DIVIDE(SUM(cost_value_usd), NULLIF(SUM(quantity_net), 0))
+            ELSE NULL
+          END AS avg_cost_price_usd,
+
+          CASE
+            WHEN category = 'PORTFOLIO'
+                 AND ANY_VALUE(underlying_ticker) IS NOT NULL
+                 AND ANY_VALUE(ratio_numerator) IS NOT NULL
+                 AND ANY_VALUE(ratio_denominator) IS NOT NULL
+                 AND ANY_VALUE(ratio_denominator) != 0
+            THEN SAFE_DIVIDE(SUM(cost_value_usd), NULLIF(SUM(quantity_net), 0))
+                 * SAFE_DIVIDE(ANY_VALUE(ratio_numerator), ANY_VALUE(ratio_denominator))
+            ELSE NULL
+          END AS avg_cost_underlying_usd,
+
+          CASE
+            WHEN category = 'LIQUIDITY'
+            THEN SAFE_DIVIDE(SUM(cost_value_ars), NULLIF(SUM(cost_value_usd), 0))
+            ELSE NULL
+          END AS fx_rate_avg,
+
+          NULL AS change_pct_1d
+        FROM base
+        GROUP BY ticker, category, normalized_ticker
+      )
+
       SELECT
         ticker,
         category,
@@ -105,11 +257,39 @@ async function getHoldings(req, res) {
         market_value_ars,
         cost_value_usd,
         cost_value_ars,
+        avg_cost_price_usd,
+        avg_cost_underlying_usd,
+        fx_rate_avg,
+
+        CASE
+          WHEN category = 'PORTFOLIO'
+               AND underlying_ticker IS NOT NULL
+               AND avg_cost_underlying_usd IS NOT NULL
+          THEN avg_cost_underlying_usd
+          WHEN category = 'PORTFOLIO'
+          THEN avg_cost_price_usd
+          WHEN category = 'LIQUIDITY'
+          THEN fx_rate_avg
+          ELSE NULL
+        END AS reference_value,
+
+        CASE
+          WHEN category = 'PORTFOLIO'
+               AND underlying_ticker IS NOT NULL
+               AND avg_cost_underlying_usd IS NOT NULL
+          THEN 'PPC Underlying'
+          WHEN category = 'PORTFOLIO'
+          THEN 'PPC USD'
+          WHEN category = 'LIQUIDITY'
+          THEN 'TC'
+          ELSE NULL
+        END AS reference_type,
+
         pnl_usd,
         pnl_ars,
-        pnl_pct
-      FROM \`project-a4c11095-2051-4d2c-b3c.portfolio.vw_portfolio_valued\`
-      WHERE market_value_usd IS NOT NULL
+        pnl_pct,
+        change_pct_1d
+      FROM grouped
       ORDER BY market_value_usd DESC
     `;
 
@@ -195,12 +375,14 @@ async function getHistory(req, res) {
         total_pnl_ars,
         total_pnl_pct,
         investments_usd,
+        investments_cost_usd,
+        investments_cost_ars,
         liquidity_usd,
         crypto_usd
       FROM \`project-a4c11095-2051-4d2c-b3c.portfolio.portfolio_snapshots\`
       WHERE ${dateFilter}
       ORDER BY snapshot_date ASC
-    `;
+          `;
 
     const rows = await runQuery(query);
 
@@ -266,14 +448,23 @@ async function getMovements(req, res) {
     }
 
     const parsedLimit = Number(limit);
-    const safeLimit =
-      Number.isFinite(parsedLimit) && parsedLimit > 0
-        ? Math.min(parsedLimit, 500)
-        : 200;
+
+    let safeLimit;
+    if (asset) {
+      safeLimit =
+        Number.isFinite(parsedLimit) && parsedLimit > 0
+          ? Math.min(parsedLimit, 5000)
+          : 5000;
+    } else {
+      safeLimit =
+        Number.isFinite(parsedLimit) && parsedLimit > 0
+          ? Math.min(parsedLimit, 500)
+          : 200;
+    }
 
     const whereSql = whereClauses.length
-      ? `WHERE ${whereClauses.join(' AND ')}`
-      : '';
+      ? `WHERE ${whereClauses.join(" AND ")}`
+      : "";
 
     const query = `
       SELECT
@@ -305,9 +496,9 @@ async function getMovements(req, res) {
     const rows = await runQuery(query, params);
     res.json(normalizeBigQueryRows(rows));
   } catch (error) {
-    console.error('Error in getMovements:', error.message);
+    console.error("Error in getMovements:", error.message);
     console.error(error);
-    res.status(500).json({ error: 'Error fetching movements' });
+    res.status(500).json({ error: "Error fetching movements" });
   }
 }
 
@@ -343,12 +534,156 @@ async function getMarket(req, res) {
 
     const rows = await runQuery(query);
     res.json(normalizeBigQueryRows(rows));
-    } catch (error) {
-      console.error('Error in getMarket:', error);
-      console.error('Error message:', error?.message);
-      console.error('Error stack:', error?.stack);
-      res.status(500).json({ error: 'Error fetching market data', details: error?.message });
+  } catch (error) {
+    console.error('Error in getMarket:', error);
+    console.error('Error message:', error?.message);
+    console.error('Error stack:', error?.stack);
+    res.status(500).json({ error: 'Error fetching market data', details: error?.message });
+  }
+}
+
+async function getPlatformAllocation(req, res) {
+  try {
+    const query = `
+SELECT
+  COALESCE(NULLIF(TRIM(broker), ''), 'Sin broker') AS broker,
+  SUM(
+    CASE
+      WHEN movement_type = 'BUY_ASSET'
+        THEN
+          CASE
+            WHEN settlement_currency = 'USD' THEN CAST(gross_amount AS FLOAT64)
+            WHEN settlement_currency = 'ARS' AND fx_rate IS NOT NULL THEN CAST(gross_amount AS FLOAT64) / fx_rate
+            ELSE 0
+          END
+      WHEN movement_type = 'SELL_ASSET'
+        THEN
+          CASE
+            WHEN settlement_currency = 'USD' THEN -CAST(gross_amount AS FLOAT64)
+            WHEN settlement_currency = 'ARS' AND fx_rate IS NOT NULL THEN -CAST(gross_amount AS FLOAT64) / fx_rate
+            ELSE 0
+          END
+      ELSE 0
+    END
+  ) AS invested_usd
+FROM \`project-a4c11095-2051-4d2c-b3c.portfolio.movements\`
+WHERE movement_type IN ('BUY_ASSET', 'SELL_ASSET')
+GROUP BY 1
+HAVING invested_usd > 0
+ORDER BY invested_usd DESC
+    `;
+
+    const rows = await runQuery(query);
+    res.json(normalizeBigQueryRows(rows));
+  } catch (error) {
+    console.error("Error in getPlatformAllocation:", error);
+    res.status(500).json({ error: "Error fetching platform allocation" });
+  }
+}
+
+async function getBenchmarkComparison(req, res) {
+  try {
+
+    const range = String(req.query.range || "6M").toUpperCase();
+
+    let dateFilter = "";
+    switch (range) {
+      case "1M":
+        dateFilter = "snapshot_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH)";
+        break;
+      case "3M":
+        dateFilter = "snapshot_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH)";
+        break;
+      case "6M":
+        dateFilter = "snapshot_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 6 MONTH)";
+        break;
+      case "YTD":
+        dateFilter = "snapshot_date >= DATE_TRUNC(CURRENT_DATE(), YEAR)";
+        break;
+      case "1A":
+        dateFilter = "snapshot_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 1 YEAR)";
+        break;
+      case "MAX":
+      default:
+        dateFilter = "1=1";
+        break;
     }
+
+    const requestedCode = String(req.query.code || "SPY").toUpperCase();
+
+    const allowedBenchmarks = ["SPY", "QQQ", "BTC"];
+    const benchmarkCode = allowedBenchmarks.includes(requestedCode)
+      ? requestedCode
+      : "SPY";
+
+    const query = `
+      WITH snapshots AS (
+        SELECT
+          snapshot_date,
+          investments_usd
+        FROM \`project-a4c11095-2051-4d2c-b3c.portfolio.portfolio_snapshots\`
+        WHERE investments_usd IS NOT NULL
+         AND ${dateFilter}
+      ),
+      benchmark AS (
+        SELECT
+          date AS snapshot_date,
+          benchmark_code,
+          close_price_usd
+        FROM \`project-a4c11095-2051-4d2c-b3c.portfolio.benchmark_prices\`
+        WHERE benchmark_code = '${benchmarkCode}'
+          AND close_price_usd IS NOT NULL
+      ),
+      joined AS (
+        SELECT
+          s.snapshot_date,
+          s.investments_usd,
+          b.benchmark_code,
+          b.close_price_usd
+        FROM snapshots s
+        INNER JOIN benchmark b
+          ON s.snapshot_date = b.snapshot_date
+      ),
+      base AS (
+        SELECT
+          *,
+          FIRST_VALUE(investments_usd) OVER (ORDER BY snapshot_date) AS base_investments_usd,
+          FIRST_VALUE(close_price_usd) OVER (ORDER BY snapshot_date) AS base_benchmark_price
+        FROM joined
+      )
+      SELECT
+        snapshot_date,
+        benchmark_code,
+        investments_usd,
+        close_price_usd,
+        SAFE_DIVIDE(investments_usd, base_investments_usd) * 100 AS investments_index,
+        SAFE_DIVIDE(close_price_usd, base_benchmark_price) * 100 AS benchmark_index,
+        (SAFE_DIVIDE(investments_usd, base_investments_usd) * 100)
+          - (SAFE_DIVIDE(close_price_usd, base_benchmark_price) * 100) AS relative_alpha_index
+      FROM base
+      ORDER BY snapshot_date
+    `;
+
+    const rows = await runQuery(query);
+
+    const normalizedRows = rows.map((row) => ({
+      snapshot_date: row.snapshot_date?.value || row.snapshot_date || null,
+      benchmark_code: row.benchmark_code,
+      investments_usd: Number(row.investments_usd || 0),
+      close_price_usd: Number(row.close_price_usd || 0),
+      investments_index: Number(row.investments_index || 0),
+      benchmark_index: Number(row.benchmark_index || 0),
+      relative_alpha_index: Number(row.relative_alpha_index || 0),
+    }));
+
+    res.json({
+      benchmark_code: benchmarkCode,
+      rows: normalizedRows,
+    });
+  } catch (error) {
+    console.error("Error fetching benchmark comparison:", error);
+    res.status(500).json({ error: "Error fetching benchmark comparison" });
+  }
 }
 
 module.exports = {
@@ -359,4 +694,6 @@ module.exports = {
   getMovements,
   getMarket,
   getHistory,
+  getPlatformAllocation,
+  getBenchmarkComparison,
 };

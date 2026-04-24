@@ -16,14 +16,30 @@ export default function TransactionsView({
     SortableHeader,
     FilterToolbar,
     SectionShell,
+    
 }) {
+    const selectedTicker =
+        selectedAssetMovements?.ticker || null;
+
+    const selectedNormalizedTicker =
+        selectedAssetMovements?.normalized_ticker || null;
+
+    const movementsToShow = selectedAssetMovements
+        ? filteredAndSortedMovements.filter((m) => {
+            return (
+                m.ticker === selectedTicker ||
+                m.normalized_ticker === selectedNormalizedTicker
+            );
+        })
+        : filteredAndSortedMovements;
+
     return (
         <SectionShell className="mt-8">
             <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                 <div>
                     <h2 className="text-2xl font-semibold text-white">
-                        {selectedAssetMovements
-                            ? `Transacciones - ${selectedAssetMovements}`
+                        {selectedTicker
+                            ? `Transacciones - ${selectedTicker}`
                             : "Transacciones"}
                     </h2>
                     <p className="mt-1 text-sm text-slate-400">
@@ -44,7 +60,7 @@ export default function TransactionsView({
                 )}
             </div>
 
-            <FilterToolbar right={`${filteredAndSortedMovements.length} resultados`}>
+            <FilterToolbar right={`${movementsToShow.length} resultados`}>
                 <input
                     type="text"
                     placeholder="Buscar ticker, tipo o broker..."
@@ -144,20 +160,26 @@ export default function TransactionsView({
                     </thead>
 
                     <tbody>
-                        {filteredAndSortedMovements.map((m, i) => (
+                        {movementsToShow.map((m, i) => (
                             <tr
                                 key={m.id || i}
-                                className={`border-t border-slate-800/80 transition-colors hover:bg-slate-800/20 ${selectedAssetMovements && m.ticker === selectedAssetMovements
+                                className={`border-t border-slate-800/80 transition-colors hover:bg-slate-800/20 ${selectedAssetMovements &&
+                                        (m.ticker === selectedTicker ||
+                                            m.normalized_ticker === selectedNormalizedTicker)
                                         ? "bg-indigo-500/8"
                                         : ""
                                     }`}
                             >
                                 <td className="px-4 py-4">
-                                    {m.fecha ? new Date(m.fecha).toLocaleDateString("es-AR") : "-"}
+                                    {m.fecha
+                                        ? new Date(m.fecha).toLocaleDateString("es-AR")
+                                        : "-"}
                                 </td>
                                 <td className="px-4 py-4">{m.movement_type}</td>
                                 <td className="px-4 py-4">{m.category}</td>
-                                <td className="px-4 py-4 font-semibold text-white">{m.ticker}</td>
+                                <td className="px-4 py-4 font-semibold text-white">
+                                    {m.ticker}
+                                </td>
                                 <td className="px-4 py-4">{m.instrument_type || "-"}</td>
                                 <td className="px-4 py-4 text-right tabular-nums">
                                     {m.quantity == null ? "-" : formatNumber(m.quantity, 4)}

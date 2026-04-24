@@ -1,5 +1,6 @@
 import React from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
+import AssetAvatar from "../shared/AssetAvatar";
 
 const CHART_COLORS = [
     "#5B7CFA",
@@ -57,6 +58,9 @@ export default function DashboardView({
     liquidityUsd,
     cryptoUsd,
     compositionTopCount,
+    compositionMetric,
+    setCompositionMetric,
+    chartTotalValue,
 }) {
     const activeItem = activeIndex != null ? compositionData[activeIndex] : null;
 
@@ -154,16 +158,30 @@ export default function DashboardView({
                                         Portfolio Composition
                                     </div>
                                     <div className="mt-1 text-sm text-slate-400">
-                                        Allocation by current market value
+                                        {compositionMetric === "platform"
+                                            ? "Distribución del capital invertido por broker"
+                                            : "Allocation by current market value"}
                                     </div>
                                 </div>
+
+                                <div className="flex items-center gap-3">
+                                    <select
+                                        value={compositionMetric}
+                                        onChange={(e) => setCompositionMetric(e.target.value)}
+                                        className="rounded-xl border border-slate-700/70 bg-slate-950/90 px-4 py-2.5 text-sm text-white outline-none transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                                    >
+                                        <option value="market_value_usd">Valor actual</option>
+                                        <option value="cost_value_usd">Costo</option>
+                                        <option value="platform">Plataforma</option>
+                                    </select>
+                                </div>                                
 
                                 <div className="text-right">
                                     <div className="text-xs uppercase tracking-[0.18em] text-slate-500">
                                         Valor Actual
                                     </div>
                                     <div className="mt-1 text-[clamp(1.4rem,1.8vw,2.1rem)] font-semibold leading-tight text-white tabular-nums">
-                                        {formatCurrency(investmentsUsd, "USD")}
+                                        {formatCurrency(chartTotalValue, "USD")}
                                     </div>
                                 </div>
                             </div>
@@ -223,8 +241,8 @@ export default function DashboardView({
 
                                 <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-3">
                                     {compositionData.map((item, index) => {
-                                        const pct = summaryTotalMarketUsd
-                                            ? (item.value / summaryTotalMarketUsd) * 100
+                                        const pct = chartTotalValue
+                                            ? (item.value / chartTotalValue) * 100
                                             : 0;
                                         const isOthers = item.name === "Otros";
 
@@ -258,7 +276,9 @@ export default function DashboardView({
                                                                 chartData.length - compositionTopCount,
                                                                 0
                                                             )} posiciones`
-                                                            : `${formatPortfolioPercent(pct)} del portfolio`}
+                                                            : compositionMetric === "platform"
+                                                                ? `${formatPortfolioPercent(pct)} del capital invertido`
+                                                                : `${formatPortfolioPercent(pct)} del portfolio`}
                                                     </div>
                                                 </div>
                                             </button>
@@ -300,8 +320,8 @@ export default function DashboardView({
 
                             <div className="mt-5 flex-1 space-y-3 overflow-y-auto pr-1">
                                 {chartData.map((item, index) => {
-                                    const pct = summaryTotalMarketUsd
-                                        ? (item.value / summaryTotalMarketUsd) * 100
+                                    const pct = chartTotalValue
+                                        ? (item.value / chartTotalValue) * 100
                                         : 0;
 
                                     return (
@@ -326,7 +346,9 @@ export default function DashboardView({
                                                         {item.name}
                                                     </div>
                                                     <div className="text-[12px] text-slate-500">
-                                                        {formatPortfolioPercent(pct)} del portfolio
+                                                        {compositionMetric === "platform"
+                                                            ? `${formatPortfolioPercent(pct)} del capital invertido`
+                                                            : `${formatPortfolioPercent(pct)} del portfolio`}
                                                     </div>
                                                 </div>
                                             </div>
@@ -466,8 +488,8 @@ export default function DashboardView({
 
                             <tbody>
                                 {filteredInvestments.map((inv, i) => {
-                                    const portfolioPct = summaryTotalMarketUsd
-                                        ? (inv.market_value_usd / summaryTotalMarketUsd) * 100
+                                    const portfolioPct = chartTotalValue
+                                        ? (inv.market_value_usd / chartTotalValue) * 100
                                         : null;
 
                                     return (
@@ -480,8 +502,12 @@ export default function DashboardView({
                                                     : ""
                                                 }`}
                                         >
-                                            <td className="px-4 py-4 font-semibold text-white">
-                                                {inv.ticker}
+                                            <td className="px-4 py-4">
+                                                <AssetAvatar
+                                                    ticker={inv.ticker}
+                                                    normalizedTicker={inv.normalized_ticker}
+                                                    size={28}
+                                                />
                                             </td>
                                             <td className="px-4 py-4 text-slate-300">
                                                 {inv.normalized_ticker}

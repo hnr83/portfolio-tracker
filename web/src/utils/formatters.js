@@ -26,3 +26,29 @@ export function formatNumber(value, decimals = 2) {
     maximumFractionDigits: decimals,
   }).format(Number(value));
 }
+
+export function formatMoney(value, currency = "USD") {
+  if (value === null || value === undefined || value === "") return "-";
+
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "-";
+
+  return new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(n);
+}
+
+export function formatNumberDisplay(value, decimals = 2) {
+  if (value === null || value === undefined || value === "") return "-";
+
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "-";
+
+  return new Intl.NumberFormat("es-AR", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(n);
+}

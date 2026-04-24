@@ -1,14 +1,18 @@
 const express = require('express');
 const router = express.Router();
-const { runUpdatePrices } = require('../controllers/jobController');
-const { updateFxRatesJob } = require('../jobs/updateFxRatesJob');
 
-router.post('/update-fx', async (req, res) => {
-  const result = await updateFxRatesJob();
-  res.json(result);
-});
+const {
+  runUpdatePrices,
+  snapshotPortfolio,
+  updateFx,
+  updateBenchmarkPrices,
+  backfillBenchmarkHistory,
+} = require('../controllers/jobController');
 
-
+router.post('/update-fx', updateFx);
 router.post('/update-prices', runUpdatePrices);
+router.post('/snapshot-portfolio', snapshotPortfolio);
+router.post('/update-benchmark-prices', updateBenchmarkPrices);
+router.post('/backfill-benchmark-history', backfillBenchmarkHistory);
 
 module.exports = router;

@@ -8,6 +8,8 @@ const {
   getMovements,
   getMarket,
   getHistory,
+  getPlatformAllocation,
+  getBenchmarkComparison,
 } = require('../controllers/portfolioController');
 
 router.get('/summary', getSummary);
@@ -17,5 +19,8 @@ router.get("/holdings", getHoldings);
 router.get("/movements", getMovements);
 router.get("/market", getMarket);
 router.get("/history", getHistory);
+router.get("/platform-allocation", getPlatformAllocation);
+router.get("/benchmark", getBenchmarkComparison);
+
 
 module.exports = router;

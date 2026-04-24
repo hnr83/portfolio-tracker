@@ -22,6 +22,7 @@ export default function Sidebar({
 
     const totalUsd = Number(summary?.total_market_usd || 0);
     const totalArs = Number(summary?.total_market_ars || 0);
+    const investmentsUsd = Number(summary?.investments_market_usd || 0);
 
     const pnlUsd = Number(summary?.total_pnl_usd || 0);
     const pnlPct = Number(summary?.total_pnl_pct || 0);
@@ -59,12 +60,26 @@ export default function Sidebar({
 
                 <div className="mt-5 h-px bg-white/8" />
 
+                {/* INVESTMENTS */}
                 <div className="mt-4 flex items-center justify-between">
-                    <span className="text-[12px] uppercase tracking-[0.2em] text-slate-500">
-                        PnL
+                    <span className="text-[10px] uppercase tracking-[0.2em] text-slate-500">
+                        Investments
                     </span>
 
-                    <div className="text-right leading-tight">
+                    <div className="text-right min-w-[110px]">
+                        <div className="text-slate-200 font-small tabular-nums">
+                            {formatCurrency(investmentsUsd, "USD")}
+                        </div>
+                    </div>
+                </div>
+
+                {/* PNL */}
+                <div className="mt-5 flex items-center justify-between">
+                    <span className="text-[10px] uppercase tracking-[0.2em] text-slate-500">
+                        PnL investments
+                    </span>
+
+                    <div className="text-right min-w-[110px] tabular-nums text-[12px]">
                         <div className={pnlPositive ? "text-emerald-400" : "text-red-400"}>
                             {pnlUsd >= 0 ? "+" : ""}
                             {formatCurrency(pnlUsd, "USD")}

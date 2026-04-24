@@ -1,4 +1,5 @@
 import React from "react";
+import AssetAvatar from "../shared/AssetAvatar";
 
 function MarketMoverCard({ title, row, positive = true, formatPercent, formatCurrency }) {
     const accentClass = positive
@@ -166,7 +167,11 @@ export default function MarketView({
                             >
                                 <td className="px-4 py-4">
                                     <div className="flex flex-col">
-                                        <span className="font-semibold text-white">{row.ticker}</span>
+                                        <AssetAvatar
+                                            ticker={row.ticker}
+                                            normalizedTicker={row.normalized_ticker}
+                                            size={28}
+                                        />
 
                                         {row.is_cedear && (
                                             <div className="mt-1 flex items-center gap-2">

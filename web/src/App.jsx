@@ -49,6 +49,7 @@ const buttonPrimaryClass =
   "rounded-2xl bg-gradient-to-r from-indigo-500 to-blue-500 px-5 py-3 font-medium text-white shadow-[0_10px_30px_rgba(93,124,250,0.32)] transition-all duration-200 hover:opacity-90";
 
 export default function App() {
+
   const [selectedAssetMovements, setSelectedAssetMovements] = useState(null);
   const [activeView, setActiveView] = useState("dashboard");
   const [movements, setMovements] = useState([]);
@@ -63,6 +64,9 @@ export default function App() {
   const [selectedTicker, setSelectedTicker] = useState(null);
   const [showKpis, setShowKpis] = useState(true);
   const [pinKpis, setPinKpis] = useState(false);
+
+  const [platformAllocation, setPlatformAllocation] = useState([]);
+  const [compositionMetric, setCompositionMetric] = useState("market_value_usd");
 
   const [investmentSearch, setInvestmentSearch] = useState("");
   const [investmentCategoryFilter, setInvestmentCategoryFilter] = useState("ALL");
@@ -87,64 +91,107 @@ export default function App() {
     direction: "desc",
   });
 
-async function loadMarket() {
-  try {
-    const res = await fetch("/api/portfolio/market");
 
-    if (!res.ok) {
-      throw new Error(`Market HTTP ${res.status}`);
+
+
+  async function loadBenchmark(code = "SPY") {
+    try {
+      setBenchmarkLoading(true);
+
+      const res = await fetch(`/api/portfolio/benchmark?code=${code}`);
+      const data = await res.json();
+
+      const normalized = (data.rows || []).map((row) => ({
+        date: row.snapshot_date?.value || row.snapshot_date,
+        investmentsIndex: Number(row.investments_index || 0),
+        benchmarkIndex: Number(row.benchmark_index || 0),
+        alpha: Number(row.relative_alpha_index || 0),
+        investmentsUsd: Number(row.investments_usd || 0),
+        benchmarkPrice: Number(row.close_price_usd || 0),
+        benchmarkCode: row.benchmark_code,
+      }));
+
+      setBenchmarkSeries(normalized);
+    } catch (err) {
+      console.error("Error loading benchmark:", err);
+      setBenchmarkSeries([]);
+    } finally {
+      setBenchmarkLoading(false);
     }
+  }  
 
-    const data = await res.json();
 
-    const normalized = data.map((row) => ({
-      ...row,
-      market_price:
-        row.market_price == null || row.market_price === ""
-          ? null
-          : Number(row.market_price),
-
-      prev_market_price:
-        row.prev_market_price == null || row.prev_market_price === ""
-          ? null
-          : Number(row.prev_market_price),
-
-      change_1d:
-        row.change_1d == null || row.change_1d === ""
-          ? null
-          : Number(row.change_1d),
-
-      change_pct_1d:
-        row.change_pct_1d == null || row.change_pct_1d === ""
-          ? null
-          : Number(row.change_pct_1d),
-
-      ratio_numerator:
-        row.ratio_numerator == null || row.ratio_numerator === ""
-          ? null
-          : Number(row.ratio_numerator),
-
-      ratio_denominator:
-        row.ratio_denominator == null || row.ratio_denominator === ""
-          ? null
-          : Number(row.ratio_denominator),
-
-      underlying_price_usd:
-        row.underlying_price_usd == null || row.underlying_price_usd === ""
-          ? null
-          : Number(row.underlying_price_usd),
-
-      usdars:
-        row.usdars == null || row.usdars === ""
-          ? null
-          : Number(row.usdars),
-    }));
-
-    setMarketData(normalized);
-  } catch (err) {
-    console.error("Error loading market:", err);
+  async function loadPlatformAllocation() {
+    try {
+      const res = await fetch("/api/portfolio/platform-allocation");
+      if (!res.ok) {
+        throw new Error(`Platform allocation HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      setPlatformAllocation(data);
+    } catch (err) {
+      console.error("Error loading platform allocation:", err);
+    }
   }
-}
+
+  async function loadMarket() {
+    try {
+      const res = await fetch("/api/portfolio/market");
+
+      if (!res.ok) {
+        throw new Error(`Market HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+
+      const normalized = data.map((row) => ({
+        ...row,
+        market_price:
+          row.market_price == null || row.market_price === ""
+            ? null
+            : Number(row.market_price),
+
+        prev_market_price:
+          row.prev_market_price == null || row.prev_market_price === ""
+            ? null
+            : Number(row.prev_market_price),
+
+        change_1d:
+          row.change_1d == null || row.change_1d === ""
+            ? null
+            : Number(row.change_1d),
+
+        change_pct_1d:
+          row.change_pct_1d == null || row.change_pct_1d === ""
+            ? null
+            : Number(row.change_pct_1d),
+
+        ratio_numerator:
+          row.ratio_numerator == null || row.ratio_numerator === ""
+            ? null
+            : Number(row.ratio_numerator),
+
+        ratio_denominator:
+          row.ratio_denominator == null || row.ratio_denominator === ""
+            ? null
+            : Number(row.ratio_denominator),
+
+        underlying_price_usd:
+          row.underlying_price_usd == null || row.underlying_price_usd === ""
+            ? null
+            : Number(row.underlying_price_usd),
+
+        usdars:
+          row.usdars == null || row.usdars === ""
+            ? null
+            : Number(row.usdars),
+      }));
+
+      setMarketData(normalized);
+    } catch (err) {
+      console.error("Error loading market:", err);
+    }
+  }
 
   async function loadMovements(asset = null) {
     try {
@@ -165,10 +212,19 @@ async function loadMarket() {
     }
   }
 
-  async function openAssetTransactions(ticker) {
-    setSelectedAssetMovements(ticker);
+  async function openAssetTransactions(holdingOrTicker) {
+    const holding =
+      typeof holdingOrTicker === "string"
+        ? { ticker: holdingOrTicker, normalized_ticker: null }
+        : holdingOrTicker;
+
+    setSelectedAssetMovements({
+      ticker: holding.ticker,
+      normalized_ticker: holding.normalized_ticker || null,
+    });
+
     setActiveView("transactions");
-    await loadMovements(ticker);
+    await loadMovements(holding.ticker);
   }
 
   async function loadHoldings() {
@@ -189,7 +245,6 @@ async function loadMarket() {
       setIsRefreshing(true);
       setRefreshError("");
 
-  
       const fxRes = await fetch("/api/jobs/update-fx", {
         method: "POST",
       });
@@ -206,6 +261,24 @@ async function loadMarket() {
         throw new Error(`update-prices HTTP ${pricesRes.status}`);
       }
 
+    const benchmarkPricesRes = await fetch("/api/jobs/update-benchmark-prices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ codes: ["SPY"] }),
+      }); 
+      
+      if (!benchmarkPricesRes.ok) {
+        throw new Error(`update-benchmark-prices HTTP ${benchmarkPricesRes.status}`);
+      }
+
+      const snapshotRes = await fetch("/api/jobs/snapshot-portfolio", {
+        method: "POST",
+      });
+
+      if (!snapshotRes.ok) {
+        throw new Error(`snapshot-portfolio HTTP ${snapshotRes.status}`);
+      }
+
       await loadData();
 
       if (activeView === "holdings") {
@@ -218,7 +291,7 @@ async function loadMarket() {
 
       if (activeView === "market") {
         await loadMarket();
-      }  
+      }
 
     } catch (err) {
       console.error("Error refreshing market data:", err);
@@ -230,11 +303,16 @@ async function loadMarket() {
 
   async function loadData() {
     try {
-      const [summaryRes, investmentsRes, positionsRes] = await Promise.all([
+      const [summaryRes, investmentsRes, positionsRes, platformAllocationRes] = await Promise.all([
         fetch("/api/portfolio/summary"),
         fetch("/api/portfolio/investments"),
         fetch("/api/portfolio/positions"),
+        fetch("/api/portfolio/platform-allocation"),
       ]);
+
+      if (!platformAllocationRes.ok) {
+        throw new Error(`Platform allocation HTTP ${platformAllocationRes.status}`);
+      }
 
       if (!summaryRes.ok) {
         throw new Error(`Summary HTTP ${summaryRes.status}`);
@@ -246,15 +324,17 @@ async function loadMarket() {
         throw new Error(`Positions HTTP ${positionsRes.status}`);
       }
 
-      const [summaryData, investmentsData, positionsData] = await Promise.all([
+      const [summaryData, investmentsData, positionsData, platformAllocationData] = await Promise.all([
         summaryRes.json(),
         investmentsRes.json(),
         positionsRes.json(),
+        platformAllocationRes.json(),
       ]);
 
       setSummary(summaryData);
       setInvestments(investmentsData);
       setPositions(positionsData);
+      setPlatformAllocation(platformAllocationData);
     } catch (err) {
       console.error("Error fetching data:", err);
     }
@@ -295,29 +375,31 @@ async function loadMarket() {
     }
   }, [pinKpis, showKpis]);
 
-const filteredAndSortedMarket = useMemo(() => {
-  return sortRows(
-    marketData.filter((row) => {
-      if (row.market_price == null) return false;
 
-      const search = marketSearch.toLowerCase();
 
-      const matchesSearch =
-        !search ||
-        String(row.ticker || "").toLowerCase().includes(search) ||
-        String(row.underlying_ticker || "").toLowerCase().includes(search) ||
-        String(row.ratio_text || "").toLowerCase().includes(search);
+  const filteredAndSortedMarket = useMemo(() => {
+    return sortRows(
+      marketData.filter((row) => {
+        if (row.market_price == null) return false;
 
-      const matchesType =
-        marketTypeFilter === "ALL" ||
-        (marketTypeFilter === "CEDEAR" && row.is_cedear) ||
-        (marketTypeFilter === "NORMAL" && !row.is_cedear);
+        const search = marketSearch.toLowerCase();
 
-      return matchesSearch && matchesType;
-    }),
-    marketSort
-  );
-}, [marketData, marketSearch, marketTypeFilter, marketSort]);
+        const matchesSearch =
+          !search ||
+          String(row.ticker || "").toLowerCase().includes(search) ||
+          String(row.underlying_ticker || "").toLowerCase().includes(search) ||
+          String(row.ratio_text || "").toLowerCase().includes(search);
+
+        const matchesType =
+          marketTypeFilter === "ALL" ||
+          (marketTypeFilter === "CEDEAR" && row.is_cedear) ||
+          (marketTypeFilter === "NORMAL" && !row.is_cedear);
+
+        return matchesSearch && matchesType;
+      }),
+      marketSort
+    );
+  }, [marketData, marketSearch, marketTypeFilter, marketSort]);
 
 
   const marketTopStats = useMemo(() => {
@@ -412,13 +494,35 @@ const filteredAndSortedMarket = useMemo(() => {
 
   const totalPortfolioUsd = liquidityUsd + cryptoUsd + investmentsUsd;
 
-  const chartData = filteredAndSortedInvestments
-    .filter((inv) => (inv.market_value_usd || 0) > 0)
-    .map((inv) => ({
-      name: inv.normalized_ticker || inv.ticker,
-      value: inv.market_value_usd || 0,
-    }));
+  const metricConfig = {
+    market_value_usd: {
+      label: "Valor actual",
+      type: "asset",
+    },
+    cost_value_usd: {
+      label: "Costo",
+      type: "asset",
+    },
+    platform: {
+      label: "Plataforma",
+      type: "platform",
+    },
+  };
 
+  const chartData =
+    compositionMetric === "platform"
+      ? platformAllocation
+        .filter((row) => Number(row.invested_usd || 0) > 0)
+        .map((row) => ({
+          name: row.broker,
+          value: Number(row.invested_usd || 0),
+        }))
+      : filteredAndSortedInvestments
+        .filter((inv) => Number(inv[compositionMetric] || 0) > 0)
+        .map((inv) => ({
+          name: inv.normalized_ticker || inv.ticker,
+          value: Number(inv[compositionMetric] || 0),
+        }));
 
   const filteredInvestments = filteredAndSortedInvestments;
 
@@ -439,6 +543,8 @@ const filteredAndSortedMarket = useMemo(() => {
     : compositionBase;
 
   const activeItem = activeIndex != null ? compositionData[activeIndex] : null;
+
+  const chartTotalValue = chartData.reduce((acc, item) => acc + Number(item.value || 0), 0);  
 
   function handleToggleKpis() {
     if (pinKpis) return;
@@ -509,6 +615,9 @@ const filteredAndSortedMarket = useMemo(() => {
               liquidityUsd={liquidityUsd}
               cryptoUsd={cryptoUsd}
               compositionTopCount={compositionTopCount}
+              compositionMetric={compositionMetric}
+              setCompositionMetric={setCompositionMetric}
+              chartTotalValue={chartTotalValue}                            
             />
           )}
 
@@ -528,7 +637,7 @@ const filteredAndSortedMarket = useMemo(() => {
               formatCurrency={formatCurrency}
               SortableHeader={SortableHeader}
               FilterToolbar={FilterToolbar}
-              SectionShell={SectionShell}
+              SectionShell={SectionShell}           
             />
           )}
 
@@ -538,6 +647,14 @@ const filteredAndSortedMarket = useMemo(() => {
               formatNumber={formatNumber}
               formatCurrency={formatCurrency}
               SectionShell={SectionShell}
+              onSelectHolding={async (holding) => {
+                setSelectedAssetMovements({
+                  ticker: holding.ticker,
+                  normalized_ticker: holding.normalized_ticker,
+                });
+                setActiveView("transactions");
+                await loadMovements(holding.ticker);
+              }}
             />
           )}
 
