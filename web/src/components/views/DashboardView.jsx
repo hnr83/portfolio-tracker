@@ -119,8 +119,8 @@ export default function DashboardView({
                     <div className="grid grid-cols-1 gap-4 pb-1 md:grid-cols-2 xl:grid-cols-4">
                         <SummaryCard
                             title="Total Portfolio USD"
-                            value={formatCurrency(totalPortfolioUsd, "USD")}
-                            subtitle={formatCurrency(summary.total_market_ars, "ARS")}
+                            value={formatCurrency(summary.total_with_trading_usd, "USD")}
+                            subtitle={formatCurrency(summary.total_with_trading_ars, "ARS")}
                             icon="◫"
                         />
                         <SummaryCard

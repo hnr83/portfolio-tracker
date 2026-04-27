@@ -5,6 +5,7 @@ import MarketView from "./components/views/MarketView";
 import TransactionsView from "./components/views/TransactionsView";
 import HoldingsView from "./components/views/HoldingsView";
 import DashboardView from "./components/views/DashboardView";
+import TradingView from "./components/views/TradingView";
 import SortableHeader from "./components/shared/SortableHeader";
 import SectionShell from "./components/layout/SectionShell";
 import FilterToolbar from "./components/layout/FilterToolbar";
@@ -621,6 +622,24 @@ export default function App() {
             />
           )}
 
+          
+          {activeView === "holdings" && (
+            <HoldingsView
+              holdings={holdings}
+              formatNumber={formatNumber}
+              formatCurrency={formatCurrency}
+              SectionShell={SectionShell}
+              onSelectHolding={async (holding) => {
+                setSelectedAssetMovements({
+                  ticker: holding.ticker,
+                  normalized_ticker: holding.normalized_ticker,
+                });
+                setActiveView("transactions");
+                await loadMovements(holding.ticker);
+              }}
+            />
+          )}
+
           {activeView === "transactions" && (
             <TransactionsView
               selectedAssetMovements={selectedAssetMovements}
@@ -639,24 +658,7 @@ export default function App() {
               FilterToolbar={FilterToolbar}
               SectionShell={SectionShell}           
             />
-          )}
-
-          {activeView === "holdings" && (
-            <HoldingsView
-              holdings={holdings}
-              formatNumber={formatNumber}
-              formatCurrency={formatCurrency}
-              SectionShell={SectionShell}
-              onSelectHolding={async (holding) => {
-                setSelectedAssetMovements({
-                  ticker: holding.ticker,
-                  normalized_ticker: holding.normalized_ticker,
-                });
-                setActiveView("transactions");
-                await loadMovements(holding.ticker);
-              }}
-            />
-          )}
+          )}          
 
           {activeView === "market" && (
             <MarketView
@@ -677,6 +679,7 @@ export default function App() {
           )}
 
           {activeView === "history" && <HistoryView />}
+          {activeView === "trading" && <TradingView />}
         </div>
       </main>
 

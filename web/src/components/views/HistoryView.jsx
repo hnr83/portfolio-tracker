@@ -123,10 +123,13 @@ function CustomTooltip({ active, payload, label, metric }) {
                         {metric === "TOTAL" ? "Valor total" : "PnL"}
                     </div>
 
-                    <div className="text-lg font-semibold text-white">
-                        {metric === "TOTAL"
-                            ? formatCurrency(row.market_value_usd, "USD")
-                            : formatCurrency(row.total_pnl_usd, "USD")}
+                        <div className="text-lg font-semibold text-white">
+                            {metric === "TOTAL"
+                                ? formatCurrency(
+                                    row.total_with_trading_usd ?? row.market_value_usd,
+                                    "USD"
+                                )
+                                : formatCurrency(row.total_pnl_usd, "USD")}
                     </div>
 
                     {metric === "PNL" && (

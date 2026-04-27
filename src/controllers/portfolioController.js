@@ -62,79 +62,66 @@ function normalizeBigQueryRows(rows = []) {
 
 async function getSummary(req, res) {
   try {
-    const query = `
-      SELECT
-        -- Totales generales
-        SUM(CAST(market_value_usd AS FLOAT64)) AS total_market_usd,
-        SUM(CAST(market_value_ars AS FLOAT64)) AS total_market_ars,
 
-        SUM(CAST(cost_value_usd AS FLOAT64)) AS total_cost_usd,
-        SUM(CAST(cost_value_ars AS FLOAT64)) AS total_cost_ars,
+const query = `
+  WITH portfolio AS (
+    SELECT
+      SUM(CAST(market_value_usd AS FLOAT64)) AS total_market_usd,
+      SUM(CAST(market_value_ars AS FLOAT64)) AS total_market_ars,
 
-        -- Investments (PORTFOLIO)
-        SUM(
-          CASE
-            WHEN category = 'PORTFOLIO'
-            THEN CAST(market_value_usd AS FLOAT64)
-            ELSE 0
-          END
-        ) AS investments_market_usd,
+      SUM(CAST(cost_value_usd AS FLOAT64)) AS total_cost_usd,
+      SUM(CAST(cost_value_ars AS FLOAT64)) AS total_cost_ars,
 
-        SUM(
-          CASE
-            WHEN category = 'PORTFOLIO'
-            THEN CAST(market_value_ars AS FLOAT64)
-            ELSE 0
-          END
-        ) AS investments_market_ars,
+      SUM(CASE WHEN category = 'PORTFOLIO' THEN CAST(market_value_usd AS FLOAT64) ELSE 0 END)
+        AS investments_market_usd,
 
-        SUM(
-          CASE
-            WHEN category = 'PORTFOLIO'
-            THEN CAST(cost_value_usd AS FLOAT64)
-            ELSE 0
-          END
-        ) AS investments_cost_usd,
+      SUM(CASE WHEN category = 'PORTFOLIO' THEN CAST(market_value_ars AS FLOAT64) ELSE 0 END)
+        AS investments_market_ars,
 
-        -- PnL SOLO investments
-        SUM(
-          CASE
-            WHEN category = 'PORTFOLIO'
-            THEN CAST(pnl_usd AS FLOAT64)
-            ELSE 0
-          END
-        ) AS total_pnl_usd,
+      SUM(CASE WHEN category = 'PORTFOLIO' THEN CAST(cost_value_usd AS FLOAT64) ELSE 0 END)
+        AS investments_cost_usd,
 
-        SUM(
-          CASE
-            WHEN category = 'PORTFOLIO'
-            THEN CAST(pnl_ars AS FLOAT64)
-            ELSE 0
-          END
-        ) AS total_pnl_ars,
+      SUM(CASE WHEN category = 'PORTFOLIO' THEN CAST(pnl_usd AS FLOAT64) ELSE 0 END)
+        AS total_pnl_usd,
 
-        SAFE_DIVIDE(
-          SUM(
-            CASE
-              WHEN category = 'PORTFOLIO'
-              THEN CAST(pnl_usd AS FLOAT64)
-              ELSE 0
-            END
-          ),
-          NULLIF(
-            SUM(
-              CASE
-                WHEN category = 'PORTFOLIO'
-                THEN CAST(cost_value_usd AS FLOAT64)
-                ELSE 0
-              END
-            ),
-            0
-          )
-        ) AS total_pnl_pct
+      SUM(CASE WHEN category = 'PORTFOLIO' THEN CAST(pnl_ars AS FLOAT64) ELSE 0 END)
+        AS total_pnl_ars,
 
-      FROM \`project-a4c11095-2051-4d2c-b3c.portfolio.vw_portfolio_valued\`
-    `;
+      SAFE_DIVIDE(
+        SUM(CASE WHEN category = 'PORTFOLIO' THEN CAST(pnl_usd AS FLOAT64) ELSE 0 END),
+        NULLIF(SUM(CASE WHEN category = 'PORTFOLIO' THEN CAST(cost_value_usd AS FLOAT64) ELSE 0 END), 0)
+      ) AS total_pnl_pct,
+
+      -- FX actual
+      ANY_VALUE(CAST(usdars AS FLOAT64)) AS usdars
+
+    FROM \`project-a4c11095-2051-4d2c-b3c.portfolio.vw_portfolio_valued\`
+  ),
+
+  trading AS (
+    SELECT
+      CAST(retained_result_usd AS FLOAT64) AS trading_retained_result_usd
+    FROM \`project-a4c11095-2051-4d2c-b3c.portfolio.vw_trading_summary\`
+  )
+
+  SELECT
+    p.*,
+
+    COALESCE(t.trading_retained_result_usd, 0) AS trading_retained_result_usd,
+
+    -- Total consolidado USD
+    COALESCE(p.total_market_usd, 0)
+      + COALESCE(t.trading_retained_result_usd, 0)
+      AS total_with_trading_usd,
+
+    -- Total consolidado ARS
+    COALESCE(p.total_market_ars, 0)
+      + COALESCE(t.trading_retained_result_usd, 0) * COALESCE(p.usdars, 0)
+      AS total_with_trading_ars
+
+  FROM portfolio p
+  CROSS JOIN trading t
+`;
 
     const rows = await runQuery(query);
     const normalizedRows = normalizeBigQueryRows(rows);
@@ -367,7 +354,7 @@ async function getHistory(req, res) {
     const query = `
       SELECT
         snapshot_date,
-        market_value_usd,
+        COALESCE(total_with_trading_usd, market_value_usd) AS market_value_usd,
         market_value_ars,
         cost_value_usd,
         cost_value_ars,
@@ -685,6 +672,8 @@ async function getBenchmarkComparison(req, res) {
     res.status(500).json({ error: "Error fetching benchmark comparison" });
   }
 }
+
+
 
 module.exports = {
   getSummary,

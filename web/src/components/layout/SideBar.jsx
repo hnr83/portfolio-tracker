@@ -20,8 +20,8 @@ export default function Sidebar({
         `h-2 w-2 rounded-full transition-all ${activeView === view ? "bg-indigo-400" : "bg-slate-700 group-hover:bg-slate-500"
         }`;
 
-    const totalUsd = Number(summary?.total_market_usd || 0);
-    const totalArs = Number(summary?.total_market_ars || 0);
+    const totalUsd = Number(summary?.total_with_trading_usd || 0);
+    const totalArs = Number(summary?.total_with_trading_ars || 0);
     const investmentsUsd = Number(summary?.investments_market_usd || 0);
 
     const pnlUsd = Number(summary?.total_pnl_usd || 0);
@@ -106,20 +106,6 @@ export default function Sidebar({
 
                 <div
                     onClick={async () => {
-                        setSelectedAssetMovements(null);
-                        setActiveView("transactions");
-                        await loadMovements();
-                    }}
-                    className={navClass("transactions")}
-                >
-                    <div className="flex items-center gap-3">
-                        <span className={dotClass("transactions")} />
-                        <span>Transacciones</span>
-                    </div>
-                </div>
-
-                <div
-                    onClick={async () => {
                         setActiveView("holdings");
                         await loadHoldings();
                     }}
@@ -153,19 +139,33 @@ export default function Sidebar({
                         <span>Histórico</span>
                     </div>
                 </div>
-            </nav>
 
-            <div className="mt-auto rounded-[22px] border border-slate-800/80 bg-[linear-gradient(180deg,rgba(10,15,34,0.98)_0%,rgba(5,8,24,0.98)_100%)] p-4 shadow-[0_12px_36px_rgba(0,0,0,0.18)]">
-                <div className="flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
-                    <div className="text-sm font-medium uppercase tracking-[0.16em] text-slate-300">
-                        Estado
+                <div
+                    onClick={async () => {
+                        setSelectedAssetMovements(null);
+                        setActiveView("transactions");
+                        await loadMovements();
+                    }}
+                    className={navClass("transactions")}
+                >
+                    <div className="flex items-center gap-3">
+                        <span className={dotClass("transactions")} />
+                        <span>Transacciones</span>
                     </div>
                 </div>
-                <div className="mt-3 text-sm leading-6 text-slate-400">
-                    Base lista para seguir creciendo con transacciones e histórico.
+
+                <button
+                onClick={() => setActiveView("trading")}
+                className={navClass("trading")}
+                >
+                <div className="flex items-center gap-3">
+                    <span className={dotClass("trading")} />
+                    <span>Trading</span>
                 </div>
-            </div>
+                </button> 
+
+            </nav>
+
         </aside>
     );
 }
