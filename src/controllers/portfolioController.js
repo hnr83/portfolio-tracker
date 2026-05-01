@@ -1,4 +1,5 @@
 const { runQuery } = require('../services/bigQueryService');
+const { table } = require('../utils/bigqueryHelper');
 
 function isBigQueryNumericObject(value) {
   return (
@@ -95,13 +96,13 @@ const query = `
       -- FX actual
       ANY_VALUE(CAST(usdars AS FLOAT64)) AS usdars
 
-    FROM \`project-a4c11095-2051-4d2c-b3c.portfolio.vw_portfolio_valued\`
+    FROM ${table('vw_portfolio_valued')}
   ),
 
   trading AS (
     SELECT
       CAST(retained_result_usd AS FLOAT64) AS trading_retained_result_usd
-    FROM \`project-a4c11095-2051-4d2c-b3c.portfolio.vw_trading_summary\`
+    FROM ${table('vw_trading_summary')}
   )
 
   SELECT
@@ -166,7 +167,7 @@ async function getHoldings(req, res) {
           CAST(pnl_usd AS FLOAT64) AS pnl_usd,
           CAST(pnl_ars AS FLOAT64) AS pnl_ars,
           CAST(pnl_pct AS FLOAT64) AS pnl_pct
-        FROM \`project-a4c11095-2051-4d2c-b3c.portfolio.vw_portfolio_valued\`
+        FROM ${table('vw_portfolio_valued')}
         WHERE market_value_usd IS NOT NULL
       ),
 
@@ -312,7 +313,7 @@ async function getPositions(req, res) {
         pnl_usd,
         pnl_ars,
         pnl_pct
-      FROM \`project-a4c11095-2051-4d2c-b3c.portfolio.vw_portfolio_valued\`
+      FROM ${table('vw_portfolio_valued')}
       ORDER BY market_value_usd DESC
     `;
 
@@ -366,7 +367,7 @@ async function getHistory(req, res) {
         investments_cost_ars,
         liquidity_usd,
         crypto_usd
-      FROM \`project-a4c11095-2051-4d2c-b3c.portfolio.portfolio_snapshots\`
+      FROM ${table('portfolio_snapshots')}
       WHERE ${dateFilter}
       ORDER BY snapshot_date ASC
           `;
@@ -404,7 +405,7 @@ async function getInvestments(req, res) {
         pnl_usd,
         pnl_ars,
         pnl_pct
-      FROM \`project-a4c11095-2051-4d2c-b3c.portfolio.vw_portfolio_valued\`
+      FROM ${table('vw_portfolio_valued')}
       WHERE category NOT IN ('CASH', 'FX', 'CRYPTO')
       ORDER BY market_value_usd DESC
     `;
@@ -474,7 +475,7 @@ async function getMovements(req, res) {
         broker,
         description,
         raw_payload
-      FROM \`project-a4c11095-2051-4d2c-b3c.portfolio.movements\`
+      FROM ${table('movements')}
       ${whereSql}
       ORDER BY fecha DESC
       LIMIT ${safeLimit}
@@ -501,7 +502,7 @@ async function getMarket(req, res) {
               THEN REGEXP_REPLACE(REGEXP_REPLACE(ticker, r'^CURRENCY:', ''), r'ARS$', '')
             ELSE ticker
           END AS market_key
-        FROM \`project-a4c11095-2051-4d2c-b3c.portfolio.vw_portfolio_valued\`
+        FROM ${table('vw_portfolio_valued')}
         WHERE quantity_net > 0
           AND market_value_usd IS NOT NULL
       ),
@@ -509,7 +510,7 @@ async function getMarket(req, res) {
         SELECT
           *,
           ticker AS market_key
-        FROM \`project-a4c11095-2051-4d2c-b3c.portfolio.vw_market_watch\`
+        FROM ${table('vw_market_watch')}
       )
       SELECT mw.*
       FROM market_watch mw
@@ -553,7 +554,7 @@ SELECT
       ELSE 0
     END
   ) AS invested_usd
-FROM \`project-a4c11095-2051-4d2c-b3c.portfolio.movements\`
+FROM ${table('movements')}
 WHERE movement_type IN ('BUY_ASSET', 'SELL_ASSET')
 GROUP BY 1
 HAVING invested_usd > 0
@@ -608,7 +609,7 @@ async function getBenchmarkComparison(req, res) {
         SELECT
           snapshot_date,
           investments_usd
-        FROM \`project-a4c11095-2051-4d2c-b3c.portfolio.portfolio_snapshots\`
+        FROM ${table('portfolio_snapshots')}
         WHERE investments_usd IS NOT NULL
          AND ${dateFilter}
       ),
@@ -617,8 +618,8 @@ async function getBenchmarkComparison(req, res) {
           date AS snapshot_date,
           benchmark_code,
           close_price_usd
-        FROM \`project-a4c11095-2051-4d2c-b3c.portfolio.benchmark_prices\`
-        WHERE benchmark_code = '${benchmarkCode}'
+        FROM ${table('benchmark_prices')}
+        WHERE benchmark_code = @benchmarkCode
           AND close_price_usd IS NOT NULL
       ),
       joined AS (
@@ -651,7 +652,7 @@ async function getBenchmarkComparison(req, res) {
       ORDER BY snapshot_date
     `;
 
-    const rows = await runQuery(query);
+    const rows = await runQuery(query, { benchmarkCode });
 
     const normalizedRows = rows.map((row) => ({
       snapshot_date: row.snapshot_date?.value || row.snapshot_date || null,

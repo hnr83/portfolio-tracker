@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "db:export": "node db/scripts/exportBigQueryDb.js",
+    "db:setup": "node db/scripts/setupBigQueryDb.js"    
   },
   "dependencies": {
     "react": "^19.2.4",

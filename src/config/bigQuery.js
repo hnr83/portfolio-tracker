@@ -1,7 +1,13 @@
 const { BigQuery } = require('@google-cloud/bigquery');
 
+const projectId = process.env.BIGQUERY_PROJECT_ID;
+
+if (!projectId) {
+  throw new Error("Falta BIGQUERY_PROJECT_ID en .env");
+}
+
 const bigquery = new BigQuery({
-  projectId: 'project-a4c11095-2051-4d2c-b3c',
+  projectId,
 });
 
 module.exports = bigquery;

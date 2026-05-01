@@ -1,5 +1,7 @@
 const { get } = require('../routes/portfolioRoutes');
 const { runQuery } = require('../services/bigQueryService');
+const { table } = require('../utils/bigqueryHelper');
+
 const {
   getBingxSwapPositions,
   getBingxSwapAllOrders,
@@ -143,7 +145,7 @@ async function getTrading(req, res) {
   try {
     const query = `
       SELECT *
-      FROM \`project-a4c11095-2051-4d2c-b3c.portfolio.vw_trading_trades_valued\`
+      FROM ${table('vw_trading_trades_valued')}
       ORDER BY closed_at DESC
     `;
 
@@ -159,7 +161,7 @@ async function getTradingSummary(req, res) {
   try {
     const query = `
       SELECT *
-      FROM \`project-a4c11095-2051-4d2c-b3c.portfolio.vw_trading_summary\`
+      FROM ${table('vw_trading_summary')}
     `;
 
     const rows = await runQuery(query);
@@ -176,7 +178,7 @@ async function getTradingByAsset(req, res) {
   try {
     const query = `
       SELECT *
-      FROM \`project-a4c11095-2051-4d2c-b3c.portfolio.vw_trading_by_asset\`
+      FROM ${table('vw_trading_by_asset')}
       ORDER BY pnl_usd DESC
     `;
 
@@ -218,7 +220,7 @@ async function createTradingTrade(req, res) {
       (cleanDirection === "SHORT" ? "HOLD_USDT" : "HOLD_COIN");
 
     const query = `
-      INSERT INTO \`project-a4c11095-2051-4d2c-b3c.portfolio.trading_trades_raw\`
+      INSERT INTO ${table('trading_trades_raw')}
       (
         trade_id,
         instrument,
@@ -635,7 +637,7 @@ async function getExistingTradingTradeKeys() {
       instrument,
       direction,
       CAST(closed_at AS STRING) AS closed_at
-    FROM \`project-a4c11095-2051-4d2c-b3c.portfolio.trading_trades_raw\`
+    FROM ${table('trading_trades_raw')}
     WHERE LOWER(exchange) IN ('bingx', 'binx')
       AND contract_type = 'USD_MONEDA'
   `;
@@ -853,7 +855,7 @@ async function syncBingxTradesConfirm(req, res) {
     }
 
     const query = `
-      INSERT INTO \`project-a4c11095-2051-4d2c-b3c.portfolio.trading_trades_raw\`
+      INSERT INTO  ${table('trading_trades_raw')}
       (
         trade_id,
         instrument,

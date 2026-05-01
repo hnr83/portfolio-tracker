@@ -1,5 +1,6 @@
 const axios = require("axios");
 const { runQuery } = require("../repositories/bigqueryRepository");
+const { table } = require('../utils/bigqueryHelper');
 
 const BENCHMARKS = [
   {
@@ -174,7 +175,7 @@ async function upsertBenchmarkPrice(row) {
   const safeCode = String(row.benchmark_code || "").replace(/'/g, "\\'");
 
   const query = `
-    MERGE \`project-a4c11095-2051-4d2c-b3c.portfolio.benchmark_prices\` T
+    MERGE ${table('benchmark_prices')} T
     USING (
       SELECT
         DATE('${row.date}') AS date,

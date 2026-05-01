@@ -1,8 +1,9 @@
 const { runQuery } = require("../repositories/bigqueryRepository");
+const { table } = require('../utils/bigqueryHelper');
 
 async function snapshotPortfolioJob() {
   const query = `
-    MERGE \`project-a4c11095-2051-4d2c-b3c.portfolio.portfolio_snapshots\` T
+    MERGE ${table('portfolio_snapshots')} T
     USING (
       WITH portfolio AS (
         SELECT
@@ -90,13 +91,13 @@ async function snapshotPortfolioJob() {
             END
           ) AS crypto_usd
 
-        FROM \`project-a4c11095-2051-4d2c-b3c.portfolio.vw_portfolio_valued\`
+        FROM ${table('vw_portfolio_valued')}
       ),
 
       trading AS (
         SELECT
           CAST(retained_result_usd AS FLOAT64) AS trading_retained_result_usd
-        FROM \`project-a4c11095-2051-4d2c-b3c.portfolio.vw_trading_summary\`
+        FROM ${table('vw_trading_summary')}
       )
 
       SELECT

@@ -1,6 +1,7 @@
 const { runQuery, insertRows } = require('../repositories/bigqueryRepository');
 const { fetchTwelveDataPrices } = require('../services/providers/twelveDataService');
 const { fetchCoinGeckoPrices } = require('../services/providers/coinGeckoService');
+const { table } = require('../utils/bigqueryHelper');
 
 async function updatePricesJob() {
   const tickers = await runQuery(`
@@ -11,10 +12,10 @@ async function updatePricesJob() {
       tm.provider_symbol,
       tm.provider_exchange,
       tm.quote_currency
-    FROM \`project-a4c11095-2051-4d2c-b3c.portfolio.ticker_master\` tm
+    FROM ${table('ticker_master')} tm
     INNER JOIN (
       SELECT DISTINCT normalized_ticker
-      FROM \`project-a4c11095-2051-4d2c-b3c.portfolio.vw_positions_normalized\`
+      FROM ${table('vw_positions_normalized')}
       WHERE quantity_net IS NOT NULL
         AND quantity_net <> 0
     ) p

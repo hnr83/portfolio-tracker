@@ -10,7 +10,7 @@ async function getPortfolioSummary() {
       SUM(pnl_usd) AS total_pnl_usd,
       SUM(pnl_ars) AS total_pnl_ars,
       SAFE_DIVIDE(SUM(pnl_usd), NULLIF(SUM(cost_value_usd), 0)) * 100 AS total_pnl_pct
-    FROM \`project-a4c11095-2051-4d2c-b3c.portfolio.vw_portfolio_valued\`
+    FROM ${table('vw_portfolio_valued')} 
   `);
 
   return rows[0] || {};
@@ -39,7 +39,7 @@ async function getPortfolioPositions() {
       pnl_usd,
       pnl_ars,
       pnl_pct
-    FROM \`project-a4c11095-2051-4d2c-b3c.portfolio.vw_portfolio_valued\`
+    FROM ${table('vw_portfolio_valued')}
     ORDER BY market_value_usd DESC
   `);
 }

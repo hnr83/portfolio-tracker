@@ -119,7 +119,7 @@ export default function App() {
     } finally {
       setBenchmarkLoading(false);
     }
-  }  
+  }
 
 
   async function loadPlatformAllocation() {
@@ -262,12 +262,12 @@ export default function App() {
         throw new Error(`update-prices HTTP ${pricesRes.status}`);
       }
 
-    const benchmarkPricesRes = await fetch("/api/jobs/update-benchmark-prices", {
+      const benchmarkPricesRes = await fetch("/api/jobs/update-benchmark-prices", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ codes: ["SPY"] }),
-      }); 
-      
+      });
+
       if (!benchmarkPricesRes.ok) {
         throw new Error(`update-benchmark-prices HTTP ${benchmarkPricesRes.status}`);
       }
@@ -376,7 +376,20 @@ export default function App() {
     }
   }, [pinKpis, showKpis]);
 
+  function getMarketAssetType(row) {
+    if (row.is_cedear) return "CEDEAR";
 
+    const ticker = row.normalized_ticker || row.ticker || "";
+
+    if (
+      ticker.startsWith("CURRENCY:") ||
+      ["BTC", "ETH", "SOL", "RON", "USDT"].includes(ticker)
+    ) {
+      return "CRYPTO";
+    }
+
+    return "STOCK";
+  }
 
   const filteredAndSortedMarket = useMemo(() => {
     return sortRows(
@@ -391,10 +404,13 @@ export default function App() {
           String(row.underlying_ticker || "").toLowerCase().includes(search) ||
           String(row.ratio_text || "").toLowerCase().includes(search);
 
+        const assetType = getMarketAssetType(row);
+
         const matchesType =
           marketTypeFilter === "ALL" ||
-          (marketTypeFilter === "CEDEAR" && row.is_cedear) ||
-          (marketTypeFilter === "NORMAL" && !row.is_cedear);
+          (marketTypeFilter === "STOCK" && assetType === "STOCK") ||
+          (marketTypeFilter === "CRYPTO" && assetType === "CRYPTO") ||
+          (marketTypeFilter === "CEDEAR" && assetType === "CEDEAR");
 
         return matchesSearch && matchesType;
       }),
@@ -545,7 +561,7 @@ export default function App() {
 
   const activeItem = activeIndex != null ? compositionData[activeIndex] : null;
 
-  const chartTotalValue = chartData.reduce((acc, item) => acc + Number(item.value || 0), 0);  
+  const chartTotalValue = chartData.reduce((acc, item) => acc + Number(item.value || 0), 0);
 
   function handleToggleKpis() {
     if (pinKpis) return;
@@ -618,11 +634,11 @@ export default function App() {
               compositionTopCount={compositionTopCount}
               compositionMetric={compositionMetric}
               setCompositionMetric={setCompositionMetric}
-              chartTotalValue={chartTotalValue}                            
+              chartTotalValue={chartTotalValue}
             />
           )}
 
-          
+
           {activeView === "holdings" && (
             <HoldingsView
               holdings={holdings}
@@ -656,9 +672,9 @@ export default function App() {
               formatCurrency={formatCurrency}
               SortableHeader={SortableHeader}
               FilterToolbar={FilterToolbar}
-              SectionShell={SectionShell}           
+              SectionShell={SectionShell}
             />
-          )}          
+          )}
 
           {activeView === "market" && (
             <MarketView

@@ -1,6 +1,33 @@
 import React from "react";
 import AssetAvatar from "../shared/AssetAvatar";
 
+function getAssetType(row) {
+    if (row.is_cedear) return "CEDEAR";
+
+    const ticker = row.normalized_ticker || row.ticker || "";
+
+    if (
+        ticker.startsWith("CURRENCY:") ||
+        ["BTC", "ETH", "SOL", "RON", "USDT"].includes(ticker)
+    ) {
+        return "CRYPTO";
+    }
+
+    return "STOCK";
+}
+
+function getAssetTypeClass(assetType) {
+    if (assetType === "CEDEAR") {
+        return "bg-indigo-500/15 text-indigo-300";
+    }
+
+    if (assetType === "CRYPTO") {
+        return "bg-orange-500/15 text-orange-300";
+    }
+
+    return "bg-slate-800 text-slate-300";
+}
+
 function MarketMoverCard({ title, row, positive = true, formatPercent, formatCurrency }) {
     const accentClass = positive
         ? "border-emerald-500/20 bg-emerald-500/[0.04]"
@@ -38,10 +65,11 @@ function MarketMoverCard({ title, row, positive = true, formatPercent, formatCur
                 </div>
 
                 <div
-                    className={`flex h-10 w-10 items-center justify-center rounded-xl ${positive
+                    className={`flex h-10 w-10 items-center justify-center rounded-xl ${
+                        positive
                             ? "bg-emerald-500/10 text-emerald-400"
                             : "bg-red-500/10 text-red-400"
-                        }`}
+                    }`}
                 >
                     <span className="text-lg leading-none font-sans">
                         {positive ? "↑" : "↓"}
@@ -97,7 +125,8 @@ export default function MarketView({
                     className="rounded-xl border border-slate-700/70 bg-slate-950/90 px-4 py-2.5 text-sm text-white outline-none placeholder:text-slate-500 transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                 >
                     <option value="ALL">Todos</option>
-                    <option value="NORMAL">Normales</option>
+                    <option value="STOCK">Stocks</option>
+                    <option value="CRYPTO">Crypto</option>
                     <option value="CEDEAR">CEDEARs</option>
                 </select>
             </FilterToolbar>
@@ -160,72 +189,80 @@ export default function MarketView({
                     </thead>
 
                     <tbody>
-                        {filteredAndSortedMarket.map((row, i) => (
-                            <tr
-                                key={`${row.ticker}-${i}`}
-                                className="border-t border-slate-800/80 transition-colors hover:bg-slate-800/20"
-                            >
-                                <td className="px-4 py-4">
-                                    <div className="flex flex-col">
-                                        <AssetAvatar
-                                            ticker={row.ticker}
-                                            normalizedTicker={row.normalized_ticker}
-                                            size={28}
-                                        />
+                        {filteredAndSortedMarket.map((row, i) => {
+                            const assetType = getAssetType(row);
 
-                                        {row.is_cedear && (
-                                            <div className="mt-1 flex items-center gap-2">
-                                                <span className="rounded-md bg-indigo-500/10 px-2 py-0.5 text-[10px] font-medium text-indigo-300">
-                                                    {row.underlying_ticker || "-"}
-                                                </span>
-                                                <span className="rounded-md bg-slate-800 px-2 py-0.5 text-[10px] text-slate-400">
-                                                    {row.ratio_text || "-"}
-                                                </span>
-                                            </div>
-                                        )}
-                                    </div>
-                                </td>
+                            return (
+                                <tr
+                                    key={`${row.ticker}-${i}`}
+                                    className="border-t border-slate-800/80 transition-colors hover:bg-slate-800/20"
+                                >
+                                    <td className="px-4 py-4">
+                                        <div className="flex flex-col">
+                                            <AssetAvatar
+                                                ticker={row.ticker}
+                                                normalizedTicker={row.normalized_ticker}
+                                                size={28}
+                                            />
 
-                                <td className="px-4 py-4 text-slate-300">
-                                    <span
-                                        className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${row.is_cedear
-                                                ? "bg-indigo-500/15 text-indigo-300"
-                                                : "bg-slate-800 text-slate-300"
-                                            }`}
+                                            {row.is_cedear && (
+                                                <div className="mt-1 flex items-center gap-2">
+                                                    <span className="rounded-md bg-indigo-500/10 px-2 py-0.5 text-[10px] font-medium text-indigo-300">
+                                                        {row.underlying_ticker || "-"}
+                                                    </span>
+                                                    <span className="rounded-md bg-slate-800 px-2 py-0.5 text-[10px] text-slate-400">
+                                                        {row.ratio_text || "-"}
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </td>
+
+                                    <td className="px-4 py-4 text-slate-300">
+                                        <span
+                                            className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getAssetTypeClass(
+                                                assetType
+                                            )}`}
+                                        >
+                                            {assetType}
+                                        </span>
+                                    </td>
+
+                                    <td className="px-4 py-4 text-right tabular-nums text-white">
+                                        {row.market_price == null
+                                            ? "-"
+                                            : formatCurrency(row.market_price, row.currency || "USD")}
+                                    </td>
+
+                                    <td
+                                        className={`px-4 py-4 text-right font-semibold tabular-nums ${
+                                            Number(row.change_1d || 0) >= 0
+                                                ? "text-emerald-400"
+                                                : "text-red-400"
+                                        }`}
                                     >
-                                        {row.is_cedear ? "CEDEAR" : "Normal"}
-                                    </span>
-                                </td>
+                                        {formatCurrency(row.change_1d, row.currency || "USD")}
+                                    </td>
 
-                                <td className="px-4 py-4 text-right tabular-nums text-white">
-                                    {row.market_price == null
-                                        ? "-"
-                                        : formatCurrency(row.market_price, row.currency || "USD")}
-                                </td>
-
-                                <td
-                                    className={`px-4 py-4 text-right font-semibold tabular-nums ${Number(row.change_1d || 0) >= 0 ? "text-emerald-400" : "text-red-400"
+                                    <td
+                                        className={`px-4 py-4 text-right font-semibold tabular-nums ${
+                                            Number(row.change_pct_1d || 0) >= 0
+                                                ? "text-emerald-400"
+                                                : "text-red-400"
                                         }`}
-                                >
-                                    {formatCurrency(row.change_1d, row.currency || "USD")}
-                                </td>
+                                    >
+                                        {formatPercent(row.change_pct_1d)}
+                                    </td>
 
-                                <td
-                                    className={`px-4 py-4 text-right font-semibold tabular-nums ${Number(row.change_pct_1d || 0) >= 0
-                                            ? "text-emerald-400"
-                                            : "text-red-400"
-                                        }`}
-                                >
-                                    {formatPercent(row.change_pct_1d)}
-                                </td>
-
-                                <td className="px-4 py-4 text-slate-300">
-                                    {row.as_of_ts && !Number.isNaN(new Date(row.as_of_ts).getTime())
-                                        ? new Date(row.as_of_ts).toLocaleString("es-AR")
-                                        : "-"}
-                                </td>
-                            </tr>
-                        ))}
+                                    <td className="px-4 py-4 text-slate-300">
+                                        {row.as_of_ts &&
+                                        !Number.isNaN(new Date(row.as_of_ts).getTime())
+                                            ? new Date(row.as_of_ts).toLocaleString("es-AR")
+                                            : "-"}
+                                    </td>
+                                </tr>
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>
