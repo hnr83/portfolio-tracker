@@ -1,0 +1,8 @@
+{"internal_ticker":"BCBA:MELI","underlying_ticker":"MELI","ratio_numerator":120,"ratio_denominator":1,"ratio_text":"120:1","ratio_source":"COMAFI","is_active":true}
+{"internal_ticker":"BCBA:AMZN","underlying_ticker":"AMZN","ratio_numerator":144,"ratio_denominator":1,"ratio_text":"144:1","ratio_source":"COMAFI","is_active":true}
+{"internal_ticker":"BCBA:TSLA","underlying_ticker":"TSLA","ratio_numerator":15,"ratio_denominator":1,"ratio_text":"15:1","ratio_source":"COMAFI","is_active":true}
+{"internal_ticker":"BCBA:AAPL","underlying_ticker":"AAPL","ratio_numerator":20,"ratio_denominator":1,"ratio_text":"20:1","ratio_source":"COMAFI","is_active":true}
+{"internal_ticker":"BCBA:META","underlying_ticker":"META","ratio_numerator":24,"ratio_denominator":1,"ratio_text":"24:1","ratio_source":"COMAFI","is_active":true}
+{"internal_ticker":"BCBA:NVDA","underlying_ticker":"NVDA","ratio_numerator":24,"ratio_denominator":1,"ratio_text":"24:1","ratio_source":"COMAFI","is_active":true}
+{"internal_ticker":"BCBA:MSFT","underlying_ticker":"MSFT","ratio_numerator":30,"ratio_denominator":1,"ratio_text":"30:1","ratio_source":"COMAFI","is_active":true}
+{"internal_ticker":"BCBA:GOOGL","underlying_ticker":"GOOGL","ratio_numerator":58,"ratio_denominator":1,"ratio_text":"58:1","ratio_source":"COMAFI","is_active":true}

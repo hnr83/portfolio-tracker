@@ -42,8 +42,6 @@ npm install
 
 Este proyecto usa autenticación local con tu cuenta de Google.
 
-Instalar CLI de Google Cloud y loguearte:
-
 ```bash
 gcloud auth application-default login
 ```
@@ -92,7 +90,7 @@ Esto automáticamente:
 * crea el dataset en BigQuery
 * crea tablas
 * crea vistas
-* carga datos base
+* carga datos base desde `/db/seeds` (si existen)
 
 ---
 
@@ -104,15 +102,106 @@ npm run dev
 
 ---
 
+## ⚙️ Configuración de activos (`ticker_master`)
+
+El proyecto incluye un seed inicial en:
+
+```
+/db/seeds/ticker_master.jsonl
+```
+
+Este archivo define qué activos puede reconocer la aplicación y cómo obtener sus precios.
+
+Incluye por defecto:
+
+* Acciones (AAPL, MSFT, etc.)
+* ETFs (SPY, QQQ, etc.)
+* Crypto (BTC, ETH, SOL, USDT)
+
+---
+
+### ➕ Agregar nuevos activos
+
+Antes de crear la base de datos, podés agregar activos al seed.
+
+Ejemplo:
+
+```json
+{"internal_ticker":"NVDA","asset_class":"EQUITY","provider":"TWELVE_DATA","provider_symbol":"NVDA","provider_exchange":"NASDAQ","quote_currency":"USD","is_active":true}
+```
+
+Luego ejecutar nuevamente:
+
+```bash
+npm run db:setup
+```
+
+---
+
+### ⚠️ Importante
+
+* Los activos deben existir en `ticker_master` para que el sistema pueda obtener precios
+* Si no existe, el job de precios no lo va a actualizar
+* Cada usuario define su universo de inversión desde este archivo
+
+---
+
+## 🇦🇷 Configuración de CEDEARs (`cedear_master`)
+
+El proyecto incluye un seed inicial en:
+
+```
+/db/seeds/cedear_master.jsonl
+```
+
+Este archivo define la relación entre CEDEARs y sus activos subyacentes.
+
+---
+
+### ⚙️ ¿Para qué sirve?
+
+Permite:
+
+* Valuar CEDEARs usando el precio del activo subyacente
+* Aplicar correctamente el ratio de conversión
+* Convertir precios a USD/ARS automáticamente
+
+---
+
+### ➕ Agregar nuevos CEDEARs
+
+Podés agregar registros antes de crear la base de datos.
+
+Ejemplo:
+
+```json
+{"internal_ticker":"BCBA:AAPL","underlying_ticker":"AAPL","ratio_numerator":20,"ratio_denominator":1}
+```
+
+Luego ejecutar:
+
+```bash
+npm run db:setup
+```
+
+---
+
+### ⚠️ Importante
+
+* Si un CEDEAR no está en `cedear_master`, no se podrá valuar correctamente
+* Los ratios deben ser correctos (fuente recomendada: COMAFI)
+
+---
+
 ## 📂 Estructura del proyecto
 
 ```
 /db
   /schema
-    /tables      # CREATE TABLE
-    /views       # CREATE VIEW
-  /seeds         # datos base
-  /scripts       # export y setup
+    /tables
+    /views
+  /seeds
+  /scripts
 
 /backend
   /controllers

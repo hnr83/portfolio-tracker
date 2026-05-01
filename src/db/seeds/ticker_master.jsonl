@@ -1,0 +1,14 @@
+{"internal_ticker":"AAPL","asset_class":"EQUITY","provider":"TWELVE_DATA","provider_symbol":"AAPL","provider_exchange":"NASDAQ","quote_currency":"USD","is_active":true}
+{"internal_ticker":"MSFT","asset_class":"EQUITY","provider":"TWELVE_DATA","provider_symbol":"MSFT","provider_exchange":"NASDAQ","quote_currency":"USD","is_active":true}
+{"internal_ticker":"GOOGL","asset_class":"EQUITY","provider":"TWELVE_DATA","provider_symbol":"GOOGL","provider_exchange":"NASDAQ","quote_currency":"USD","is_active":true}
+{"internal_ticker":"AMZN","asset_class":"EQUITY","provider":"TWELVE_DATA","provider_symbol":"AMZN","provider_exchange":"NASDAQ","quote_currency":"USD","is_active":true}
+{"internal_ticker":"TSLA","asset_class":"EQUITY","provider":"TWELVE_DATA","provider_symbol":"TSLA","provider_exchange":"NASDAQ","quote_currency":"USD","is_active":true}
+
+{"internal_ticker":"SPY","asset_class":"ETF","provider":"TWELVE_DATA","provider_symbol":"SPY","provider_exchange":"NYSE","quote_currency":"USD","is_active":true}
+{"internal_ticker":"QQQ","asset_class":"ETF","provider":"TWELVE_DATA","provider_symbol":"QQQ","provider_exchange":"NASDAQ","quote_currency":"USD","is_active":true}
+{"internal_ticker":"ARKK","asset_class":"ETF","provider":"TWELVE_DATA","provider_symbol":"ARKK","provider_exchange":"BATS","quote_currency":"USD","is_active":true}
+
+{"internal_ticker":"BTC","asset_class":"CRYPTO","provider":"COINGECKO","provider_symbol":"bitcoin","provider_exchange":null,"quote_currency":"USD","is_active":true}
+{"internal_ticker":"ETH","asset_class":"CRYPTO","provider":"COINGECKO","provider_symbol":"ethereum","provider_exchange":null,"quote_currency":"USD","is_active":true}
+{"internal_ticker":"SOL","asset_class":"CRYPTO","provider":"COINGECKO","provider_symbol":"solana","provider_exchange":null,"quote_currency":"USD","is_active":true}
+{"internal_ticker":"USDT","asset_class":"CRYPTO","provider":"COINGECKO","provider_symbol":"tether","provider_exchange":null,"quote_currency":"USD","is_active":true}
