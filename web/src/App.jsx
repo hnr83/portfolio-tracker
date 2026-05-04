@@ -12,6 +12,7 @@ import FilterToolbar from "./components/layout/FilterToolbar";
 import SummaryCard from "./components/shared/SummaryCard";
 import Sidebar from "./components/layout/Sidebar";
 import KpiVisibilityRail from "./components/layout/KpiVisibilityRail";
+import PerformanceView from "./components/views/PerformanceView.jsx";
 
 import {
   formatCurrency,
@@ -41,16 +42,26 @@ const CHART_COLORS = [
   "#FF8A4C",
 ];
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+function apiFetch(path, options = {}) {
+  if (!API_BASE_URL) {
+    throw new Error("Falta configurar VITE_API_BASE_URL");
+  }
+
+  return fetch(`${API_BASE_URL}${path}`, options);
+}
 
 const inputBaseClass =
   "rounded-xl border border-slate-700/70 bg-slate-950/90 px-4 py-2.5 text-sm text-white outline-none placeholder:text-slate-500 transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500";
+
 const buttonSecondaryClass =
   "rounded-2xl border border-slate-700/70 bg-transparent px-5 py-3 text-white transition-all duration-200 hover:bg-slate-800/60 disabled:opacity-50";
+
 const buttonPrimaryClass =
   "rounded-2xl bg-gradient-to-r from-indigo-500 to-blue-500 px-5 py-3 font-medium text-white shadow-[0_10px_30px_rgba(93,124,250,0.32)] transition-all duration-200 hover:opacity-90";
 
 export default function App() {
-
   const [selectedAssetMovements, setSelectedAssetMovements] = useState(null);
   const [activeView, setActiveView] = useState("dashboard");
   const [movements, setMovements] = useState([]);
@@ -83,7 +94,6 @@ export default function App() {
     direction: "desc",
   });
 
-
   const [marketData, setMarketData] = useState([]);
   const [marketSearch, setMarketSearch] = useState("");
   const [marketTypeFilter, setMarketTypeFilter] = useState("ALL");
@@ -92,14 +102,11 @@ export default function App() {
     direction: "desc",
   });
 
-
-
-
   async function loadBenchmark(code = "SPY") {
     try {
       setBenchmarkLoading(true);
 
-      const res = await fetch(`/api/portfolio/benchmark?code=${code}`);
+      const res = await apiFetch(`/api/portfolio/benchmark?code=${code}`);
       const data = await res.json();
 
       const normalized = (data.rows || []).map((row) => ({
@@ -121,13 +128,14 @@ export default function App() {
     }
   }
 
-
   async function loadPlatformAllocation() {
     try {
-      const res = await fetch("/api/portfolio/platform-allocation");
+      const res = await apiFetch("/api/portfolio/platform-allocation");
+
       if (!res.ok) {
         throw new Error(`Platform allocation HTTP ${res.status}`);
       }
+
       const data = await res.json();
       setPlatformAllocation(data);
     } catch (err) {
@@ -137,7 +145,7 @@ export default function App() {
 
   async function loadMarket() {
     try {
-      const res = await fetch("/api/portfolio/market");
+      const res = await apiFetch("/api/portfolio/market");
 
       if (!res.ok) {
         throw new Error(`Market HTTP ${res.status}`);
@@ -200,7 +208,7 @@ export default function App() {
         ? `/api/portfolio/movements?asset=${encodeURIComponent(asset)}`
         : "/api/portfolio/movements";
 
-      const res = await fetch(url);
+      const res = await apiFetch(url);
 
       if (!res.ok) {
         throw new Error(`Movements HTTP ${res.status}`);
@@ -230,10 +238,12 @@ export default function App() {
 
   async function loadHoldings() {
     try {
-      const res = await fetch("/api/portfolio/holdings");
+      const res = await apiFetch("/api/portfolio/holdings");
+
       if (!res.ok) {
         throw new Error(`Holdings HTTP ${res.status}`);
       }
+
       const data = await res.json();
       setHoldings(data);
     } catch (err) {
@@ -246,7 +256,7 @@ export default function App() {
       setIsRefreshing(true);
       setRefreshError("");
 
-      const fxRes = await fetch("/api/jobs/update-fx", {
+      const fxRes = await apiFetch("/api/jobs/update-fx", {
         method: "POST",
       });
 
@@ -254,7 +264,7 @@ export default function App() {
         throw new Error(`update-fx HTTP ${fxRes.status}`);
       }
 
-      const pricesRes = await fetch("/api/jobs/update-prices", {
+      const pricesRes = await apiFetch("/api/jobs/update-prices", {
         method: "POST",
       });
 
@@ -262,7 +272,7 @@ export default function App() {
         throw new Error(`update-prices HTTP ${pricesRes.status}`);
       }
 
-      const benchmarkPricesRes = await fetch("/api/jobs/update-benchmark-prices", {
+      const benchmarkPricesRes = await apiFetch("/api/jobs/update-benchmark-prices", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ codes: ["SPY"] }),
@@ -272,7 +282,7 @@ export default function App() {
         throw new Error(`update-benchmark-prices HTTP ${benchmarkPricesRes.status}`);
       }
 
-      const snapshotRes = await fetch("/api/jobs/snapshot-portfolio", {
+      const snapshotRes = await apiFetch("/api/jobs/snapshot-portfolio", {
         method: "POST",
       });
 
@@ -293,7 +303,6 @@ export default function App() {
       if (activeView === "market") {
         await loadMarket();
       }
-
     } catch (err) {
       console.error("Error refreshing market data:", err);
       setRefreshError(err.message || "Error actualizando datos");
@@ -304,12 +313,13 @@ export default function App() {
 
   async function loadData() {
     try {
-      const [summaryRes, investmentsRes, positionsRes, platformAllocationRes] = await Promise.all([
-        fetch("/api/portfolio/summary"),
-        fetch("/api/portfolio/investments"),
-        fetch("/api/portfolio/positions"),
-        fetch("/api/portfolio/platform-allocation"),
-      ]);
+      const [summaryRes, investmentsRes, positionsRes, platformAllocationRes] =
+        await Promise.all([
+          apiFetch("/api/portfolio/summary"),
+          apiFetch("/api/portfolio/investments"),
+          apiFetch("/api/portfolio/positions"),
+          apiFetch("/api/portfolio/platform-allocation"),
+        ]);
 
       if (!platformAllocationRes.ok) {
         throw new Error(`Platform allocation HTTP ${platformAllocationRes.status}`);
@@ -318,19 +328,22 @@ export default function App() {
       if (!summaryRes.ok) {
         throw new Error(`Summary HTTP ${summaryRes.status}`);
       }
+
       if (!investmentsRes.ok) {
         throw new Error(`Investments HTTP ${investmentsRes.status}`);
       }
+
       if (!positionsRes.ok) {
         throw new Error(`Positions HTTP ${positionsRes.status}`);
       }
 
-      const [summaryData, investmentsData, positionsData, platformAllocationData] = await Promise.all([
-        summaryRes.json(),
-        investmentsRes.json(),
-        positionsRes.json(),
-        platformAllocationRes.json(),
-      ]);
+      const [summaryData, investmentsData, positionsData, platformAllocationData] =
+        await Promise.all([
+          summaryRes.json(),
+          investmentsRes.json(),
+          positionsRes.json(),
+          platformAllocationRes.json(),
+        ]);
 
       setSummary(summaryData);
       setInvestments(investmentsData);
@@ -418,7 +431,6 @@ export default function App() {
     );
   }, [marketData, marketSearch, marketTypeFilter, marketSort]);
 
-
   const marketTopStats = useMemo(() => {
     const validRows = marketData.filter(
       (row) =>
@@ -443,7 +455,6 @@ export default function App() {
       topLoser: sortedByChange[sortedByChange.length - 1] || null,
     };
   }, [marketData]);
-
 
   const filteredAndSortedMovements = useMemo(() => {
     return sortRows(
@@ -529,17 +540,17 @@ export default function App() {
   const chartData =
     compositionMetric === "platform"
       ? platformAllocation
-        .filter((row) => Number(row.invested_usd || 0) > 0)
-        .map((row) => ({
-          name: row.broker,
-          value: Number(row.invested_usd || 0),
-        }))
+          .filter((row) => Number(row.invested_usd || 0) > 0)
+          .map((row) => ({
+            name: row.broker,
+            value: Number(row.invested_usd || 0),
+          }))
       : filteredAndSortedInvestments
-        .filter((inv) => Number(inv[compositionMetric] || 0) > 0)
-        .map((inv) => ({
-          name: inv.normalized_ticker || inv.ticker,
-          value: Number(inv[compositionMetric] || 0),
-        }));
+          .filter((inv) => Number(inv[compositionMetric] || 0) > 0)
+          .map((inv) => ({
+            name: inv.normalized_ticker || inv.ticker,
+            value: Number(inv[compositionMetric] || 0),
+          }));
 
   const filteredInvestments = filteredAndSortedInvestments;
 
@@ -549,19 +560,23 @@ export default function App() {
     .slice(compositionTopCount)
     .reduce((acc, item) => acc + Number(item.value || 0), 0);
 
-  const compositionData = compositionOthersValue > 0
-    ? [
-      ...compositionBase,
-      {
-        name: "Otros",
-        value: compositionOthersValue,
-      },
-    ]
-    : compositionBase;
+  const compositionData =
+    compositionOthersValue > 0
+      ? [
+          ...compositionBase,
+          {
+            name: "Otros",
+            value: compositionOthersValue,
+          },
+        ]
+      : compositionBase;
 
   const activeItem = activeIndex != null ? compositionData[activeIndex] : null;
 
-  const chartTotalValue = chartData.reduce((acc, item) => acc + Number(item.value || 0), 0);
+  const chartTotalValue = chartData.reduce(
+    (acc, item) => acc + Number(item.value || 0),
+    0
+  );
 
   function handleToggleKpis() {
     if (pinKpis) return;
@@ -638,7 +653,6 @@ export default function App() {
             />
           )}
 
-
           {activeView === "holdings" && (
             <HoldingsView
               holdings={holdings}
@@ -675,6 +689,8 @@ export default function App() {
               SectionShell={SectionShell}
             />
           )}
+
+          {activeView === "performance" && <PerformanceView />}
 
           {activeView === "market" && (
             <MarketView

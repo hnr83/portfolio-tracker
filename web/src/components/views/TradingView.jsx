@@ -10,7 +10,17 @@ import {
 } from "recharts";
 import TradingModal from "../modals/TradingModal";
 
-const API_BASE = "/api/trading";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+const API_BASE = `${API_BASE_URL}/api/trading`;
+
+function apiFetch(path, options = {}) {
+    if (!API_BASE_URL) {
+        throw new Error("Falta configurar VITE_API_BASE_URL");
+    }
+
+    return fetch(`${API_BASE_URL}${path}`, options);
+}
 
 const EMPTY_FORM = {
     instrument: "",
@@ -246,7 +256,7 @@ export default function TradingView() {
                 throw new Error(data?.error || "Error creando operación");
             }
 
-            const snapshotRes = await fetch("/api/jobs/snapshot-portfolio", {
+            const snapshotRes = await apiFetch("/api/jobs/snapshot-portfolio", {
                 method: "POST",
             });
 

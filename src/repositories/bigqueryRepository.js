@@ -1,4 +1,4 @@
-const bigquery = require('../config/bigquery');
+const bigquery = require('../config/bigQuery');
 
 async function runQuery(query) {
   const [rows] = await bigquery.query({ query });

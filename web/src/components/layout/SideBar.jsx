@@ -154,15 +154,25 @@ export default function Sidebar({
                     </div>
                 </div>
 
-                <button
-                onClick={() => setActiveView("trading")}
-                className={navClass("trading")}
+                <div
+                    onClick={() => setActiveView("trading")}
+                    className={navClass("trading")}
                 >
-                <div className="flex items-center gap-3">
-                    <span className={dotClass("trading")} />
-                    <span>Trading</span>
+                    <div className="flex items-center gap-3">
+                        <span className={dotClass("trading")} />
+                        <span>Trading</span>
+                    </div>
                 </div>
-                </button> 
+
+                <div
+                    onClick={() => setActiveView("performance")}
+                    className={navClass("performance")}
+                >
+                    <div className="flex items-center gap-3">
+                        <span className={dotClass("performance")} />
+                        <span>Performance</span>
+                    </div>
+                </div>
 
             </nav>
 

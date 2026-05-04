@@ -64,7 +64,7 @@ function normalizeBigQueryRows(rows = []) {
 async function getSummary(req, res) {
   try {
 
-const query = `
+    const query = `
   WITH portfolio AS (
     SELECT
       SUM(CAST(market_value_usd AS FLOAT64)) AS total_market_usd,
@@ -674,6 +674,53 @@ async function getBenchmarkComparison(req, res) {
   }
 }
 
+async function getAssetPerformance(req, res) {
+  try {
+    const query = `
+      SELECT
+        ticker,
+        internal_ticker,
+        asset_class,
+        provider,
+        provider_symbol,
+        quote_currency,
+        current_price,
+        current_price_date,
+        first_price_date,
+        last_price_date,
+        days_with_price,
+        calendar_days,
+        return_7d,
+        return_30d,
+        return_90d,
+        low_range,
+        high_range,
+        position_range,
+        drawdown_range,
+        volatility_30d,
+        risk_adjusted_return_30d,
+        performance_score,
+        trend_points
+      FROM ${table("vw_asset_performance")}
+      WHERE ticker != 'USDT'
+      ORDER BY performance_score DESC
+    `;
+
+    const rows = await runQuery(query);
+
+    res.json({
+      success: true,
+      data: rows,
+    });
+  } catch (error) {
+    console.error("Error getAssetPerformance:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+}
+
 
 
 module.exports = {
@@ -686,4 +733,5 @@ module.exports = {
   getHistory,
   getPlatformAllocation,
   getBenchmarkComparison,
+  getAssetPerformance,
 };

@@ -12,6 +12,15 @@ import {
 
 const RANGE_OPTIONS = ["1M", "3M", "6M", "YTD", "1A", "MAX"];
 const METRIC_OPTIONS = ["TOTAL", "INVESTMENTS", "PNL"];
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+function apiFetch(path, options = {}) {
+  if (!API_BASE_URL) {
+    throw new Error("Falta configurar VITE_API_BASE_URL");
+  }
+
+  return fetch(`${API_BASE_URL}${path}`, options);
+}
 
 function formatCurrency(value, currency = "USD") {
     if (value == null || isNaN(value)) return "-";
@@ -205,7 +214,7 @@ export default function HistoryView() {
         async function loadHistory() {
             try {
                 setLoading(true);
-                const res = await fetch(`/api/portfolio/history?range=${range}`);
+                const res = await apiFetch(`/api/portfolio/history?range=${range}`);
                 const data = await res.json();
                 setHistory(Array.isArray(data) ? data : []);
             } catch (error) {
@@ -224,7 +233,7 @@ export default function HistoryView() {
             try {
                 setBenchmarkLoading(true);
 
-                const res = await fetch(
+                const res = await apiFetch(
                     `/api/portfolio/benchmark?code=${benchmarkCode}&range=${range}`
                 );
                 const data = await res.json();

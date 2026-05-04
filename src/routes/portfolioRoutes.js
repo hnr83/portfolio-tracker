@@ -10,6 +10,8 @@ const {
   getHistory,
   getPlatformAllocation,
   getBenchmarkComparison,
+  getAssetPerformance,
+
 } = require('../controllers/portfolioController');
 
 router.get('/summary', getSummary);
@@ -21,6 +23,7 @@ router.get("/market", getMarket);
 router.get("/history", getHistory);
 router.get("/platform-allocation", getPlatformAllocation);
 router.get("/benchmark", getBenchmarkComparison);
+router.get("/performance",getAssetPerformance);
 
 
 
