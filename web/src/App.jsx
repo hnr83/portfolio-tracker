@@ -13,6 +13,7 @@ import SummaryCard from "./components/shared/SummaryCard";
 import Sidebar from "./components/layout/Sidebar";
 import KpiVisibilityRail from "./components/layout/KpiVisibilityRail";
 import PerformanceView from "./components/views/PerformanceView.jsx";
+import LoginView from "./components/auth/LoginView";
 
 import {
   formatCurrency,
@@ -49,7 +50,15 @@ function apiFetch(path, options = {}) {
     throw new Error("Falta configurar VITE_API_BASE_URL");
   }
 
-  return fetch(`${API_BASE_URL}${path}`, options);
+  const token = window.localStorage.getItem("portfolio-auth-token");
+
+  return fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
 }
 
 const inputBaseClass =
@@ -62,6 +71,32 @@ const buttonPrimaryClass =
   "rounded-2xl bg-gradient-to-r from-indigo-500 to-blue-500 px-5 py-3 font-medium text-white shadow-[0_10px_30px_rgba(93,124,250,0.32)] transition-all duration-200 hover:opacity-90";
 
 export default function App() {
+
+  const [authToken, setAuthToken] = useState(() =>
+    window.localStorage.getItem("portfolio-auth-token")
+  );
+
+  const [authUser, setAuthUser] = useState(() => {
+    try {
+      const saved = window.localStorage.getItem("portfolio-auth-user");
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  function handleLogin(user, token) {
+    setAuthUser(user);
+    setAuthToken(token);
+  }
+
+  function handleLogout() {
+    window.localStorage.removeItem("portfolio-auth-token");
+    window.localStorage.removeItem("portfolio-auth-user");
+    setAuthUser(null);
+    setAuthToken(null);
+  }
+
   const [selectedAssetMovements, setSelectedAssetMovements] = useState(null);
   const [activeView, setActiveView] = useState("dashboard");
   const [movements, setMovements] = useState([]);
@@ -355,8 +390,10 @@ export default function App() {
   }
 
   useEffect(() => {
+    if (!authToken) return;
+
     loadData();
-  }, []);
+  }, [authToken]);
 
   useEffect(() => {
     try {
@@ -540,17 +577,17 @@ export default function App() {
   const chartData =
     compositionMetric === "platform"
       ? platformAllocation
-          .filter((row) => Number(row.invested_usd || 0) > 0)
-          .map((row) => ({
-            name: row.broker,
-            value: Number(row.invested_usd || 0),
-          }))
+        .filter((row) => Number(row.invested_usd || 0) > 0)
+        .map((row) => ({
+          name: row.broker,
+          value: Number(row.invested_usd || 0),
+        }))
       : filteredAndSortedInvestments
-          .filter((inv) => Number(inv[compositionMetric] || 0) > 0)
-          .map((inv) => ({
-            name: inv.normalized_ticker || inv.ticker,
-            value: Number(inv[compositionMetric] || 0),
-          }));
+        .filter((inv) => Number(inv[compositionMetric] || 0) > 0)
+        .map((inv) => ({
+          name: inv.normalized_ticker || inv.ticker,
+          value: Number(inv[compositionMetric] || 0),
+        }));
 
   const filteredInvestments = filteredAndSortedInvestments;
 
@@ -563,12 +600,12 @@ export default function App() {
   const compositionData =
     compositionOthersValue > 0
       ? [
-          ...compositionBase,
-          {
-            name: "Otros",
-            value: compositionOthersValue,
-          },
-        ]
+        ...compositionBase,
+        {
+          name: "Otros",
+          value: compositionOthersValue,
+        },
+      ]
       : compositionBase;
 
   const activeItem = activeIndex != null ? compositionData[activeIndex] : null;
@@ -587,6 +624,11 @@ export default function App() {
     setPinKpis((prev) => !prev);
   }
 
+  if (!authToken) {
+    return <LoginView onLogin={handleLogin} />;
+  }
+
+
   return (
     <div className="flex min-h-screen bg-[#020617] text-white">
       <Sidebar
@@ -597,6 +639,8 @@ export default function App() {
         loadHoldings={loadHoldings}
         loadMarket={loadMarket}
         setSelectedAssetMovements={setSelectedAssetMovements}
+        authUser={authUser}
+        onLogout={handleLogout}
       />
 
       <main className="min-w-0 flex-1 bg-[radial-gradient(circle_at_top_left,rgba(78,99,255,0.16),transparent_22%),radial-gradient(circle_at_top_right,rgba(23,183,229,0.10),transparent_20%),linear-gradient(180deg,#030817_0%,#020617_100%)]">
