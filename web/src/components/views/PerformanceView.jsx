@@ -10,7 +10,15 @@ function apiFetch(path, options = {}) {
     throw new Error("Falta configurar VITE_API_BASE_URL");
   }
 
-  return fetch(`${API_BASE_URL}${path}`, options);
+  const token = window.localStorage.getItem("portfolio-auth-token");
+
+  return fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
 }
 
 function cleanTicker(ticker) {

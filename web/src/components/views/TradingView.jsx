@@ -15,11 +15,19 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 const API_BASE = `${API_BASE_URL}/api/trading`;
 
 function apiFetch(path, options = {}) {
-    if (!API_BASE_URL) {
-        throw new Error("Falta configurar VITE_API_BASE_URL");
-    }
+  if (!API_BASE_URL) {
+    throw new Error("Falta configurar VITE_API_BASE_URL");
+  }
 
-    return fetch(`${API_BASE_URL}${path}`, options);
+  const token = window.localStorage.getItem("portfolio-auth-token");
+
+  return fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
 }
 
 const EMPTY_FORM = {
