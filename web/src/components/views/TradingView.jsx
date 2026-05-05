@@ -12,7 +12,6 @@ import TradingModal from "../modals/TradingModal";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
-const API_BASE = `${API_BASE_URL}/api/trading`;
 
 function apiFetch(path, options = {}) {
   if (!API_BASE_URL) {
@@ -251,7 +250,7 @@ export default function TradingView() {
             setSaving(true);
             setModalError("");
 
-            const res = await fetch(`${API_BASE}`, {
+            const res = await apiFetch("/api/trading", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -292,8 +291,8 @@ export default function TradingView() {
             setSyncError("");
             setSyncResult(null);
 
-            const res = await fetch(
-                `${API_BASE}/bingx/sync-preview?lookbackDays=60&limit=100`
+            const res = await apiFetch(
+                "/api/trading/bingx/sync-preview?lookbackDays=60&limit=100"
             );
 
             const data = await res.json().catch(() => ({}));
@@ -321,7 +320,7 @@ export default function TradingView() {
 
             const rowsToInsert = syncPreview?.rowsToInsert || [];
 
-            const res = await fetch(`${API_BASE}/bingx/sync-confirm`, {
+            const res = await apiFetch("/api/trading/bingx/sync-confirm", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
