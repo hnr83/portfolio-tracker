@@ -192,9 +192,9 @@ export default function TradingView() {
             setError("");
 
             const [summaryRes, byAssetRes, tradesRes] = await Promise.all([
-                apiFetch(`${API_BASE}/summary`),
-                apiFetch(`${API_BASE}/by-asset`),
-                apiFetch(`${API_BASE}`),
+            apiFetch(`/api/trading/summary`),
+            apiFetch(`/api/trading/by-asset`),
+            apiFetch(`/api/trading`),
             ]);
 
             if (!summaryRes.ok || !byAssetRes.ok || !tradesRes.ok) {
