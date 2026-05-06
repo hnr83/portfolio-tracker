@@ -23,11 +23,6 @@ export default function DashboardView({
     handleToggleKpis,
     handlePinKpisToggle,
     pinKpis,
-    loadHoldings,
-    loadMovements,
-    selectedAssetMovements,
-    activeView,
-    loadMarket,
     KpiVisibilityRail,
     SectionShell,
     SummaryCard,
@@ -52,8 +47,6 @@ export default function DashboardView({
     investmentSort,
     setInvestmentSort,
     openAssetTransactions,
-    summaryTotalMarketUsd,
-    totalPortfolioUsd,
     investmentsUsd,
     liquidityUsd,
     cryptoUsd,
@@ -66,31 +59,33 @@ export default function DashboardView({
 
     return (
         <>
-            <div className="flex flex-col gap-6 border-slate-800/80 pb-8 md:flex-row md:items-start md:justify-between">
-                <div>
-                    <div className="text-xs uppercase tracking-[0.24em] text-indigo-400">
+            <div className="flex flex-col gap-5 border-slate-800/80 pb-6 sm:gap-6 sm:pb-8 lg:flex-row lg:items-start lg:justify-between">
+                <div className="min-w-0">
+                    <div className="text-[11px] uppercase tracking-[0.24em] text-indigo-400 sm:text-xs">
                         Dashboard
                     </div>
-                    <h1 className="mt-3 text-5xl font-bold tracking-tight text-white">
+
+                    <h1 className="mt-3 text-3xl font-bold tracking-tight text-white sm:text-4xl lg:text-5xl">
                         Portfolio <span className="text-indigo-400">Jubilación</span>
                     </h1>
-                    <p className="mt-3 max-w-2xl text-base text-slate-400">
+
+                    <p className="mt-3 max-w-2xl text-sm text-slate-400 sm:text-base">
                         Visión general de tu portfolio y su evolución
                     </p>
                 </div>
 
-                <div className="flex flex-wrap gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:flex sm:flex-wrap lg:justify-end">
                     <button
                         onClick={refreshMarketData}
                         disabled={isRefreshing}
-                        className="rounded-2xl border border-slate-700/70 bg-transparent px-5 py-3 text-white transition-all duration-200 hover:bg-slate-800/60 disabled:opacity-50"
+                        className="w-full rounded-2xl border border-slate-700/70 bg-transparent px-5 py-3 text-sm text-white transition-all duration-200 hover:bg-slate-800/60 disabled:opacity-50 sm:w-auto"
                     >
                         {isRefreshing ? "Actualizando..." : "Actualizar datos"}
                     </button>
 
                     <button
                         onClick={() => setIsTransactionModalOpen(true)}
-                        className="rounded-2xl bg-gradient-to-r from-indigo-500 to-blue-500 px-5 py-3 font-medium text-white shadow-[0_10px_30px_rgba(93,124,250,0.32)] transition-all duration-200 hover:opacity-90"
+                        className="w-full rounded-2xl bg-gradient-to-r from-indigo-500 to-blue-500 px-5 py-3 text-sm font-medium text-white shadow-[0_10px_30px_rgba(93,124,250,0.32)] transition-all duration-200 hover:opacity-90 sm:w-auto"
                     >
                         + Agregar transacción
                     </button>
@@ -105,18 +100,18 @@ export default function DashboardView({
             />
 
             {!summary && (
-                <SectionShell className="mt-10">
+                <SectionShell className="mt-6 sm:mt-10">
                     <div className="text-slate-300">Cargando resumen...</div>
                 </SectionShell>
             )}
 
             <div
-                className={`overflow-hidden transition-all duration-300 ease-out ${showKpis ? "max-h-[520px] opacity-100" : "max-h-0 opacity-0"
+                className={`overflow-hidden transition-all duration-300 ease-out ${showKpis ? "max-h-[900px] opacity-100" : "max-h-0 opacity-0"
                     }`}
                 aria-hidden={!showKpis}
             >
                 {summary && (
-                    <div className="grid grid-cols-1 gap-4 pb-1 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="grid grid-cols-1 gap-3 pb-1 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
                         <SummaryCard
                             title="Total Portfolio USD"
                             value={formatCurrency(summary.total_with_trading_usd, "USD")}
@@ -149,12 +144,12 @@ export default function DashboardView({
             )}
 
             {chartData.length > 0 && summary && (
-                <div className="mt-8 grid grid-cols-1 gap-6 xl:grid-cols-5">
-                    <SectionShell className="xl:col-span-3 h-[480px] lg:h-[560px] xl:h-[620px]">
+                <div className="mt-6 grid grid-cols-1 gap-4 sm:mt-8 sm:gap-6 xl:grid-cols-5">
+                    <SectionShell className="min-h-[620px] xl:col-span-3 xl:min-h-[620px]">
                         <div className="flex h-full flex-col">
-                            <div className="flex items-start justify-between gap-4">
-                                <div>
-                                    <div className="text-[20px] font-semibold text-white">
+                            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                <div className="min-w-0">
+                                    <div className="text-lg font-semibold text-white sm:text-[20px]">
                                         Portfolio Composition
                                     </div>
                                     <div className="mt-1 text-sm text-slate-400">
@@ -164,32 +159,32 @@ export default function DashboardView({
                                     </div>
                                 </div>
 
-                                <div className="flex items-center gap-3">
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center lg:justify-end">
                                     <select
                                         value={compositionMetric}
                                         onChange={(e) => setCompositionMetric(e.target.value)}
-                                        className="rounded-xl border border-slate-700/70 bg-slate-950/90 px-4 py-2.5 text-sm text-white outline-none transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                                        className="w-full rounded-xl border border-slate-700/70 bg-slate-950/90 px-4 py-2.5 text-sm text-white outline-none transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 sm:w-auto"
                                     >
                                         <option value="market_value_usd">Valor actual</option>
                                         <option value="cost_value_usd">Costo</option>
                                         <option value="platform">Plataforma</option>
                                     </select>
-                                </div>                                
 
-                                <div className="text-right">
-                                    <div className="text-xs uppercase tracking-[0.18em] text-slate-500">
-                                        Valor Actual
-                                    </div>
-                                    <div className="mt-1 text-[clamp(1.4rem,1.8vw,2.1rem)] font-semibold leading-tight text-white tabular-nums">
-                                        {formatCurrency(chartTotalValue, "USD")}
+                                    <div className="text-left sm:text-right">
+                                        <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500 sm:text-xs">
+                                            Valor Actual
+                                        </div>
+                                        <div className="mt-1 whitespace-nowrap text-xl font-semibold leading-tight text-white tabular-nums sm:text-2xl">
+                                            {formatCurrency(chartTotalValue, "USD")}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="mt-4 grid flex-1 grid-cols-1 gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-                                <div className="flex h-full w-full items-center justify-center">
-                                    <div className="w-full max-w-[430px]">
-                                        <ResponsiveContainer width="100%" height={320}>
+                            <div className="mt-5 grid flex-1 grid-cols-1 gap-5 lg:grid-cols-[1.05fr_0.95fr] lg:gap-6">
+                                <div className="flex w-full items-center justify-center">
+                                    <div className="h-[260px] w-full max-w-[360px] sm:h-[320px] sm:max-w-[430px]">
+                                        <ResponsiveContainer width="100%" height="100%">
                                             <PieChart>
                                                 <Pie
                                                     data={compositionData}
@@ -197,8 +192,8 @@ export default function DashboardView({
                                                     nameKey="name"
                                                     cx="50%"
                                                     cy="50%"
-                                                    innerRadius={78}
-                                                    outerRadius={122}
+                                                    innerRadius="52%"
+                                                    outerRadius="82%"
                                                     paddingAngle={3}
                                                     stroke="#07101F"
                                                     strokeWidth={2}
@@ -239,7 +234,7 @@ export default function DashboardView({
                                     </div>
                                 </div>
 
-                                <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-3">
+                                <div className="max-h-[280px] space-y-3 overflow-y-auto pr-1 lg:max-h-[420px]">
                                     {compositionData.map((item, index) => {
                                         const pct = chartTotalValue
                                             ? (item.value / chartTotalValue) * 100
@@ -254,7 +249,7 @@ export default function DashboardView({
                                                         setSelectedTicker(item.name);
                                                     }
                                                 }}
-                                                className={`flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left transition-all ${!isOthers && selectedTicker === item.name
+                                                className={`flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left transition-all sm:px-4 ${!isOthers && selectedTicker === item.name
                                                         ? "border-indigo-500/40 bg-indigo-500/10"
                                                         : "border-slate-800/80 bg-slate-950/50 hover:border-slate-700"
                                                     } ${isOthers ? "cursor-default" : "cursor-pointer"}`}
@@ -277,7 +272,9 @@ export default function DashboardView({
                                                                 0
                                                             )} posiciones`
                                                             : compositionMetric === "platform"
-                                                                ? `${formatPortfolioPercent(pct)} del capital invertido`
+                                                                ? `${formatPortfolioPercent(
+                                                                    pct
+                                                                )} del capital invertido`
                                                                 : `${formatPortfolioPercent(pct)} del portfolio`}
                                                     </div>
                                                 </div>
@@ -287,12 +284,10 @@ export default function DashboardView({
                                 </div>
                             </div>
 
-                            <div className="mt-2 pb-1 text-center text-sm text-slate-400">
+                            <div className="mt-4 pb-1 text-center text-sm text-slate-400">
                                 {activeItem ? (
                                     <>
-                                        <span className="font-medium text-white">
-                                            {activeItem.name}
-                                        </span>{" "}
+                                        <span className="font-medium text-white">{activeItem.name}</span>{" "}
                                         · {formatCurrency(activeItem.value, "USD")}
                                     </>
                                 ) : (
@@ -307,10 +302,10 @@ export default function DashboardView({
                         </div>
                     </SectionShell>
 
-                    <SectionShell className="xl:col-span-2 h-[480px] lg:h-[560px] xl:h-[620px]">
+                    <SectionShell className="min-h-[520px] xl:col-span-2 xl:min-h-[620px]">
                         <div className="flex h-full flex-col">
                             <div>
-                                <div className="mb-1 text-[20px] font-semibold text-white">
+                                <div className="mb-1 text-lg font-semibold text-white sm:text-[20px]">
                                     Top Holdings
                                 </div>
                                 <div className="text-sm text-slate-400">
@@ -318,7 +313,7 @@ export default function DashboardView({
                                 </div>
                             </div>
 
-                            <div className="mt-5 flex-1 space-y-3 overflow-y-auto pr-1">
+                            <div className="mt-5 max-h-[430px] flex-1 space-y-3 overflow-y-auto pr-1 xl:max-h-[520px]">
                                 {chartData.map((item, index) => {
                                     const pct = chartTotalValue
                                         ? (item.value / chartTotalValue) * 100
@@ -328,7 +323,7 @@ export default function DashboardView({
                                         <div
                                             key={item.name}
                                             onClick={() => setSelectedTicker(item.name)}
-                                            className={`flex cursor-pointer items-center justify-between rounded-xl border px-4 py-3 transition-all ${selectedTicker === item.name
+                                            className={`flex cursor-pointer items-center justify-between gap-3 rounded-xl border px-3 py-3 transition-all sm:px-4 ${selectedTicker === item.name
                                                     ? "border-indigo-500 bg-indigo-500/10"
                                                     : "border-slate-800 bg-slate-900/60 hover:border-slate-700"
                                                 }`}
@@ -347,14 +342,16 @@ export default function DashboardView({
                                                     </div>
                                                     <div className="text-[12px] text-slate-500">
                                                         {compositionMetric === "platform"
-                                                            ? `${formatPortfolioPercent(pct)} del capital invertido`
+                                                            ? `${formatPortfolioPercent(
+                                                                pct
+                                                            )} del capital invertido`
                                                             : `${formatPortfolioPercent(pct)} del portfolio`}
                                                     </div>
                                                 </div>
                                             </div>
 
-                                            <div className="pl-4 text-right">
-                                                <div className="text-sm font-semibold text-white tabular-nums whitespace-nowrap">
+                                            <div className="shrink-0 text-right">
+                                                <div className="whitespace-nowrap text-sm font-semibold text-white tabular-nums">
                                                     {formatCurrency(item.value, "USD")}
                                                 </div>
                                                 {index === 0 && (
@@ -373,10 +370,10 @@ export default function DashboardView({
             )}
 
             {filteredAndSortedInvestments.length > 0 && (
-                <SectionShell className="mt-16">
+                <SectionShell className="mt-8 sm:mt-12 xl:mt-16">
                     <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                         <div>
-                            <h2 className="text-2xl font-semibold text-white">
+                            <h2 className="text-xl font-semibold text-white sm:text-2xl">
                                 Investments
                             </h2>
                             <p className="mt-1 text-sm text-slate-400">
@@ -394,7 +391,7 @@ export default function DashboardView({
                             selectedTicker ? (
                                 <button
                                     onClick={() => setSelectedTicker(null)}
-                                    className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-indigo-400 transition hover:bg-slate-900"
+                                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-indigo-400 transition hover:bg-slate-900 sm:w-auto"
                                 >
                                     Clear filter ({selectedTicker})
                                 </button>
@@ -406,13 +403,13 @@ export default function DashboardView({
                             placeholder="Buscar ticker..."
                             value={investmentSearch}
                             onChange={(e) => setInvestmentSearch(e.target.value)}
-                            className="rounded-xl border border-slate-700/70 bg-slate-950/90 px-4 py-2.5 text-sm text-white outline-none placeholder:text-slate-500 transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                            className="w-full rounded-xl border border-slate-700/70 bg-slate-950/90 px-4 py-2.5 text-sm text-white outline-none placeholder:text-slate-500 transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 sm:w-auto"
                         />
 
                         <select
                             value={investmentCategoryFilter}
                             onChange={(e) => setInvestmentCategoryFilter(e.target.value)}
-                            className="rounded-xl border border-slate-700/70 bg-slate-950/90 px-4 py-2.5 text-sm text-white outline-none placeholder:text-slate-500 transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                            className="w-full rounded-xl border border-slate-700/70 bg-slate-950/90 px-4 py-2.5 text-sm text-white outline-none placeholder:text-slate-500 transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 sm:w-auto"
                         >
                             <option value="ALL">Todas las categorías</option>
                             <option value="PORTFOLIO">PORTFOLIO</option>
@@ -422,8 +419,8 @@ export default function DashboardView({
                         </select>
                     </FilterToolbar>
 
-                    <div className="overflow-x-auto rounded-[22px] border border-slate-800/80 bg-slate-950/70">
-                        <table className="w-full text-sm">
+                    <div className="overflow-x-auto rounded-[18px] border border-slate-800/80 bg-slate-950/70 sm:rounded-[22px]">
+                        <table className="min-w-[980px] text-sm">
                             <thead className="bg-slate-950/95 text-slate-400">
                                 <tr>
                                     <SortableHeader
@@ -516,7 +513,10 @@ export default function DashboardView({
                                                 {formatNumber(inv.quantity_net, 4)}
                                             </td>
                                             <td className="px-4 py-4 text-right">
-                                                {formatCurrency(inv.market_price, inv.price_currency || "USD")}
+                                                {formatCurrency(
+                                                    inv.market_price,
+                                                    inv.price_currency || "USD"
+                                                )}
                                             </td>
                                             <td className="px-4 py-4 text-right tabular-nums">
                                                 {formatCurrency(inv.market_value_usd, "USD")}

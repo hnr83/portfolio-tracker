@@ -644,7 +644,7 @@ export default function App() {
       />
 
       <main className="min-w-0 flex-1 bg-[radial-gradient(circle_at_top_left,rgba(78,99,255,0.16),transparent_22%),radial-gradient(circle_at_top_right,rgba(23,183,229,0.10),transparent_20%),linear-gradient(180deg,#030817_0%,#020617_100%)]">
-        <div className="mx-auto max-w-[1600px] px-8 py-6">
+        <div className="mx-auto w-full max-w-[1600px] px-3 pb-5 pt-20 sm:px-5 sm:py-6 lg:px-8 xl:pt-6">
           {activeView === "dashboard" && (
             <DashboardView
               summary={summary}
