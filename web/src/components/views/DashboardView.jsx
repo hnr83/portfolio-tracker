@@ -147,25 +147,26 @@ export default function DashboardView({
 
             {chartData.length > 0 && summary && (
                 <div className="mt-6 grid grid-cols-1 gap-4 sm:mt-8 sm:gap-6 xl:grid-cols-5">
-                    <SectionShell className="min-h-[620px] xl:col-span-3 xl:min-h-[620px]">
+                    <SectionShell className="xl:col-span-3 xl:min-h-[620px]">
                         <div className="flex h-full flex-col">
-                            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                            <div className="flex flex-col gap-3 sm:gap-4 lg:flex-row lg:items-start lg:justify-between">
                                 <div className="min-w-0">
-                                    <div className="text-lg font-semibold text-white sm:text-[20px]">
+                                    <div className="text-base font-semibold text-white sm:text-[20px]">
                                         Portfolio Composition
                                     </div>
-                                    <div className="mt-1 text-sm text-slate-400">
+
+                                    <div className="mt-1 text-xs text-slate-400 sm:text-sm">
                                         {compositionMetric === "platform"
                                             ? "Distribución del capital invertido por broker"
                                             : "Allocation by current market value"}
                                     </div>
                                 </div>
 
-                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center lg:justify-end">
+                                <div className="flex flex-col gap-2 sm:flex-row sm:items-center lg:justify-end">
                                     <select
                                         value={compositionMetric}
                                         onChange={(e) => setCompositionMetric(e.target.value)}
-                                        className="w-full rounded-xl border border-slate-700/70 bg-slate-950/90 px-4 py-2.5 text-sm text-white outline-none transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 sm:w-auto"
+                                        className="w-full rounded-xl border border-slate-700/70 bg-slate-950/90 px-3 py-2 text-xs text-white outline-none transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 sm:w-auto sm:px-4 sm:py-2.5 sm:text-sm"
                                     >
                                         <option value="market_value_usd">Valor actual</option>
                                         <option value="cost_value_usd">Costo</option>
@@ -173,19 +174,89 @@ export default function DashboardView({
                                     </select>
 
                                     <div className="text-left sm:text-right">
-                                        <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500 sm:text-xs">
+                                        <div className="text-[9px] uppercase tracking-[0.16em] text-slate-500 sm:text-xs">
                                             Valor Actual
                                         </div>
-                                        <div className="mt-1 whitespace-nowrap text-xl font-semibold leading-tight text-white tabular-nums sm:text-2xl">
+
+                                        <div className="mt-1 whitespace-nowrap text-lg font-semibold leading-tight text-white tabular-nums sm:text-2xl">
                                             {formatCurrency(chartTotalValue, "USD")}
                                         </div>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="mt-5 grid flex-1 grid-cols-1 gap-5 lg:grid-cols-[1.05fr_0.95fr] lg:gap-6">
+                            {/* MOBILE COMPACT */}
+                            <div className="mt-4 flex items-center gap-4 lg:hidden">
+                                <div className="flex shrink-0 items-center justify-center">
+                                    <div className="h-[135px] w-[135px]">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <PieChart>
+                                                <Pie
+                                                    data={compositionData.slice(0, 4)}
+                                                    dataKey="value"
+                                                    nameKey="name"
+                                                    cx="50%"
+                                                    cy="50%"
+                                                    innerRadius="62%"
+                                                    outerRadius="78%"
+                                                    paddingAngle={3}
+                                                    stroke="#07101F"
+                                                    strokeWidth={2}
+                                                >
+                                                    {compositionData.slice(0, 4).map((entry, index) => (
+                                                        <Cell
+                                                            key={`cell-mobile-${index}`}
+                                                            fill={CHART_COLORS[index % CHART_COLORS.length]}
+                                                        />
+                                                    ))}
+                                                </Pie>
+                                            </PieChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </div>
+
+                                <div className="min-w-0 flex-1 space-y-2">
+                                    {compositionData.slice(0, 4).map((item, index) => {
+                                        const pct = chartTotalValue
+                                            ? (item.value / chartTotalValue) * 100
+                                            : 0;
+
+                                        return (
+                                            <button
+                                                key={item.name}
+                                                onClick={() => setSelectedTicker(item.name)}
+                                                className={`flex w-full items-center justify-between gap-2 rounded-xl px-2 py-2 text-left transition ${selectedTicker === item.name
+                                                    ? "bg-indigo-500/10"
+                                                    : "hover:bg-slate-900/60"
+                                                    }`}
+                                            >
+                                                <div className="flex min-w-0 items-center gap-2">
+                                                    <span
+                                                        className="h-2.5 w-2.5 shrink-0 rounded-full"
+                                                        style={{
+                                                            backgroundColor:
+                                                                CHART_COLORS[index % CHART_COLORS.length],
+                                                        }}
+                                                    />
+
+                                                    <span className="truncate text-xs font-medium text-white">
+                                                        {item.name}
+                                                    </span>
+                                                </div>
+
+                                                <span className="shrink-0 text-[11px] text-slate-400">
+                                                    {formatPortfolioPercent(pct)}
+                                                </span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* DESKTOP */}
+                            <div className="mt-5 hidden flex-1 grid-cols-1 gap-5 lg:grid lg:grid-cols-[1.05fr_0.95fr] lg:gap-6">
                                 <div className="flex w-full items-center justify-center">
-                                    <div className="h-[150px] w-full max-w-[180px] sm:h-[320px] sm:max-w-[430px]">
+                                    <div className="h-[320px] w-full max-w-[430px]">
                                         <ResponsiveContainer width="100%" height="100%">
                                             <PieChart>
                                                 <Pie
@@ -194,8 +265,8 @@ export default function DashboardView({
                                                     nameKey="name"
                                                     cx="50%"
                                                     cy="50%"
-                                                    innerRadius="58%"
-                                                    outerRadius="72%"
+                                                    innerRadius="52%"
+                                                    outerRadius="82%"
                                                     paddingAngle={3}
                                                     stroke="#07101F"
                                                     strokeWidth={2}
@@ -236,11 +307,12 @@ export default function DashboardView({
                                     </div>
                                 </div>
 
-                                <div className="max-h-[280px] space-y-3 overflow-y-auto pr-1 lg:max-h-[420px]">
+                                <div className="max-h-[420px] space-y-3 overflow-y-auto pr-1">
                                     {compositionData.map((item, index) => {
                                         const pct = chartTotalValue
                                             ? (item.value / chartTotalValue) * 100
                                             : 0;
+
                                         const isOthers = item.name === "Otros";
 
                                         return (
@@ -263,10 +335,12 @@ export default function DashboardView({
                                                             CHART_COLORS[index % CHART_COLORS.length],
                                                     }}
                                                 />
+
                                                 <div className="min-w-0 flex-1">
                                                     <div className="truncate text-sm font-semibold text-white">
                                                         {item.name}
                                                     </div>
+
                                                     <div className="mt-0.5 text-xs text-slate-500">
                                                         {isOthers
                                                             ? `${formatPortfolioPercent(pct)} · ${Math.max(
@@ -285,22 +359,6 @@ export default function DashboardView({
                                     })}
                                 </div>
                             </div>
-
-                            <div className="mt-4 pb-1 text-center text-sm text-slate-400">
-                                {activeItem ? (
-                                    <>
-                                        <span className="font-medium text-white">{activeItem.name}</span>{" "}
-                                        · {formatCurrency(activeItem.value, "USD")}
-                                    </>
-                                ) : (
-                                    <>
-                                        <span className="font-medium text-white">
-                                            Top {Math.min(compositionTopCount, chartData.length)} + otros
-                                        </span>{" "}
-                                        · click en un holding para filtrar la tabla
-                                    </>
-                                )}
-                            </div>
                         </div>
                     </SectionShell>
 
@@ -310,6 +368,7 @@ export default function DashboardView({
                                 <div className="mb-1 text-lg font-semibold text-white sm:text-[20px]">
                                     Top Holdings
                                 </div>
+
                                 <div className="text-sm text-slate-400">
                                     Ranked by market value
                                 </div>
@@ -338,10 +397,12 @@ export default function DashboardView({
                                                             CHART_COLORS[index % CHART_COLORS.length],
                                                     }}
                                                 />
+
                                                 <div className="min-w-0">
                                                     <div className="truncate font-semibold text-white">
                                                         {item.name}
                                                     </div>
+
                                                     <div className="text-[12px] text-slate-500">
                                                         {compositionMetric === "platform"
                                                             ? `${formatPortfolioPercent(
@@ -356,6 +417,7 @@ export default function DashboardView({
                                                 <div className="whitespace-nowrap text-sm font-semibold text-white tabular-nums">
                                                     {formatCurrency(item.value, "USD")}
                                                 </div>
+
                                                 {index === 0 && (
                                                     <div className="mt-1 inline-flex rounded-full border border-indigo-500/25 bg-indigo-500/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-indigo-300">
                                                         Largest
@@ -378,115 +440,89 @@ export default function DashboardView({
                             <h2 className="text-xl font-semibold text-white sm:text-2xl">
                                 Investments
                             </h2>
-                            <p className="mt-1 text-sm text-slate-400">
+                            <p className="mt-1 hidden text-sm text-slate-400 sm:block">
                                 Posiciones actuales del portfolio
                             </p>
                         </div>
 
-                        <div className="text-sm text-slate-400">
+                        <div className="hidden sm:block text-sm text-slate-400">
                             {filteredInvestments.length} resultados
                         </div>
                     </div>
-
-                    <FilterToolbar
-                        right={
-                            selectedTicker ? (
-                                <button
-                                    onClick={() => setSelectedTicker(null)}
-                                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-indigo-400 transition hover:bg-slate-900 sm:w-auto"
-                                >
-                                    Clear filter ({selectedTicker})
-                                </button>
-                            ) : null
-                        }
-                    >
-                        <input
-                            type="text"
-                            placeholder="Buscar ticker..."
-                            value={investmentSearch}
-                            onChange={(e) => setInvestmentSearch(e.target.value)}
-                            className="w-full rounded-xl border border-slate-700/70 bg-slate-950/90 px-4 py-2.5 text-sm text-white outline-none placeholder:text-slate-500 transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 sm:w-auto"
-                        />
-
-                        <select
-                            value={investmentCategoryFilter}
-                            onChange={(e) => setInvestmentCategoryFilter(e.target.value)}
-                            className="w-full rounded-xl border border-slate-700/70 bg-slate-950/90 px-4 py-2.5 text-sm text-white outline-none placeholder:text-slate-500 transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 sm:w-auto"
+                    <div className="hidden sm:block">
+                        <FilterToolbar
+                            right={
+                                selectedTicker ? (
+                                    <button
+                                        onClick={() => setSelectedTicker(null)}
+                                        className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-indigo-400 transition hover:bg-slate-900 sm:w-auto"
+                                    >
+                                        Clear filter ({selectedTicker})
+                                    </button>
+                                ) : null
+                            }
                         >
-                            <option value="ALL">Todas las categorías</option>
-                            <option value="PORTFOLIO">PORTFOLIO</option>
-                            <option value="CRYPTO">CRYPTO</option>
-                            <option value="FX">FX</option>
-                            <option value="CASH">CASH</option>
-                        </select>
-                    </FilterToolbar>
+                            <input
+                                type="text"
+                                placeholder="Buscar ticker..."
+                                value={investmentSearch}
+                                onChange={(e) => setInvestmentSearch(e.target.value)}
+                                className="w-full rounded-xl border border-slate-700/70 bg-slate-950/90 px-4 py-2.5 text-sm text-white outline-none placeholder:text-slate-500 transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 sm:w-auto"
+                            />
+
+                            <select
+                                value={investmentCategoryFilter}
+                                onChange={(e) => setInvestmentCategoryFilter(e.target.value)}
+                                className="w-full rounded-xl border border-slate-700/70 bg-slate-950/90 px-4 py-2.5 text-sm text-white outline-none placeholder:text-slate-500 transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 sm:w-auto"
+                            >
+                                <option value="ALL">Todas las categorías</option>
+                                <option value="PORTFOLIO">PORTFOLIO</option>
+                                <option value="CRYPTO">CRYPTO</option>
+                                <option value="FX">FX</option>
+                                <option value="CASH">CASH</option>
+                            </select>
+                        </FilterToolbar>
+                    </div>
 
                     <>
                         {/* MOBILE */}
-                        <div className="space-y-3 lg:hidden">
+                        <div className="space-y-2 lg:hidden">
                             {filteredInvestments.map((inv, i) => {
-                                const portfolioPct = chartTotalValue
-                                    ? (inv.market_value_usd / chartTotalValue) * 100
-                                    : null;
-
                                 const displayTicker = inv.normalized_ticker || inv.ticker;
+                                const qty = Number(inv.quantity_net || 0);
 
                                 return (
                                     <button
                                         key={`${inv.ticker}-${i}`}
                                         onClick={() => openAssetTransactions(inv.ticker)}
-                                        className={`w-full rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-left transition ${selectedTicker && displayTicker === selectedTicker
+                                        className={`w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-3 text-left transition ${selectedTicker && displayTicker === selectedTicker
                                                 ? "border-indigo-500/40 bg-indigo-500/10"
                                                 : "hover:border-slate-700"
                                             }`}
                                     >
                                         <div className="flex items-center justify-between gap-3">
-                                            <div className="flex min-w-0 items-center gap-3">
+                                            <div className="min-w-0 flex-1">
                                                 <AssetAvatar
                                                     ticker={inv.ticker}
                                                     normalizedTicker={inv.normalized_ticker}
-                                                    size={30}
+                                                    size={34}
                                                 />
 
-                                                <div className="min-w-0">
-                                                    <div className="truncate text-sm font-semibold text-white">
-                                                        {displayTicker}
-                                                    </div>
+                                                <div className="mt-1 truncate text-xs text-slate-500">
+                                                    {formatNumber(qty, 4)} {displayTicker}
                                                 </div>
                                             </div>
 
                                             <div className="shrink-0 text-right">
-                                                <div className="mb-1 text-[10px] uppercase tracking-[0.16em] text-slate-500">
-                                                    PnL %
+                                                <div className="text-base font-semibold text-white tabular-nums">
+                                                    {formatCurrency(inv.market_value_usd, "USD")}
                                                 </div>
 
                                                 <div
-                                                    className={`text-sm font-semibold tabular-nums ${inv.pnl_pct >= 0 ? "text-emerald-400" : "text-red-400"
+                                                    className={`mt-1 text-xs font-semibold tabular-nums ${inv.pnl_pct >= 0 ? "text-emerald-400" : "text-red-400"
                                                         }`}
                                                 >
                                                     {formatPercent(inv.pnl_pct)}
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="mt-4 grid grid-cols-2 gap-3">
-                                            <div>
-                                                <div className="text-[10px] uppercase tracking-[0.16em] text-slate-500">
-                                                    Market Value
-                                                </div>
-
-                                                <div className="mt-1 text-sm font-semibold text-white tabular-nums">
-                                                    {formatCurrency(inv.market_value_usd, "USD")}
-                                                </div>
-                                            </div>
-
-                                            <div className="text-right">
-                                                <div className="text-[10px] uppercase tracking-[0.16em] text-slate-500">
-                                                    Portfolio
-                                                </div>
-
-                                                <div className="mt-1 text-sm text-slate-300 tabular-nums">
-                                                    {formatPortfolioPercent(portfolioPct)}
                                                 </div>
                                             </div>
                                         </div>
@@ -494,7 +530,6 @@ export default function DashboardView({
                                 );
                             })}
                         </div>
-
                         {/* DESKTOP */}
                         <div className="hidden overflow-x-auto rounded-[18px] border border-slate-800/80 bg-slate-950/70 lg:block sm:rounded-[22px]">
                             <table className="min-w-[980px] text-sm">
