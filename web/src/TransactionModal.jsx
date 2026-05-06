@@ -1,6 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
 import { formatMoney, formatNumberDisplay } from "./utils/formatters";
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+function apiFetch(path, options = {}) {
+  if (!API_BASE_URL) {
+    throw new Error("Falta configurar VITE_API_BASE_URL");
+  }
+
+  const token = window.localStorage.getItem("portfolio-auth-token");
+
+  return fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+}
+
 const FAMILY_OPTIONS = [
   { value: "CASH_USD", label: "Cash USD" },
   { value: "FX_USD", label: "Compra / venta USD" },
@@ -225,7 +243,7 @@ export default function TransactionModal({ isOpen, onClose, onSaved }) {
 
         const payload = buildPayload(form);
 
-        const res = await fetch("/api/transactions/preview", {
+        const res = await apiFetch("/api/transactions/preview", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -290,7 +308,7 @@ export default function TransactionModal({ isOpen, onClose, onSaved }) {
     try {
       const payload = buildPayload(form);
 
-      const res = await fetch("/api/transactions", {
+      const res = await apiFetch("/api/transactions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
