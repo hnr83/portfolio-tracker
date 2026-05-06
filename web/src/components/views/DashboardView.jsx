@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef, useState } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import AssetAvatar from "../shared/AssetAvatar";
 
@@ -57,8 +57,67 @@ export default function DashboardView({
 }) {
     const activeItem = activeIndex != null ? compositionData[activeIndex] : null;
 
+    const touchStartY = useRef(0);
+    const touchEndY = useRef(0);
+
+    const [pullDistance, setPullDistance] = useState(0);
+    const [isPullRefreshing, setIsPullRefreshing] = useState(false);
+
+    const handleTouchStart = (e) => {
+        if (window.scrollY <= 0) {
+            touchStartY.current = e.touches[0].clientY;
+        }
+    };
+
+    const handleTouchMove = (e) => {
+        if (window.scrollY > 0) return;
+
+        touchEndY.current = e.touches[0].clientY;
+        const distance = touchEndY.current - touchStartY.current;
+
+        if (distance > 0) {
+            setPullDistance(Math.min(distance, 120));
+        }
+    };
+
+    const handleTouchEnd = async () => {
+        if (pullDistance > 80 && !isPullRefreshing) {
+            try {
+                setIsPullRefreshing(true);
+                await refreshMarketData();
+            } finally {
+                setTimeout(() => {
+                    setIsPullRefreshing(false);
+                }, 600);
+            }
+        }
+
+        setPullDistance(0);
+    };
+
     return (
-        <>
+        <div
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            className="relative"
+        >
+            <div
+                className={`pointer-events-none sticky top-0 z-40 flex justify-center transition-all duration-200 lg:hidden ${pullDistance > 0 || isPullRefreshing ? "opacity-100" : "opacity-0"
+                    }`}
+                style={{
+                    transform: `translateY(${Math.min(pullDistance - 40, 30)}px)`,
+                }}
+            >
+                <div className="rounded-full border border-slate-700 bg-slate-950/90 px-4 py-2 text-xs text-slate-300 shadow-lg backdrop-blur-xl">
+                    {isPullRefreshing
+                        ? "Actualizando..."
+                        : pullDistance > 80
+                            ? "Soltá para actualizar"
+                            : "Deslizá para actualizar"}
+                </div>
+            </div>
+
             <div className="flex flex-col gap-3 border-slate-800/80 pb-4 sm:gap-6 sm:pb-8 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0">
                     <div className="text-[10px] uppercase tracking-[0.22em] text-indigo-400 sm:text-xs sm:tracking-[0.24em]">
@@ -78,7 +137,7 @@ export default function DashboardView({
                     <button
                         onClick={refreshMarketData}
                         disabled={isRefreshing}
-                        className="flex-1 rounded-xl border border-slate-700/70 bg-transparent px-4 py-2 text-xs text-white transition-all duration-200 hover:bg-slate-800/60 disabled:opacity-50 sm:w-auto sm:rounded-2xl sm:px-5 sm:py-3 sm:text-sm"
+                        className="hidden flex-1 rounded-xl border border-slate-700/70 bg-transparent px-4 py-2 text-xs text-white transition-all duration-200 hover:bg-slate-800/60 disabled:opacity-50 sm:block sm:w-auto sm:rounded-2xl sm:px-5 sm:py-3 sm:text-sm"
                     >
                         {isRefreshing ? "Actualizando..." : "Actualizar datos"}
                     </button>
@@ -226,8 +285,8 @@ export default function DashboardView({
                                                 key={item.name}
                                                 onClick={() => setSelectedTicker(item.name)}
                                                 className={`flex w-full items-center justify-between gap-2 rounded-xl px-2 py-2 text-left transition ${selectedTicker === item.name
-                                                    ? "bg-indigo-500/10"
-                                                    : "hover:bg-slate-900/60"
+                                                        ? "bg-indigo-500/10"
+                                                        : "hover:bg-slate-900/60"
                                                     }`}
                                             >
                                                 <div className="flex min-w-0 items-center gap-2">
@@ -324,8 +383,8 @@ export default function DashboardView({
                                                     }
                                                 }}
                                                 className={`flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left transition-all sm:px-4 ${!isOthers && selectedTicker === item.name
-                                                    ? "border-indigo-500/40 bg-indigo-500/10"
-                                                    : "border-slate-800/80 bg-slate-950/50 hover:border-slate-700"
+                                                        ? "border-indigo-500/40 bg-indigo-500/10"
+                                                        : "border-slate-800/80 bg-slate-950/50 hover:border-slate-700"
                                                     } ${isOthers ? "cursor-default" : "cursor-pointer"}`}
                                             >
                                                 <span
@@ -385,8 +444,8 @@ export default function DashboardView({
                                             key={item.name}
                                             onClick={() => setSelectedTicker(item.name)}
                                             className={`flex cursor-pointer items-center justify-between gap-3 rounded-xl border px-3 py-3 transition-all sm:px-4 ${selectedTicker === item.name
-                                                ? "border-indigo-500 bg-indigo-500/10"
-                                                : "border-slate-800 bg-slate-900/60 hover:border-slate-700"
+                                                    ? "border-indigo-500 bg-indigo-500/10"
+                                                    : "border-slate-800 bg-slate-900/60 hover:border-slate-700"
                                                 }`}
                                         >
                                             <div className="flex min-w-0 items-center gap-3">
@@ -445,10 +504,11 @@ export default function DashboardView({
                             </p>
                         </div>
 
-                        <div className="hidden sm:block text-sm text-slate-400">
+                        <div className="hidden text-sm text-slate-400 sm:block">
                             {filteredInvestments.length} resultados
                         </div>
                     </div>
+
                     <div className="hidden sm:block">
                         <FilterToolbar
                             right={
@@ -530,8 +590,9 @@ export default function DashboardView({
                                 );
                             })}
                         </div>
+
                         {/* DESKTOP */}
-                        <div className="hidden overflow-x-auto rounded-[18px] border border-slate-800/80 bg-slate-950/70 lg:block sm:rounded-[22px]">
+                        <div className="hidden overflow-x-auto rounded-[18px] border border-slate-800/80 bg-slate-950/70 sm:rounded-[22px] lg:block">
                             <table className="min-w-[980px] text-sm">
                                 <thead className="bg-slate-950/95 text-slate-400">
                                     <tr>
@@ -606,9 +667,9 @@ export default function DashboardView({
                                                 key={`${inv.ticker}-${i}`}
                                                 onClick={() => openAssetTransactions(inv.ticker)}
                                                 className={`cursor-pointer border-t border-slate-800/80 transition-colors hover:bg-slate-800/30 ${selectedTicker &&
-                                                    (inv.normalized_ticker || inv.ticker) === selectedTicker
-                                                    ? "bg-indigo-500/8"
-                                                    : ""
+                                                        (inv.normalized_ticker || inv.ticker) === selectedTicker
+                                                        ? "bg-indigo-500/8"
+                                                        : ""
                                                     }`}
                                             >
                                                 <td className="px-4 py-4">
@@ -648,8 +709,8 @@ export default function DashboardView({
 
                                                 <td
                                                     className={`px-4 py-4 text-right font-semibold tabular-nums ${inv.pnl_usd >= 0
-                                                        ? "text-emerald-400"
-                                                        : "text-red-400"
+                                                            ? "text-emerald-400"
+                                                            : "text-red-400"
                                                         }`}
                                                 >
                                                     {formatCurrency(inv.pnl_usd, "USD")}
@@ -657,8 +718,8 @@ export default function DashboardView({
 
                                                 <td
                                                     className={`px-4 py-4 text-right font-semibold tabular-nums ${inv.pnl_pct >= 0
-                                                        ? "text-emerald-400"
-                                                        : "text-red-400"
+                                                            ? "text-emerald-400"
+                                                            : "text-red-400"
                                                         }`}
                                                 >
                                                     {formatPercent(inv.pnl_pct)}
@@ -672,6 +733,6 @@ export default function DashboardView({
                     </>
                 </SectionShell>
             )}
-        </>
+        </div>
     );
 }
