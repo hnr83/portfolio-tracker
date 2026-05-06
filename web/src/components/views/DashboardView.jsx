@@ -59,45 +59,47 @@ export default function DashboardView({
 
     return (
         <>
-            <div className="flex flex-col gap-5 border-slate-800/80 pb-6 sm:gap-6 sm:pb-8 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex flex-col gap-3 border-slate-800/80 pb-4 sm:gap-6 sm:pb-8 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0">
-                    <div className="text-[11px] uppercase tracking-[0.24em] text-indigo-400 sm:text-xs">
+                    <div className="text-[10px] uppercase tracking-[0.22em] text-indigo-400 sm:text-xs sm:tracking-[0.24em]">
                         Dashboard
                     </div>
 
-                    <h1 className="mt-3 text-3xl font-bold tracking-tight text-white sm:text-4xl lg:text-5xl">
+                    <h1 className="mt-2 text-2xl font-bold tracking-tight text-white sm:mt-3 sm:text-4xl lg:text-5xl">
                         Portfolio <span className="text-indigo-400">Jubilación</span>
                     </h1>
 
-                    <p className="mt-3 max-w-2xl text-sm text-slate-400 sm:text-base">
+                    <p className="mt-2 max-w-2xl text-xs text-slate-400 sm:mt-3 sm:text-base">
                         Visión general de tu portfolio y su evolución
                     </p>
                 </div>
 
-                <div className="grid grid-cols-1 gap-3 sm:flex sm:flex-wrap lg:justify-end">
+                <div className="flex flex-row gap-2 lg:justify-end">
                     <button
                         onClick={refreshMarketData}
                         disabled={isRefreshing}
-                        className="w-full rounded-2xl border border-slate-700/70 bg-transparent px-5 py-3 text-sm text-white transition-all duration-200 hover:bg-slate-800/60 disabled:opacity-50 sm:w-auto"
+                        className="flex-1 rounded-xl border border-slate-700/70 bg-transparent px-4 py-2 text-xs text-white transition-all duration-200 hover:bg-slate-800/60 disabled:opacity-50 sm:w-auto sm:rounded-2xl sm:px-5 sm:py-3 sm:text-sm"
                     >
                         {isRefreshing ? "Actualizando..." : "Actualizar datos"}
                     </button>
 
                     <button
                         onClick={() => setIsTransactionModalOpen(true)}
-                        className="w-full rounded-2xl bg-gradient-to-r from-indigo-500 to-blue-500 px-5 py-3 text-sm font-medium text-white shadow-[0_10px_30px_rgba(93,124,250,0.32)] transition-all duration-200 hover:opacity-90 sm:w-auto"
+                        className="flex-1 rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 px-4 py-2 text-xs font-medium text-white shadow-[0_10px_30px_rgba(93,124,250,0.32)] transition-all duration-200 hover:opacity-90 sm:w-auto sm:rounded-2xl sm:px-5 sm:py-3 sm:text-sm"
                     >
                         + Agregar transacción
                     </button>
                 </div>
             </div>
 
-            <KpiVisibilityRail
-                isOpen={showKpis}
-                isPinned={pinKpis}
-                onToggle={handleToggleKpis}
-                onPinToggle={handlePinKpisToggle}
-            />
+            <div className="hidden sm:block">
+                <KpiVisibilityRail
+                    isOpen={showKpis}
+                    isPinned={pinKpis}
+                    onToggle={handleToggleKpis}
+                    onPinToggle={handlePinKpisToggle}
+                />
+            </div>
 
             {!summary && (
                 <SectionShell className="mt-6 sm:mt-10">
@@ -106,12 +108,12 @@ export default function DashboardView({
             )}
 
             <div
-                className={`overflow-hidden transition-all duration-300 ease-out ${showKpis ? "max-h-[900px] opacity-100" : "max-h-0 opacity-0"
+                className={`overflow-hidden transition-all duration-300 ease-out max-h-[900px] opacity-100 sm:${showKpis ? "max-h-[900px] opacity-100" : "max-h-0 opacity-0"
                     }`}
                 aria-hidden={!showKpis}
             >
                 {summary && (
-                    <div className="grid grid-cols-1 gap-3 pb-1 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
+                    <div className="grid grid-cols-2 gap-3 pb-1 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
                         <SummaryCard
                             title="Total Portfolio USD"
                             value={formatCurrency(summary.total_with_trading_usd, "USD")}
@@ -250,8 +252,8 @@ export default function DashboardView({
                                                     }
                                                 }}
                                                 className={`flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left transition-all sm:px-4 ${!isOthers && selectedTicker === item.name
-                                                        ? "border-indigo-500/40 bg-indigo-500/10"
-                                                        : "border-slate-800/80 bg-slate-950/50 hover:border-slate-700"
+                                                    ? "border-indigo-500/40 bg-indigo-500/10"
+                                                    : "border-slate-800/80 bg-slate-950/50 hover:border-slate-700"
                                                     } ${isOthers ? "cursor-default" : "cursor-pointer"}`}
                                             >
                                                 <span
@@ -302,7 +304,7 @@ export default function DashboardView({
                         </div>
                     </SectionShell>
 
-                    <SectionShell className="min-h-[520px] xl:col-span-2 xl:min-h-[620px]">
+                    <SectionShell className="hidden xl:flex xl:min-h-[620px] xl:col-span-2">
                         <div className="flex h-full flex-col">
                             <div>
                                 <div className="mb-1 text-lg font-semibold text-white sm:text-[20px]">
@@ -324,8 +326,8 @@ export default function DashboardView({
                                             key={item.name}
                                             onClick={() => setSelectedTicker(item.name)}
                                             className={`flex cursor-pointer items-center justify-between gap-3 rounded-xl border px-3 py-3 transition-all sm:px-4 ${selectedTicker === item.name
-                                                    ? "border-indigo-500 bg-indigo-500/10"
-                                                    : "border-slate-800 bg-slate-900/60 hover:border-slate-700"
+                                                ? "border-indigo-500 bg-indigo-500/10"
+                                                : "border-slate-800 bg-slate-900/60 hover:border-slate-700"
                                                 }`}
                                         >
                                             <div className="flex min-w-0 items-center gap-3">
@@ -419,132 +421,220 @@ export default function DashboardView({
                         </select>
                     </FilterToolbar>
 
-                    <div className="overflow-x-auto rounded-[18px] border border-slate-800/80 bg-slate-950/70 sm:rounded-[22px]">
-                        <table className="min-w-[980px] text-sm">
-                            <thead className="bg-slate-950/95 text-slate-400">
-                                <tr>
-                                    <SortableHeader
-                                        label="Ticker"
-                                        sortKey="ticker"
-                                        sortState={investmentSort}
-                                        onSort={setInvestmentSort}
-                                    />
-                                    <SortableHeader
-                                        label="Normalized"
-                                        sortKey="normalized_ticker"
-                                        sortState={investmentSort}
-                                        onSort={setInvestmentSort}
-                                    />
-                                    <SortableHeader
-                                        label="Qty"
-                                        sortKey="quantity_net"
-                                        sortState={investmentSort}
-                                        onSort={setInvestmentSort}
-                                        align="right"
-                                    />
-                                    <SortableHeader
-                                        label="Price"
-                                        sortKey="market_price"
-                                        sortState={investmentSort}
-                                        onSort={setInvestmentSort}
-                                        align="right"
-                                    />
-                                    <SortableHeader
-                                        label="Market Value USD"
-                                        sortKey="market_value_usd"
-                                        sortState={investmentSort}
-                                        onSort={setInvestmentSort}
-                                        align="right"
-                                    />
-                                    <th className="px-4 py-3 text-right text-xs uppercase tracking-[0.16em] text-slate-500">
-                                        % Portfolio
-                                    </th>
-                                    <SortableHeader
-                                        label="Cost USD"
-                                        sortKey="cost_value_usd"
-                                        sortState={investmentSort}
-                                        onSort={setInvestmentSort}
-                                        align="right"
-                                    />
-                                    <SortableHeader
-                                        label="PnL USD"
-                                        sortKey="pnl_usd"
-                                        sortState={investmentSort}
-                                        onSort={setInvestmentSort}
-                                        align="right"
-                                    />
-                                    <SortableHeader
-                                        label="PnL %"
-                                        sortKey="pnl_pct"
-                                        sortState={investmentSort}
-                                        onSort={setInvestmentSort}
-                                        align="right"
-                                    />
-                                </tr>
-                            </thead>
+                    <>
+                        {/* MOBILE */}
+                        <div className="space-y-3 lg:hidden">
+                            {filteredInvestments.map((inv, i) => {
+                                const portfolioPct = chartTotalValue
+                                    ? (inv.market_value_usd / chartTotalValue) * 100
+                                    : null;
 
-                            <tbody>
-                                {filteredInvestments.map((inv, i) => {
-                                    const portfolioPct = chartTotalValue
-                                        ? (inv.market_value_usd / chartTotalValue) * 100
-                                        : null;
+                                const displayTicker = inv.normalized_ticker || inv.ticker;
 
-                                    return (
-                                        <tr
-                                            key={`${inv.ticker}-${i}`}
-                                            onClick={() => openAssetTransactions(inv.ticker)}
-                                            className={`cursor-pointer border-t border-slate-800/80 transition-colors hover:bg-slate-800/30 ${selectedTicker &&
-                                                    (inv.normalized_ticker || inv.ticker) === selectedTicker
-                                                    ? "bg-indigo-500/8"
-                                                    : ""
-                                                }`}
-                                        >
-                                            <td className="px-4 py-4">
+                                return (
+                                    <button
+                                        key={`${inv.ticker}-${i}`}
+                                        onClick={() => openAssetTransactions(inv.ticker)}
+                                        className={`w-full rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-left transition ${selectedTicker && displayTicker === selectedTicker
+                                                ? "border-indigo-500/40 bg-indigo-500/10"
+                                                : "hover:border-slate-700"
+                                            }`}
+                                    >
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div className="flex min-w-0 items-center gap-3">
                                                 <AssetAvatar
                                                     ticker={inv.ticker}
                                                     normalizedTicker={inv.normalized_ticker}
-                                                    size={28}
+                                                    size={30}
                                                 />
-                                            </td>
-                                            <td className="px-4 py-4 text-slate-300">
-                                                {inv.normalized_ticker}
-                                            </td>
-                                            <td className="px-4 py-4 text-right">
-                                                {formatNumber(inv.quantity_net, 4)}
-                                            </td>
-                                            <td className="px-4 py-4 text-right">
-                                                {formatCurrency(
-                                                    inv.market_price,
-                                                    inv.price_currency || "USD"
-                                                )}
-                                            </td>
-                                            <td className="px-4 py-4 text-right tabular-nums">
-                                                {formatCurrency(inv.market_value_usd, "USD")}
-                                            </td>
-                                            <td className="px-4 py-4 text-right text-slate-300 tabular-nums">
-                                                {formatPortfolioPercent(portfolioPct)}
-                                            </td>
-                                            <td className="px-4 py-4 text-right tabular-nums">
-                                                {formatCurrency(inv.cost_value_usd, "USD")}
-                                            </td>
-                                            <td
-                                                className={`px-4 py-4 text-right font-semibold tabular-nums ${inv.pnl_usd >= 0 ? "text-emerald-400" : "text-red-400"
+
+                                                <div className="min-w-0">
+                                                    <div className="truncate text-sm font-semibold text-white">
+                                                        {displayTicker}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="shrink-0 text-right">
+                                                <div className="mb-1 text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                                                    PnL %
+                                                </div>
+
+                                                <div
+                                                    className={`text-sm font-semibold tabular-nums ${inv.pnl_pct >= 0 ? "text-emerald-400" : "text-red-400"
+                                                        }`}
+                                                >
+                                                    {formatPercent(inv.pnl_pct)}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="mt-4 grid grid-cols-2 gap-3">
+                                            <div>
+                                                <div className="text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                                                    Market Value
+                                                </div>
+
+                                                <div className="mt-1 text-sm font-semibold text-white tabular-nums">
+                                                    {formatCurrency(inv.market_value_usd, "USD")}
+                                                </div>
+                                            </div>
+
+                                            <div className="text-right">
+                                                <div className="text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                                                    Portfolio
+                                                </div>
+
+                                                <div className="mt-1 text-sm text-slate-300 tabular-nums">
+                                                    {formatPortfolioPercent(portfolioPct)}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        {/* DESKTOP */}
+                        <div className="hidden overflow-x-auto rounded-[18px] border border-slate-800/80 bg-slate-950/70 lg:block sm:rounded-[22px]">
+                            <table className="min-w-[980px] text-sm">
+                                <thead className="bg-slate-950/95 text-slate-400">
+                                    <tr>
+                                        <SortableHeader
+                                            label="Ticker"
+                                            sortKey="ticker"
+                                            sortState={investmentSort}
+                                            onSort={setInvestmentSort}
+                                        />
+                                        <SortableHeader
+                                            label="Normalized"
+                                            sortKey="normalized_ticker"
+                                            sortState={investmentSort}
+                                            onSort={setInvestmentSort}
+                                        />
+                                        <SortableHeader
+                                            label="Qty"
+                                            sortKey="quantity_net"
+                                            sortState={investmentSort}
+                                            onSort={setInvestmentSort}
+                                            align="right"
+                                        />
+                                        <SortableHeader
+                                            label="Price"
+                                            sortKey="market_price"
+                                            sortState={investmentSort}
+                                            onSort={setInvestmentSort}
+                                            align="right"
+                                        />
+                                        <SortableHeader
+                                            label="Market Value USD"
+                                            sortKey="market_value_usd"
+                                            sortState={investmentSort}
+                                            onSort={setInvestmentSort}
+                                            align="right"
+                                        />
+                                        <th className="px-4 py-3 text-right text-xs uppercase tracking-[0.16em] text-slate-500">
+                                            % Portfolio
+                                        </th>
+                                        <SortableHeader
+                                            label="Cost USD"
+                                            sortKey="cost_value_usd"
+                                            sortState={investmentSort}
+                                            onSort={setInvestmentSort}
+                                            align="right"
+                                        />
+                                        <SortableHeader
+                                            label="PnL USD"
+                                            sortKey="pnl_usd"
+                                            sortState={investmentSort}
+                                            onSort={setInvestmentSort}
+                                            align="right"
+                                        />
+                                        <SortableHeader
+                                            label="PnL %"
+                                            sortKey="pnl_pct"
+                                            sortState={investmentSort}
+                                            onSort={setInvestmentSort}
+                                            align="right"
+                                        />
+                                    </tr>
+                                </thead>
+
+                                <tbody>
+                                    {filteredInvestments.map((inv, i) => {
+                                        const portfolioPct = chartTotalValue
+                                            ? (inv.market_value_usd / chartTotalValue) * 100
+                                            : null;
+
+                                        return (
+                                            <tr
+                                                key={`${inv.ticker}-${i}`}
+                                                onClick={() => openAssetTransactions(inv.ticker)}
+                                                className={`cursor-pointer border-t border-slate-800/80 transition-colors hover:bg-slate-800/30 ${selectedTicker &&
+                                                    (inv.normalized_ticker || inv.ticker) === selectedTicker
+                                                    ? "bg-indigo-500/8"
+                                                    : ""
                                                     }`}
                                             >
-                                                {formatCurrency(inv.pnl_usd, "USD")}
-                                            </td>
-                                            <td
-                                                className={`px-4 py-4 text-right font-semibold tabular-nums ${inv.pnl_pct >= 0 ? "text-emerald-400" : "text-red-400"
-                                                    }`}
-                                            >
-                                                {formatPercent(inv.pnl_pct)}
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
+                                                <td className="px-4 py-4">
+                                                    <AssetAvatar
+                                                        ticker={inv.ticker}
+                                                        normalizedTicker={inv.normalized_ticker}
+                                                        size={28}
+                                                    />
+                                                </td>
+
+                                                <td className="px-4 py-4 text-slate-300">
+                                                    {inv.normalized_ticker}
+                                                </td>
+
+                                                <td className="px-4 py-4 text-right">
+                                                    {formatNumber(inv.quantity_net, 4)}
+                                                </td>
+
+                                                <td className="px-4 py-4 text-right">
+                                                    {formatCurrency(
+                                                        inv.market_price,
+                                                        inv.price_currency || "USD"
+                                                    )}
+                                                </td>
+
+                                                <td className="px-4 py-4 text-right tabular-nums">
+                                                    {formatCurrency(inv.market_value_usd, "USD")}
+                                                </td>
+
+                                                <td className="px-4 py-4 text-right text-slate-300 tabular-nums">
+                                                    {formatPortfolioPercent(portfolioPct)}
+                                                </td>
+
+                                                <td className="px-4 py-4 text-right tabular-nums">
+                                                    {formatCurrency(inv.cost_value_usd, "USD")}
+                                                </td>
+
+                                                <td
+                                                    className={`px-4 py-4 text-right font-semibold tabular-nums ${inv.pnl_usd >= 0
+                                                        ? "text-emerald-400"
+                                                        : "text-red-400"
+                                                        }`}
+                                                >
+                                                    {formatCurrency(inv.pnl_usd, "USD")}
+                                                </td>
+
+                                                <td
+                                                    className={`px-4 py-4 text-right font-semibold tabular-nums ${inv.pnl_pct >= 0
+                                                        ? "text-emerald-400"
+                                                        : "text-red-400"
+                                                        }`}
+                                                >
+                                                    {formatPercent(inv.pnl_pct)}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </>
                 </SectionShell>
             )}
         </>
