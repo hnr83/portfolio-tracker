@@ -185,7 +185,7 @@ export default function DashboardView({
 
                             <div className="mt-5 grid flex-1 grid-cols-1 gap-5 lg:grid-cols-[1.05fr_0.95fr] lg:gap-6">
                                 <div className="flex w-full items-center justify-center">
-                                    <div className="h-[260px] w-full max-w-[360px] sm:h-[320px] sm:max-w-[430px]">
+                                    <div className="h-[150px] w-full max-w-[180px] sm:h-[320px] sm:max-w-[430px]">
                                         <ResponsiveContainer width="100%" height="100%">
                                             <PieChart>
                                                 <Pie
@@ -194,8 +194,8 @@ export default function DashboardView({
                                                     nameKey="name"
                                                     cx="50%"
                                                     cy="50%"
-                                                    innerRadius="52%"
-                                                    outerRadius="82%"
+                                                    innerRadius="58%"
+                                                    outerRadius="72%"
                                                     paddingAngle={3}
                                                     stroke="#07101F"
                                                     strokeWidth={2}
