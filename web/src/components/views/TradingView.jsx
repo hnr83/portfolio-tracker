@@ -12,21 +12,20 @@ import TradingModal from "../modals/TradingModal";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
-
 function apiFetch(path, options = {}) {
-  if (!API_BASE_URL) {
-    throw new Error("Falta configurar VITE_API_BASE_URL");
-  }
+    if (!API_BASE_URL) {
+        throw new Error("Falta configurar VITE_API_BASE_URL");
+    }
 
-  const token = window.localStorage.getItem("portfolio-auth-token");
+    const token = window.localStorage.getItem("portfolio-auth-token");
 
-  return fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers: {
-      ...(options.headers || {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-  });
+    return fetch(`${API_BASE_URL}${path}`, {
+        ...options,
+        headers: {
+            ...(options.headers || {}),
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+    });
 }
 
 const EMPTY_FORM = {
@@ -126,12 +125,12 @@ function badgeClass(value) {
     return "border-slate-700 bg-slate-900 text-slate-300";
 }
 
-function Badge({ children }) {
+function Badge({ children, compact = false }) {
     return (
         <span
-            className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${badgeClass(
+            className={`inline-flex items-center rounded-full border font-medium ${badgeClass(
                 children
-            )}`}
+            )} ${compact ? "px-2 py-0.5 text-[10px]" : "px-2.5 py-1 text-xs"}`}
         >
             {children || "-"}
         </span>
@@ -140,15 +139,19 @@ function Badge({ children }) {
 
 function KpiCard({ title, value, subtitle, valueClassName = "text-slate-100" }) {
     return (
-        <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 shadow-lg shadow-slate-950/30">
-            <div className="text-xs uppercase tracking-[0.22em] text-slate-500">
+        <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3 shadow-lg shadow-slate-950/30 md:rounded-3xl md:p-5">
+            <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500 md:text-xs md:tracking-[0.22em]">
                 {title}
             </div>
-            <div className={`mt-3 text-2xl font-semibold ${valueClassName}`}>
+
+            <div className={`mt-2 text-lg font-semibold md:mt-3 md:text-2xl ${valueClassName}`}>
                 {value}
             </div>
+
             {subtitle ? (
-                <div className="mt-2 text-sm text-slate-500">{subtitle}</div>
+                <div className="mt-1 hidden text-sm text-slate-500 md:mt-2 md:block">
+                    {subtitle}
+                </div>
             ) : null}
         </div>
     );
@@ -156,8 +159,64 @@ function KpiCard({ title, value, subtitle, valueClassName = "text-slate-100" }) 
 
 function EmptyState({ text }) {
     return (
-        <div className="rounded-3xl border border-slate-800 bg-slate-950/60 p-8 text-center text-sm text-slate-500">
+        <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-6 text-center text-sm text-slate-500 md:rounded-3xl md:p-8">
             {text}
+        </div>
+    );
+}
+
+function MobileTradeCard({ row }) {
+    return (
+        <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+            <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                        <div className="truncate text-base font-semibold text-slate-100">
+                            {row.instrument || "-"}
+                        </div>
+                        <Badge compact>{row.direction}</Badge>
+                    </div>
+
+                    <div className="mt-1 truncate text-xs text-slate-500">
+                        {row.exchange || "-"} · {row.contract_type || "-"}
+                    </div>
+                </div>
+
+                <div className="shrink-0 text-right">
+                    <div className={`text-base font-semibold ${pnlClass(row.pnl_usd_calculated)}`}>
+                        {formatUsd(row.pnl_usd_calculated)}
+                    </div>
+                    <div className="mt-1 text-xs text-slate-500">
+                        {formatPercent(row.pnl_pct)}
+                    </div>
+                </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
+                <div className="rounded-xl bg-slate-900/70 p-2">
+                    <div className="text-slate-500">Capital</div>
+                    <div className="mt-1 font-medium text-slate-200">
+                        {formatUsd(row.capital_usd, {
+                            maximumFractionDigits: 0,
+                            minimumFractionDigits: 0,
+                        })}
+                    </div>
+                </div>
+
+                <div className="rounded-xl bg-slate-900/70 p-2">
+                    <div className="text-slate-500">Cierre</div>
+                    <div className="mt-1 font-medium text-slate-200">
+                        {formatDate(row.closed_at)}
+                    </div>
+                </div>
+
+                <div className="rounded-xl bg-slate-900/70 p-2">
+                    <div className="text-slate-500">Días</div>
+                    <div className="mt-1 font-medium text-slate-200">
+                        {row.holding_days ?? "-"}
+                    </div>
+                </div>
+            </div>
         </div>
     );
 }
@@ -191,9 +250,9 @@ export default function TradingView() {
             setError("");
 
             const [summaryRes, byAssetRes, tradesRes] = await Promise.all([
-            apiFetch(`/api/trading/summary`),
-            apiFetch(`/api/trading/by-asset`),
-            apiFetch(`/api/trading`),
+                apiFetch(`/api/trading/summary`),
+                apiFetch(`/api/trading/by-asset`),
+                apiFetch(`/api/trading`),
             ]);
 
             if (!summaryRes.ok || !byAssetRes.ok || !tradesRes.ok) {
@@ -312,7 +371,6 @@ export default function TradingView() {
         }
     };
 
-
     const handleSyncConfirm = async () => {
         try {
             setSyncLoading(true);
@@ -348,7 +406,6 @@ export default function TradingView() {
         }
     };
 
-
     const handleCancelSyncPreview = () => {
         if (syncLoading) return;
         setSyncPreview(null);
@@ -356,24 +413,15 @@ export default function TradingView() {
     };
 
     const assets = useMemo(() => {
-        return [
-            "ALL",
-            ...new Set(trades.map((row) => row.instrument).filter(Boolean)),
-        ];
+        return ["ALL", ...new Set(trades.map((row) => row.instrument).filter(Boolean))];
     }, [trades]);
 
     const directions = useMemo(() => {
-        return [
-            "ALL",
-            ...new Set(trades.map((row) => row.direction).filter(Boolean)),
-        ];
+        return ["ALL", ...new Set(trades.map((row) => row.direction).filter(Boolean))];
     }, [trades]);
 
     const destinations = useMemo(() => {
-        return [
-            "ALL",
-            ...new Set(trades.map((row) => row.destination).filter(Boolean)),
-        ];
+        return ["ALL", ...new Set(trades.map((row) => row.destination).filter(Boolean))];
     }, [trades]);
 
     const filteredTrades = useMemo(() => {
@@ -396,12 +444,7 @@ export default function TradingView() {
                 String(row.contract_type || "").toLowerCase().includes(q) ||
                 String(row.exchange || "").toLowerCase().includes(q);
 
-            return (
-                matchesAsset &&
-                matchesDirection &&
-                matchesDestination &&
-                matchesSearch
-            );
+            return matchesAsset && matchesDirection && matchesDestination && matchesSearch;
         });
     }, [trades, assetFilter, directionFilter, destinationFilter, search]);
 
@@ -414,13 +457,13 @@ export default function TradingView() {
     }, [byAsset]);
 
     if (loading) {
-        return <div className="p-6 text-sm text-slate-400">Cargando trading...</div>;
+        return <div className="p-4 text-sm text-slate-400 md:p-6">Cargando trading...</div>;
     }
 
     if (error) {
         return (
-            <div className="p-6">
-                <div className="rounded-3xl border border-red-500/20 bg-red-500/10 p-5 text-sm text-red-300">
+            <div className="p-4 md:p-6">
+                <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-300 md:rounded-3xl md:p-5">
                     {error}
                 </div>
             </div>
@@ -428,42 +471,45 @@ export default function TradingView() {
     }
 
     return (
-        <div className="space-y-6 p-6">
+        <div className="space-y-5 p-4 md:space-y-6 md:p-6">
             <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
                 <div>
                     <div className="text-xs uppercase tracking-[0.28em] text-slate-500">
                         Trading
                     </div>
-                    <h1 className="mt-2 text-3xl font-semibold text-slate-100">
+
+                    <h1 className="mt-2 text-2xl font-semibold text-slate-100 md:text-3xl">
                         Resultado de operaciones
                     </h1>
-                    <p className="mt-2 max-w-2xl text-sm text-slate-500">
+
+                    <p className="mt-2 hidden max-w-2xl text-sm text-slate-500 md:block">
                         Vista separada del portfolio jubilación. El resultado se valoriza por
                         settlement: USDT directo y M-moneda contra precio actual.
                     </p>
                 </div>
 
-                <div className="flex items-center gap-4">
+                <div className="grid grid-cols-2 gap-2 md:flex md:items-center md:gap-4">
                     <button
                         onClick={handleSyncPreview}
                         disabled={syncLoading}
-                        className="rounded-xl bg-violet-500 px-4 py-2 text-sm font-semibold text-black hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="rounded-xl bg-violet-500 px-3 py-2 text-xs font-semibold text-black hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-60 md:px-4 md:text-sm"
                     >
-                        {syncLoading ? "Sync..." : "Importar trades de BingX"}
+                        {syncLoading ? "Sync..." : "Importar BingX"}
                     </button>
 
                     <button
                         onClick={handleOpenModal}
-                        className="rounded-xl bg-cyan-500 px-4 py-2 text-sm font-semibold text-black hover:bg-cyan-400"
+                        className="rounded-xl bg-cyan-500 px-3 py-2 text-xs font-semibold text-black hover:bg-cyan-400 md:px-4 md:text-sm"
                     >
-                        + Nueva operación
+                        + Nueva
                     </button>
 
-                    <div className="rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3 text-right">
-                        <div className="text-xs uppercase tracking-[0.22em] text-slate-500">
+                    <div className="absolute right-1 top-1 rounded-2xl border border-slate-800 bg-slate-950/95 px-3 py-2 shadow-lg shadow-black/20 md:relative md:right-auto md:top-auto md:rounded-2xl md:px-4 md:py-3">
+                        <div className="text-[9px] uppercase tracking-[0.18em] text-slate-500 md:text-xs md:tracking-[0.22em]">
                             Trades
                         </div>
-                        <div className="mt-1 text-xl font-semibold text-slate-100">
+
+                        <div className="mt-0.5 text-sm font-semibold text-slate-100 md:mt-1 md:text-xl">
                             {summary?.total_trades ?? 0}
                         </div>
                     </div>
@@ -471,19 +517,19 @@ export default function TradingView() {
             </div>
 
             {syncError ? (
-                <div className="rounded-3xl border border-red-500/20 bg-red-500/10 p-5 text-sm text-red-300">
+                <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-300 md:rounded-3xl md:p-5">
                     {syncError}
                 </div>
             ) : null}
 
             {syncResult ? (
-                <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-5 text-sm text-emerald-300">
+                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-300 md:rounded-3xl md:p-5">
                     Insertados desde BingX: {syncResult.inserted ?? 0}
                 </div>
             ) : null}
 
             {syncPreview ? (
-                <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 shadow-lg shadow-slate-950/30">
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-lg shadow-slate-950/30 md:rounded-3xl md:p-5">
                     <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
                         <div>
                             <div className="text-xs uppercase tracking-[0.22em] text-violet-300">
@@ -494,51 +540,34 @@ export default function TradingView() {
                                 Operaciones detectadas
                             </h2>
 
-                            <div className="mt-3 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-5">
-                                <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-3">
-                                    <div className="text-slate-500">Construidas</div>
-                                    <div className="mt-1 text-xl font-semibold text-slate-100">
-                                        {syncPreview.totalBuilt ?? 0}
+                            <div className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-2 lg:grid-cols-5">
+                                {[
+                                    ["Construidas", syncPreview.totalBuilt ?? 0, "text-slate-100"],
+                                    ["Nuevas", syncPreview.newTrades ?? 0, "text-emerald-400"],
+                                    ["Existentes", syncPreview.alreadyExists ?? 0, "text-slate-200"],
+                                    ["Descartadas", syncPreview.skippedTrades ?? 0, "text-amber-300"],
+                                    ["Lookback", `${syncPreview.lookbackDays ?? 60}d`, "text-slate-100"],
+                                ].map(([label, value, className]) => (
+                                    <div
+                                        key={label}
+                                        className="rounded-2xl border border-slate-800 bg-slate-900/40 p-3"
+                                    >
+                                        <div className="text-xs text-slate-500">{label}</div>
+                                        <div className={`mt-1 text-lg font-semibold ${className}`}>
+                                            {value}
+                                        </div>
                                     </div>
-                                </div>
-
-                                <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-3">
-                                    <div className="text-slate-500">Nuevas</div>
-                                    <div className="mt-1 text-xl font-semibold text-emerald-400">
-                                        {syncPreview.newTrades ?? 0}
-                                    </div>
-                                </div>
-
-                                <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-3">
-                                    <div className="text-slate-500">Existentes</div>
-                                    <div className="mt-1 text-xl font-semibold text-slate-200">
-                                        {syncPreview.alreadyExists ?? 0}
-                                    </div>
-                                </div>
-
-                                <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-3">
-                                    <div className="text-slate-500">Descartadas</div>
-                                    <div className="mt-1 text-xl font-semibold text-amber-300">
-                                        {syncPreview.skippedTrades ?? 0}
-                                    </div>
-                                </div>
-
-                                <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-3">
-                                    <div className="text-slate-500">Lookback</div>
-                                    <div className="mt-1 text-xl font-semibold text-slate-100">
-                                        {syncPreview.lookbackDays ?? 60}d
-                                    </div>
-                                </div>
+                                ))}
                             </div>
                         </div>
 
-                        <div className="flex flex-col gap-2 sm:flex-row lg:flex-col">
+                        <div className="grid grid-cols-2 gap-2 lg:flex lg:flex-col">
                             <button
                                 onClick={handleSyncConfirm}
                                 disabled={syncLoading || !syncPreview.newTrades}
                                 className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
                             >
-                                Confirmar inserción
+                                Confirmar
                             </button>
 
                             <button
@@ -556,11 +585,11 @@ export default function TradingView() {
                             <table className="min-w-full divide-y divide-slate-800 text-sm">
                                 <thead className="bg-slate-950">
                                     <tr className="text-left text-xs uppercase tracking-[0.18em] text-slate-500">
-                                        <th className="px-4 py-3">Asset</th>
-                                        <th className="px-4 py-3">Tipo</th>
-                                        <th className="px-4 py-3">Fechas</th>
-                                        <th className="px-4 py-3 text-right">Capital</th>
-                                        <th className="px-4 py-3 text-right">PnL</th>
+                                        <th className="px-3 py-3 md:px-4">Asset</th>
+                                        <th className="hidden px-4 py-3 md:table-cell">Tipo</th>
+                                        <th className="px-3 py-3 md:px-4">Fechas</th>
+                                        <th className="hidden px-4 py-3 text-right md:table-cell">Capital</th>
+                                        <th className="px-3 py-3 text-right md:px-4">PnL</th>
                                     </tr>
                                 </thead>
 
@@ -570,7 +599,7 @@ export default function TradingView() {
                                             key={row.trade_id}
                                             className="bg-slate-950/40 text-slate-300"
                                         >
-                                            <td className="px-4 py-3">
+                                            <td className="px-3 py-3 md:px-4">
                                                 <div className="font-semibold text-slate-100">
                                                     {row.instrument}
                                                 </div>
@@ -579,22 +608,22 @@ export default function TradingView() {
                                                 </div>
                                             </td>
 
-                                            <td className="px-4 py-3">
+                                            <td className="hidden px-4 py-3 md:table-cell">
                                                 <Badge>{row.direction}</Badge>
                                             </td>
 
-                                            <td className="px-4 py-3">
+                                            <td className="px-3 py-3 md:px-4">
                                                 <div>{formatDate(row.opened_at)}</div>
                                                 <div className="mt-1 text-xs text-slate-500">
                                                     cierre {formatDate(row.closed_at)}
                                                 </div>
                                             </td>
 
-                                            <td className="px-4 py-3 text-right">
+                                            <td className="hidden px-4 py-3 text-right md:table-cell">
                                                 {formatUsd(row.capital_usd)}
                                             </td>
 
-                                            <td className="px-4 py-3 text-right">
+                                            <td className="px-3 py-3 text-right md:px-4">
                                                 <div className={`font-semibold ${pnlClass(row.pnl_usd_reported)}`}>
                                                     {formatUsd(row.pnl_usd_reported)}
                                                 </div>
@@ -615,7 +644,7 @@ export default function TradingView() {
                 </div>
             ) : null}
 
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
                 <KpiCard
                     title="PnL total"
                     value={formatUsd(summary?.total_pnl_usd)}
@@ -624,7 +653,7 @@ export default function TradingView() {
                 />
 
                 <KpiCard
-                    title="Resultado retenido"
+                    title="Retenido"
                     value={formatUsd(summary?.retained_result_usd)}
                     subtitle="Según is_capital_held"
                     valueClassName={pnlClass(summary?.retained_result_usd)}
@@ -645,21 +674,21 @@ export default function TradingView() {
                 />
             </div>
 
-            <div className="grid gap-6 xl:grid-cols-[1fr_420px]">
-                <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 shadow-lg shadow-slate-950/30">
-                    <div className="mb-5 flex items-center justify-between gap-4">
+            <div className="grid gap-5 xl:grid-cols-[1fr_420px] xl:gap-6">
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-lg shadow-slate-950/30 md:rounded-3xl md:p-5">
+                    <div className="mb-4 flex items-center justify-between gap-4 md:mb-5">
                         <div>
                             <h2 className="text-lg font-semibold text-slate-100">
                                 PnL por instrumento
                             </h2>
-                            <p className="mt-1 text-sm text-slate-500">
+                            <p className="mt-1 hidden text-sm text-slate-500 md:block">
                                 Agrupado desde vw_trading_by_asset.
                             </p>
                         </div>
                     </div>
 
                     {chartData.length ? (
-                        <div className="h-72">
+                        <div className="h-56 md:h-72">
                             <ResponsiveContainer width="100%" height="100%">
                                 <BarChart data={chartData}>
                                     <XAxis
@@ -715,41 +744,41 @@ export default function TradingView() {
                     )}
                 </div>
 
-                <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 shadow-lg shadow-slate-950/30">
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-lg shadow-slate-950/30 md:rounded-3xl md:p-5">
                     <h2 className="text-lg font-semibold text-slate-100">Breakdown</h2>
 
-                    <div className="mt-5 space-y-4">
+                    <div className="mt-4 space-y-3 md:mt-5 md:space-y-4">
                         {byAsset.map((row) => (
                             <div
                                 key={row.instrument}
-                                className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4"
+                                className="rounded-2xl border border-slate-800 bg-slate-900/40 p-3 md:p-4"
                             >
-                                <div className="flex items-center justify-between">
-                                    <div className="text-lg font-semibold text-slate-100">
+                                <div className="flex items-center justify-between gap-3">
+                                    <div className="text-base font-semibold text-slate-100 md:text-lg">
                                         {row.instrument}
                                     </div>
-                                    <div className="text-sm text-slate-500">
+                                    <div className="text-xs text-slate-500 md:text-sm">
                                         {row.trades} trades
                                     </div>
                                 </div>
 
-                                <div className={`mt-3 text-xl font-semibold ${pnlClass(row.pnl_usd)}`}>
+                                <div className={`mt-2 text-lg font-semibold md:mt-3 md:text-xl ${pnlClass(row.pnl_usd)}`}>
                                     {formatUsd(row.pnl_usd)}
                                 </div>
 
-                                <div className="mt-2 text-sm text-slate-500">
-                                    Rendimiento sobre capital operado: {formatPercent(row.pnl_pct)}
+                                <div className="mt-1 text-xs text-slate-500 md:mt-2 md:text-sm">
+                                    Rendimiento: {formatPercent(row.pnl_pct)}
                                 </div>
 
-                                <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                                    <div className="rounded-xl bg-slate-950/70 p-3">
+                                <div className="mt-3 grid grid-cols-2 gap-2 text-xs md:mt-4 md:gap-3 md:text-sm">
+                                    <div className="rounded-xl bg-slate-950/70 p-2 md:p-3">
                                         <div className="text-slate-500">Hold coin</div>
                                         <div className={pnlClass(row.pnl_hold_coin_usd)}>
                                             {formatUsd(row.pnl_hold_coin_usd)}
                                         </div>
                                     </div>
 
-                                    <div className="rounded-xl bg-slate-950/70 p-3">
+                                    <div className="rounded-xl bg-slate-950/70 p-2 md:p-3">
                                         <div className="text-slate-500">Hold USDT</div>
                                         <div className={pnlClass(row.pnl_hold_usdt_usd)}>
                                             {formatUsd(row.pnl_hold_usdt_usd)}
@@ -764,7 +793,7 @@ export default function TradingView() {
                 </div>
             </div>
 
-            <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 shadow-lg shadow-slate-950/30">
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-lg shadow-slate-950/30 md:rounded-3xl md:p-5">
                 <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
                     <div>
                         <h2 className="text-lg font-semibold text-slate-100">
@@ -775,7 +804,7 @@ export default function TradingView() {
                         </p>
                     </div>
 
-                    <div className="flex flex-col gap-3 md:flex-row">
+                    <div className="hidden flex-col gap-3 md:flex md:flex-row">
                         <input
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
@@ -821,7 +850,17 @@ export default function TradingView() {
                     </div>
                 </div>
 
-                <div className="mt-5 overflow-hidden rounded-2xl border border-slate-800">
+                <div className="mt-4 space-y-3 md:hidden">
+                    {filteredTrades.slice(0, 5).map((row) => (
+                        <MobileTradeCard key={row.trade_id} row={row} />
+                    ))}
+
+                    {!filteredTrades.length ? (
+                        <EmptyState text="No hay operaciones para mostrar." />
+                    ) : null}
+                </div>
+
+                <div className="mt-5 hidden overflow-hidden rounded-2xl border border-slate-800 md:block">
                     <div className="max-h-[520px] overflow-auto">
                         <table className="min-w-full divide-y divide-slate-800 text-sm">
                             <thead className="sticky top-0 z-10 bg-slate-950">
