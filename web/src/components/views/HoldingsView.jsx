@@ -40,7 +40,7 @@ export default function HoldingsView({
             return matchesSearch && matchesCategory;
         });
 
-        const sorted = [...filtered].sort((a, b) => {
+        return [...filtered].sort((a, b) => {
             let aValue;
             let bValue;
 
@@ -76,8 +76,6 @@ export default function HoldingsView({
 
             return sortDir === "asc" ? comparison : -comparison;
         });
-
-        return sorted;
     }, [holdings, search, categoryFilter, sortBy, sortDir]);
 
     function handleSort(column) {
@@ -103,17 +101,20 @@ export default function HoldingsView({
         return (
             <th
                 onClick={() => handleSort(column)}
-                className={`px-4 py-3 text-xs uppercase tracking-[0.16em] text-slate-500 cursor-pointer select-none transition-colors hover:text-slate-300 ${align === "right" ? "text-right" : "text-left"
-                    }`}
+                className={`cursor-pointer select-none px-4 py-3 text-xs uppercase tracking-[0.16em] text-slate-500 transition-colors hover:text-slate-300 ${
+                    align === "right" ? "text-right" : "text-left"
+                }`}
             >
                 <div
-                    className={`inline-flex items-center gap-2 ${align === "right" ? "justify-end w-full" : ""
-                        }`}
+                    className={`inline-flex items-center gap-2 ${
+                        align === "right" ? "w-full justify-end" : ""
+                    }`}
                 >
                     <span>{label}</span>
                     <span
-                        className={`text-[11px] ${active ? "text-slate-300" : "text-slate-600"
-                            }`}
+                        className={`text-[11px] ${
+                            active ? "text-slate-300" : "text-slate-600"
+                        }`}
                     >
                         {arrow}
                     </span>
@@ -149,9 +150,21 @@ export default function HoldingsView({
         return null;
     }
 
+    function getPrimaryTicker(h) {
+        return h.normalized_ticker || h.ticker || "-";
+    }
+
+    function getSecondaryTicker(h) {
+        if (h.ticker && h.normalized_ticker && h.ticker !== h.normalized_ticker) {
+            return h.ticker;
+        }
+
+        return null;
+    }
+
     return (
-        <SectionShell className="mt-8">
-            <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <SectionShell className="mt-5 md:mt-8">
+            <div className="mb-4 flex flex-col gap-3 lg:mb-5 lg:flex-row lg:items-end lg:justify-between">
                 <div>
                     <h2 className="text-2xl font-semibold text-white">Holdings</h2>
                     <p className="mt-1 text-sm text-slate-400">
@@ -159,7 +172,7 @@ export default function HoldingsView({
                     </p>
                 </div>
 
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <div className="hidden flex-col gap-3 sm:flex-row sm:items-center md:flex">
                     <div className="min-w-[220px]">
                         <label className="mb-1 block text-[11px] uppercase tracking-[0.16em] text-slate-500">
                             Buscar
@@ -206,14 +219,115 @@ export default function HoldingsView({
                             setSearch("");
                             setCategoryFilter("ALL");
                         }}
-                        className="rounded-lg border border-slate-800 bg-slate-900/70 px-3 py-1.5 text-xs uppercase tracking-[0.14em] text-slate-300 transition hover:border-slate-700 hover:bg-slate-800/70"
+                        className="hidden rounded-lg border border-slate-800 bg-slate-900/70 px-3 py-1.5 text-xs uppercase tracking-[0.14em] text-slate-300 transition hover:border-slate-700 hover:bg-slate-800/70 md:block"
                     >
                         Limpiar filtros
                     </button>
                 )}
             </div>
 
-            <div className="overflow-auto rounded-[22px] border border-slate-800/80 bg-slate-950/70">
+            <div className="space-y-3 md:hidden">
+                {filteredAndSorted.length > 0 ? (
+                    filteredAndSorted.map((h, i) => {
+                        const primaryTicker = getPrimaryTicker(h);
+                        const secondaryTicker = getSecondaryTicker(h);
+                        const pnlPositive = Number(h.pnl_usd) >= 0;
+                        const dailyPositive = Number(h.change_pct_1d) >= 0;
+
+                        return (
+                            <button
+                                key={`${h.ticker || "row"}-${h.category || "cat"}-${i}`}
+                                type="button"
+                                onClick={() => handleRowClick(h)}
+                                className={`w-full rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-left transition active:scale-[0.99] ${
+                                    onSelectHolding ? "cursor-pointer" : "cursor-default"
+                                }`}
+                            >
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="flex min-w-0 items-center gap-3">
+                                        <AssetAvatar
+                                            ticker={h.ticker}
+                                            normalizedTicker={h.normalized_ticker}
+                                            size={34}
+                                            showText={false}
+                                        />
+
+                                        <div className="min-w-0">
+                                            <div className="truncate text-base font-semibold text-white">
+                                                {primaryTicker}
+                                            </div>
+
+                                            <div className="mt-0.5 truncate text-xs text-slate-500">
+                                                {formatNumber?.(h.quantity_net, 4) ??
+                                                    h.quantity_net ??
+                                                    "-"}{" "}
+                                                {secondaryTicker || primaryTicker}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="shrink-0 text-right">
+                                        <div className="text-base font-semibold tabular-nums text-white">
+                                            {formatCurrency?.(h.market_value_usd, "USD") ??
+                                                h.market_value_usd ??
+                                                "-"}
+                                        </div>
+
+                                        <div
+                                            className={`mt-1 text-xs font-semibold tabular-nums ${
+                                                pnlPositive
+                                                    ? "text-emerald-400"
+                                                    : "text-red-400"
+                                            }`}
+                                        >
+                                            {formatCurrency?.(h.pnl_usd, "USD") ??
+                                                h.pnl_usd ??
+                                                "-"}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                                    <div className="rounded-xl bg-slate-900/70 p-2">
+                                        <div className="text-slate-500">Categoría</div>
+                                        <div className="mt-1 truncate font-medium text-slate-200">
+                                            {h.category || "-"}
+                                        </div>
+                                    </div>
+
+                                    <div className="rounded-xl bg-slate-900/70 p-2">
+                                        <div className="text-slate-500">
+                                            {renderReferenceSubtext(h) || "Ref."}
+                                        </div>
+                                        <div className="mt-1 truncate font-medium text-slate-200">
+                                            {renderReference(h)}
+                                        </div>
+                                    </div>
+
+                                    <div className="rounded-xl bg-slate-900/70 p-2 text-right">
+                                        <div className="text-slate-500">1D</div>
+                                        <div
+                                            className={`mt-1 font-semibold ${
+                                                dailyPositive
+                                                    ? "text-emerald-400"
+                                                    : "text-red-400"
+                                            }`}
+                                        >
+                                            {formatPercent(h.change_pct_1d)}
+                                        </div>
+                                    </div>
+                                </div>
+                            </button>
+                        );
+                    })
+                ) : (
+                    <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-8 text-center text-sm text-slate-400">
+                        No hay holdings para mostrar.
+                    </div>
+                )}
+            </div>
+
+            <div className="hidden overflow-auto rounded-[22px] border border-slate-800/80 bg-slate-950/70 md:block">
                 <table className="w-full text-sm">
                     <thead className="bg-slate-950/95 text-slate-400">
                         <tr>
@@ -246,20 +360,16 @@ export default function HoldingsView({
                     <tbody>
                         {filteredAndSorted.length > 0 ? (
                             filteredAndSorted.map((h, i) => {
-                                const primaryTicker = h.normalized_ticker || h.ticker || "-";
-                                const secondaryTicker =
-                                    h.ticker &&
-                                        h.normalized_ticker &&
-                                        h.ticker !== h.normalized_ticker
-                                        ? h.ticker
-                                        : null;
+                                const primaryTicker = getPrimaryTicker(h);
+                                const secondaryTicker = getSecondaryTicker(h);
 
                                 return (
                                     <tr
                                         key={`${h.ticker || "row"}-${h.category || "cat"}-${i}`}
                                         onClick={() => handleRowClick(h)}
-                                        className={`border-t border-slate-800/80 transition-colors hover:bg-slate-800/20 ${onSelectHolding ? "cursor-pointer" : ""
-                                            }`}
+                                        className={`border-t border-slate-800/80 transition-colors hover:bg-slate-800/20 ${
+                                            onSelectHolding ? "cursor-pointer" : ""
+                                        }`}
                                     >
                                         <td className="px-4 py-4">
                                             <div className="flex items-center gap-3">
@@ -312,21 +422,25 @@ export default function HoldingsView({
                                         </td>
 
                                         <td
-                                            className={`px-4 py-4 text-right font-semibold tabular-nums ${Number(h.change_pct_1d) >= 0
+                                            className={`px-4 py-4 text-right font-semibold tabular-nums ${
+                                                Number(h.change_pct_1d) >= 0
                                                     ? "text-emerald-400"
                                                     : "text-red-400"
-                                                }`}
+                                            }`}
                                         >
                                             {formatPercent(h.change_pct_1d)}
                                         </td>
 
                                         <td
-                                            className={`px-4 py-4 text-right font-semibold tabular-nums ${Number(h.pnl_usd) >= 0
+                                            className={`px-4 py-4 text-right font-semibold tabular-nums ${
+                                                Number(h.pnl_usd) >= 0
                                                     ? "text-emerald-400"
                                                     : "text-red-400"
-                                                }`}
+                                            }`}
                                         >
-                                            {formatCurrency?.(h.pnl_usd, "USD") ?? h.pnl_usd ?? "-"}
+                                            {formatCurrency?.(h.pnl_usd, "USD") ??
+                                                h.pnl_usd ??
+                                                "-"}
                                         </td>
                                     </tr>
                                 );
