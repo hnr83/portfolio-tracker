@@ -630,7 +630,7 @@ export default function App() {
 
 
   return (
-    <div className="flex min-h-screen bg-[#020617] text-white">
+    <div className="min-h-screen bg-[#020617]">
       <Sidebar
         summary={summary}
         activeView={activeView}
