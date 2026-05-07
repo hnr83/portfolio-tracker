@@ -1,19 +1,22 @@
-import { writeFileSync } from "fs";
-import { execSync } from "child_process";
+import fs from "fs";
+import path from "path";
+import packageJson from "../package.json" assert { type: "json" };
 
-let commit = "local";
-
-try {
-  commit = execSync("git rev-parse --short HEAD").toString().trim();
-} catch {}
-
-const buildDate = new Date().toISOString();
-
-const content = `export const BUILD_INFO = {
-  version: "1.0.0",
-  buildDate: "${buildDate}",
-  commit: "${commit}"
+const buildInfo = {
+  version: packageJson.version,
+  buildDate: new Date().toISOString(),
+  commit: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) || "local",
 };
-`;
 
-writeFileSync("src/buildInfo.js", content);
+const output = `export const BUILD_INFO = ${JSON.stringify(
+  buildInfo,
+  null,
+  2
+)};\n`;
+
+fs.writeFileSync(
+  path.resolve("src/buildInfo.js"),
+  output
+);
+
+console.log("buildInfo generado:", buildInfo);
