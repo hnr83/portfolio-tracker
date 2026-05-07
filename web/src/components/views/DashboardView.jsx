@@ -62,6 +62,9 @@ export default function DashboardView({
 
     const [pullDistance, setPullDistance] = useState(0);
     const [isPullRefreshing, setIsPullRefreshing] = useState(false);
+    const [hideValues, setHideValues] = useState(() => {
+        return localStorage.getItem("portfolio-hide-values") === "true";
+    });
 
     const handleTouchStart = (e) => {
         if (window.scrollY <= 0) {
@@ -95,6 +98,14 @@ export default function DashboardView({
         setPullDistance(0);
     };
 
+    const toggleHideValues = () => {
+        const next = !hideValues;
+
+        setHideValues(next);
+
+        localStorage.setItem("portfolio-hide-values", String(next));
+    };
+
     return (
         <div
             onTouchStart={handleTouchStart}
@@ -120,17 +131,31 @@ export default function DashboardView({
 
             <div className="flex flex-col gap-3 border-slate-800/80 pb-4 sm:gap-6 sm:pb-8 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0">
-                    <div className="text-[10px] uppercase tracking-[0.22em] text-indigo-400 sm:text-xs sm:tracking-[0.24em]">
-                        Dashboard
+                    <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                            <div className="text-[10px] uppercase tracking-[0.22em] text-indigo-400 sm:text-xs sm:tracking-[0.24em]">
+                                Dashboard
+                            </div>
+
+                            <h1 className="mt-2 text-2xl font-bold tracking-tight text-white sm:mt-3 sm:text-4xl lg:text-5xl">
+                                Portfolio{" "}
+                                <span className="text-indigo-400">
+                                    Jubilación
+                                </span>
+                            </h1>
+
+                            <p className="mt-2 max-w-2xl text-xs text-slate-400 sm:mt-3 sm:text-base">
+                                Visión general de tu portfolio y su evolución
+                            </p>
+                        </div>
+
+                        <button
+                            onClick={toggleHideValues}
+                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-700/70 bg-slate-950/80 text-lg text-slate-300 transition hover:border-slate-600 hover:bg-slate-900 lg:hidden"
+                        >
+                            {hideValues ? "🙈" : "👁"}
+                        </button>
                     </div>
-
-                    <h1 className="mt-2 text-2xl font-bold tracking-tight text-white sm:mt-3 sm:text-4xl lg:text-5xl">
-                        Portfolio <span className="text-indigo-400">Jubilación</span>
-                    </h1>
-
-                    <p className="mt-2 max-w-2xl text-xs text-slate-400 sm:mt-3 sm:text-base">
-                        Visión general de tu portfolio y su evolución
-                    </p>
                 </div>
 
                 <div className="flex flex-row gap-2 lg:justify-end">
@@ -167,7 +192,9 @@ export default function DashboardView({
             )}
 
             <div
-                className={`overflow-hidden transition-all duration-300 ease-out max-h-[900px] opacity-100 sm:${showKpis ? "max-h-[900px] opacity-100" : "max-h-0 opacity-0"
+                className={`overflow-hidden transition-all duration-300 ease-out ${showKpis
+                        ? "max-h-[900px] opacity-100"
+                        : "max-h-[900px] opacity-100 sm:max-h-0 sm:opacity-0"
                     }`}
                 aria-hidden={!showKpis}
             >
@@ -175,23 +202,43 @@ export default function DashboardView({
                     <div className="grid grid-cols-2 gap-3 pb-1 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
                         <SummaryCard
                             title="Total Portfolio USD"
-                            value={formatCurrency(summary.total_with_trading_usd, "USD")}
-                            subtitle={formatCurrency(summary.total_with_trading_ars, "ARS")}
+                            value={
+                                hideValues
+                                    ? "US$ ••••••"
+                                    : formatCurrency(summary.total_with_trading_usd, "USD")
+                            }
+                            subtitle={
+                                hideValues
+                                    ? "US$ ••••••"
+                                    : formatCurrency(summary.total_with_trading_ars, "ARS")
+                            }
                             icon="◫"
                         />
                         <SummaryCard
                             title="Investments USD"
-                            value={formatCurrency(investmentsUsd, "USD")}
+                            value={
+                                hideValues
+                                    ? "US$ ••••••"
+                                    : formatCurrency(investmentsUsd, "USD")
+                            }
                             icon="↗"
                         />
                         <SummaryCard
                             title="Liquidez USD"
-                            value={formatCurrency(liquidityUsd, "USD")}
+                            value={
+                                hideValues
+                                    ? "US$ ••••••"
+                                    : formatCurrency(liquidityUsd, "USD")
+                            }
                             icon="◉"
                         />
                         <SummaryCard
                             title="Crypto USD"
-                            value={formatCurrency(cryptoUsd, "USD")}
+                            value={
+                                hideValues
+                                    ? "US$ ••••••"
+                                    : formatCurrency(cryptoUsd, "USD")
+                            }
                             icon="₿"
                         />
                     </div>
@@ -238,7 +285,9 @@ export default function DashboardView({
                                         </div>
 
                                         <div className="mt-1 whitespace-nowrap text-lg font-semibold leading-tight text-white tabular-nums sm:text-2xl">
-                                            {formatCurrency(chartTotalValue, "USD")}
+                                         {hideValues
+                                            ? "US$ ••••••"
+                                            : formatCurrency(chartTotalValue, "USD")}   
                                         </div>
                                     </div>
                                 </div>
@@ -285,8 +334,8 @@ export default function DashboardView({
                                                 key={item.name}
                                                 onClick={() => setSelectedTicker(item.name)}
                                                 className={`flex w-full items-center justify-between gap-2 rounded-xl px-2 py-2 text-left transition ${selectedTicker === item.name
-                                                        ? "bg-indigo-500/10"
-                                                        : "hover:bg-slate-900/60"
+                                                    ? "bg-indigo-500/10"
+                                                    : "hover:bg-slate-900/60"
                                                     }`}
                                             >
                                                 <div className="flex min-w-0 items-center gap-2">
@@ -383,8 +432,8 @@ export default function DashboardView({
                                                     }
                                                 }}
                                                 className={`flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left transition-all sm:px-4 ${!isOthers && selectedTicker === item.name
-                                                        ? "border-indigo-500/40 bg-indigo-500/10"
-                                                        : "border-slate-800/80 bg-slate-950/50 hover:border-slate-700"
+                                                    ? "border-indigo-500/40 bg-indigo-500/10"
+                                                    : "border-slate-800/80 bg-slate-950/50 hover:border-slate-700"
                                                     } ${isOthers ? "cursor-default" : "cursor-pointer"}`}
                                             >
                                                 <span
@@ -444,8 +493,8 @@ export default function DashboardView({
                                             key={item.name}
                                             onClick={() => setSelectedTicker(item.name)}
                                             className={`flex cursor-pointer items-center justify-between gap-3 rounded-xl border px-3 py-3 transition-all sm:px-4 ${selectedTicker === item.name
-                                                    ? "border-indigo-500 bg-indigo-500/10"
-                                                    : "border-slate-800 bg-slate-900/60 hover:border-slate-700"
+                                                ? "border-indigo-500 bg-indigo-500/10"
+                                                : "border-slate-800 bg-slate-900/60 hover:border-slate-700"
                                                 }`}
                                         >
                                             <div className="flex min-w-0 items-center gap-3">
@@ -556,8 +605,8 @@ export default function DashboardView({
                                         key={`${inv.ticker}-${i}`}
                                         onClick={() => openAssetTransactions(inv.ticker)}
                                         className={`w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-3 text-left transition ${selectedTicker && displayTicker === selectedTicker
-                                                ? "border-indigo-500/40 bg-indigo-500/10"
-                                                : "hover:border-slate-700"
+                                            ? "border-indigo-500/40 bg-indigo-500/10"
+                                            : "hover:border-slate-700"
                                             }`}
                                     >
                                         <div className="flex items-center justify-between gap-3">
@@ -575,7 +624,10 @@ export default function DashboardView({
 
                                             <div className="shrink-0 text-right">
                                                 <div className="text-base font-semibold text-white tabular-nums">
-                                                    {formatCurrency(inv.market_value_usd, "USD")}
+                                                   {
+                                                    hideValues
+                                                         ? "US$ ••••••"
+                                                        : formatCurrency(inv.market_value_usd, "USD")} 
                                                 </div>
 
                                                 <div
@@ -667,9 +719,9 @@ export default function DashboardView({
                                                 key={`${inv.ticker}-${i}`}
                                                 onClick={() => openAssetTransactions(inv.ticker)}
                                                 className={`cursor-pointer border-t border-slate-800/80 transition-colors hover:bg-slate-800/30 ${selectedTicker &&
-                                                        (inv.normalized_ticker || inv.ticker) === selectedTicker
-                                                        ? "bg-indigo-500/8"
-                                                        : ""
+                                                    (inv.normalized_ticker || inv.ticker) === selectedTicker
+                                                    ? "bg-indigo-500/8"
+                                                    : ""
                                                     }`}
                                             >
                                                 <td className="px-4 py-4">
@@ -709,8 +761,8 @@ export default function DashboardView({
 
                                                 <td
                                                     className={`px-4 py-4 text-right font-semibold tabular-nums ${inv.pnl_usd >= 0
-                                                            ? "text-emerald-400"
-                                                            : "text-red-400"
+                                                        ? "text-emerald-400"
+                                                        : "text-red-400"
                                                         }`}
                                                 >
                                                     {formatCurrency(inv.pnl_usd, "USD")}
@@ -718,8 +770,8 @@ export default function DashboardView({
 
                                                 <td
                                                     className={`px-4 py-4 text-right font-semibold tabular-nums ${inv.pnl_pct >= 0
-                                                            ? "text-emerald-400"
-                                                            : "text-red-400"
+                                                        ? "text-emerald-400"
+                                                        : "text-red-400"
                                                         }`}
                                                 >
                                                     {formatPercent(inv.pnl_pct)}
