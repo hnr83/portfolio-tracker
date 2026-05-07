@@ -16,7 +16,7 @@ export default function TransactionsView({
     SortableHeader,
     FilterToolbar,
     SectionShell,
-    
+
 }) {
     const selectedTicker =
         selectedAssetMovements?.ticker || null;
@@ -163,33 +163,46 @@ export default function TransactionsView({
                         {movementsToShow.map((m, i) => (
                             <tr
                                 key={m.id || i}
-                                className={`border-t border-slate-800/80 transition-colors hover:bg-slate-800/20 ${selectedAssetMovements &&
+                                className={`border-t border-slate-800/80 text-slate-200 transition-colors hover:bg-slate-800/20 ${selectedAssetMovements &&
                                         (m.ticker === selectedTicker ||
                                             m.normalized_ticker === selectedNormalizedTicker)
                                         ? "bg-indigo-500/8"
                                         : ""
                                     }`}
                             >
-                                <td className="px-4 py-4">
+                                <td className="px-4 py-4 text-slate-300">
                                     {m.fecha
                                         ? new Date(m.fecha).toLocaleDateString("es-AR")
                                         : "-"}
                                 </td>
-                                <td className="px-4 py-4">{m.movement_type}</td>
-                                <td className="px-4 py-4">{m.category}</td>
+
+                                <td className="px-4 py-4 text-slate-200">
+                                    {m.movement_type}
+                                </td>
+
+                                <td className="px-4 py-4 text-slate-300">
+                                    {m.category}
+                                </td>
+
                                 <td className="px-4 py-4 font-semibold text-white">
                                     {m.ticker}
                                 </td>
-                                <td className="px-4 py-4">{m.instrument_type || "-"}</td>
-                                <td className="px-4 py-4 text-right tabular-nums">
+
+                                <td className="px-4 py-4 text-slate-300">
+                                    {m.instrument_type || "-"}
+                                </td>
+
+                                <td className="px-4 py-4 text-right tabular-nums text-slate-200">
                                     {m.quantity == null ? "-" : formatNumber(m.quantity, 4)}
                                 </td>
-                                <td className="px-4 py-4 text-right tabular-nums">
+
+                                <td className="px-4 py-4 text-right tabular-nums text-slate-200">
                                     {m.unit_price == null
                                         ? "-"
                                         : formatCurrency(m.unit_price, m.price_currency || "USD")}
                                 </td>
-                                <td className="px-4 py-4 text-right tabular-nums">
+
+                                <td className="px-4 py-4 text-right tabular-nums text-slate-200">
                                     {m.gross_amount == null
                                         ? "-"
                                         : formatCurrency(
@@ -197,7 +210,8 @@ export default function TransactionsView({
                                             m.settlement_currency || m.price_currency || "USD"
                                         )}
                                 </td>
-                                <td className="px-4 py-4 text-right tabular-nums">
+
+                                <td className="px-4 py-4 text-right tabular-nums text-slate-200">
                                     {m.net_amount == null
                                         ? "-"
                                         : formatCurrency(
@@ -205,8 +219,14 @@ export default function TransactionsView({
                                             m.settlement_currency || m.price_currency || "USD"
                                         )}
                                 </td>
-                                <td className="px-4 py-4">{m.broker || "-"}</td>
-                                <td className="px-4 py-4">{m.owner || "-"}</td>
+
+                                <td className="px-4 py-4 text-slate-300">
+                                    {m.broker || "-"}
+                                </td>
+
+                                <td className="px-4 py-4 text-slate-300">
+                                    {m.owner || "-"}
+                                </td>
                             </tr>
                         ))}
                     </tbody>

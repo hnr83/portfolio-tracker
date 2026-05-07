@@ -736,18 +736,18 @@ export default function DashboardView({
                                                     {inv.normalized_ticker}
                                                 </td>
 
-                                                <td className="px-4 py-4 text-right">
+                                                <td className="px-4 py-4 text-right text-white">
                                                     {formatNumber(inv.quantity_net, 4)}
                                                 </td>
 
-                                                <td className="px-4 py-4 text-right">
+                                                <td className="px-4 py-4 text-right text-slate-300">
                                                     {formatCurrency(
                                                         inv.market_price,
                                                         inv.price_currency || "USD"
                                                     )}
                                                 </td>
 
-                                                <td className="px-4 py-4 text-right tabular-nums">
+                                                <td className="px-4 py-4 text-right text-white tabular-nums">
                                                     {formatCurrency(inv.market_value_usd, "USD")}
                                                 </td>
 
@@ -755,7 +755,7 @@ export default function DashboardView({
                                                     {formatPortfolioPercent(portfolioPct)}
                                                 </td>
 
-                                                <td className="px-4 py-4 text-right tabular-nums">
+                                                <td className="px-4 py-4 text-right text-white tabular-nums">
                                                     {formatCurrency(inv.cost_value_usd, "USD")}
                                                 </td>
 

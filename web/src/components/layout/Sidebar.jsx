@@ -73,7 +73,7 @@ export default function Sidebar({
 
     return (
         <>
-            <aside className="sticky top-0 hidden h-screen w-80 shrink-0 flex-col overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden border-r border-slate-800/80 bg-[#020617] px-5 py-6 xl:flex">
+            <aside className="hidden xl:fixed xl:inset-y-0 xl:left-0 xl:z-40 xl:flex xl:w-80 xl:shrink-0 xl:flex-col xl:overflow-y-auto xl:border-r xl:border-slate-800/80 xl:bg-[#020617] xl:px-5 xl:py-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 <div className="px-2 pt-2">
                     <div className="flex items-start gap-3">
                         <div className="mt-1 h-16 w-[3px] rounded-full bg-gradient-to-b from-indigo-300 via-indigo-400 to-indigo-600" />
@@ -128,7 +128,7 @@ export default function Sidebar({
                                 {formatCurrency(pnlUsd, "USD")}
                             </div>
 
-                            <div className="mt-1 text-[12px] opacity-70">
+                            <div className="mt-1 text-[12px] opacity-70 text-white">
                                 {pnlPct >= 0 ? "+" : ""}
                                 {formatPercent(pnlPct)}
                             </div>
