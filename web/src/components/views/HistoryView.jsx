@@ -15,19 +15,19 @@ const METRIC_OPTIONS = ["TOTAL", "INVESTMENTS", "PNL"];
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 function apiFetch(path, options = {}) {
-  if (!API_BASE_URL) {
-    throw new Error("Falta configurar VITE_API_BASE_URL");
-  }
+    if (!API_BASE_URL) {
+        throw new Error("Falta configurar VITE_API_BASE_URL");
+    }
 
-  const token = window.localStorage.getItem("portfolio-auth-token");
+    const token = window.localStorage.getItem("portfolio-auth-token");
 
-  return fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers: {
-      ...(options.headers || {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-  });
+    return fetch(`${API_BASE_URL}${path}`, {
+        ...options,
+        headers: {
+            ...(options.headers || {}),
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+    });
 }
 
 function formatCurrency(value, currency = "USD") {
@@ -66,24 +66,27 @@ function formatLongDate(value) {
 
 function HistoryKpiCard({ label, value, subvalue, positive }) {
     return (
-        <div className="rounded-[22px] border border-slate-800/80 bg-[linear-gradient(180deg,rgba(12,18,40,0.96)_0%,rgba(6,10,28,0.98)_100%)] p-5 shadow-[0_18px_50px_rgba(0,0,0,0.28)] backdrop-blur-sm">
-            <div className="text-[11px] uppercase tracking-[0.24em] text-slate-500">
+        <div className="rounded-2xl border border-slate-800/80 bg-[linear-gradient(180deg,rgba(12,18,40,0.96)_0%,rgba(6,10,28,0.98)_100%)] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.28)] backdrop-blur-sm md:rounded-[22px] md:p-5">
+            <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500 md:text-[11px] md:tracking-[0.24em]">
                 {label}
             </div>
 
             <div
-                className={`mt-4 text-[30px] font-semibold ${positive === undefined
+                className={`mt-3 text-xl font-semibold md:mt-4 md:text-[30px] ${
+                    positive === undefined
                         ? "text-white"
                         : positive
-                            ? "text-emerald-400"
-                            : "text-red-400"
-                    }`}
+                          ? "text-emerald-400"
+                          : "text-red-400"
+                }`}
             >
                 {value}
             </div>
 
             {subvalue ? (
-                <div className="mt-2 text-[14px] text-slate-400">{subvalue}</div>
+                <div className="mt-1 text-xs text-slate-400 md:mt-2 md:text-[14px]">
+                    {subvalue}
+                </div>
             ) : null}
         </div>
     );
@@ -119,16 +122,17 @@ function CustomTooltip({ active, payload, label, metric }) {
                     <div>
                         <div className="text-sm text-slate-400">Brecha</div>
                         <div
-                            className={`text-sm font-medium ${Number(row.investments_usd || 0) -
+                            className={`text-sm font-medium ${
+                                Number(row.investments_usd || 0) -
                                     Number(row.investments_cost_usd || 0) >=
-                                    0
+                                0
                                     ? "text-emerald-400"
                                     : "text-red-400"
-                                }`}
+                            }`}
                         >
                             {formatCurrency(
                                 Number(row.investments_usd || 0) -
-                                Number(row.investments_cost_usd || 0),
+                                    Number(row.investments_cost_usd || 0),
                                 "USD"
                             )}
                         </div>
@@ -140,13 +144,13 @@ function CustomTooltip({ active, payload, label, metric }) {
                         {metric === "TOTAL" ? "Valor total" : "PnL"}
                     </div>
 
-                        <div className="text-lg font-semibold text-white">
-                            {metric === "TOTAL"
-                                ? formatCurrency(
-                                    row.total_with_trading_usd ?? row.market_value_usd,
-                                    "USD"
-                                )
-                                : formatCurrency(row.total_pnl_usd, "USD")}
+                    <div className="text-lg font-semibold text-white">
+                        {metric === "TOTAL"
+                            ? formatCurrency(
+                                  row.total_with_trading_usd ?? row.market_value_usd,
+                                  "USD"
+                              )
+                            : formatCurrency(row.total_pnl_usd, "USD")}
                     </div>
 
                     {metric === "PNL" && (
@@ -195,8 +199,9 @@ function BenchmarkTooltip({ active, payload, label }) {
                 <div>
                     <div className="text-sm text-slate-400">Alpha</div>
                     <div
-                        className={`text-sm font-medium ${alpha >= 0 ? "text-emerald-400" : "text-red-400"
-                            }`}
+                        className={`text-sm font-medium ${
+                            alpha >= 0 ? "text-emerald-400" : "text-red-400"
+                        }`}
                     >
                         {alpha >= 0 ? "+" : ""}
                         {alpha.toFixed(2)}%
@@ -352,22 +357,24 @@ export default function HistoryView() {
     const investmentsCostPeriodPositive = investmentsCostPeriodChangeUsd >= 0;
 
     return (
-        <div className="space-y-8">
-            <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+        <div className="space-y-5 md:space-y-8">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
                 <div>
-                    <div className="text-[12px] uppercase tracking-[0.28em] text-slate-500">
+                    <div className="text-[11px] uppercase tracking-[0.24em] text-slate-500 md:text-[12px] md:tracking-[0.28em]">
                         Histórico
                     </div>
-                    <h2 className="mt-3 text-4xl font-semibold text-white">
+
+                    <h2 className="mt-2 text-2xl font-semibold text-white md:mt-3 md:text-4xl">
                         Evolución del portfolio
                     </h2>
-                    <p className="mt-3 text-slate-400">
+
+                    <p className="mt-2 text-sm text-slate-400 md:mt-3 md:text-base">
                         Seguimiento del valor total, investments y rendimiento.
                     </p>
                 </div>
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-3">
+            <div className="grid gap-3 md:gap-4 lg:grid-cols-3">
                 <HistoryKpiCard
                     label={activeMetric.kpiLabel}
                     value={formatCurrency(lastValue, "USD")}
@@ -424,73 +431,80 @@ export default function HistoryView() {
                 />
             </div>
 
-            <div className="rounded-[24px] border border-slate-800/80 p-6">
-                <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+            <div className="rounded-2xl border border-slate-800/80 p-4 md:rounded-[24px] md:p-6">
+                <div className="mb-4 flex flex-col gap-4 md:mb-6 xl:flex-row xl:items-center xl:justify-between">
                     <div>
-                        <div className="text-xs uppercase text-slate-500">
+                        <div className="text-[11px] uppercase text-slate-500 md:text-xs">
                             {historyMode === "benchmark"
                                 ? "Portfolio vs benchmark"
                                 : activeMetric.label}
                         </div>
-                        <div className="text-xl text-white font-semibold">
-                            {historyMode === "benchmark" ? "Performance relativa" : "Evolución"}
+
+                        <div className="text-lg font-semibold text-white md:text-xl">
+                            {historyMode === "benchmark"
+                                ? "Performance relativa"
+                                : "Evolución"}
                         </div>
                     </div>
 
                     <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-                        <div className="flex gap-2">
+                        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
                             {RANGE_OPTIONS.map((opt) => (
                                 <button
                                     key={opt}
                                     onClick={() => setRange(opt)}
-                                    className={`px-3 py-1.5 rounded-lg text-xs ${opt === range
+                                    className={`shrink-0 rounded-lg px-3 py-1.5 text-xs ${
+                                        opt === range
                                             ? "bg-indigo-500/20 text-white"
                                             : "bg-white/5 text-slate-300"
-                                        }`}
+                                    }`}
                                 >
                                     {opt}
                                 </button>
                             ))}
                         </div>
 
-                        <div className="flex rounded-2xl bg-slate-950/60 p-1">
+                        <div className="grid grid-cols-2 rounded-2xl bg-slate-950/60 p-1 md:flex">
                             <button
                                 onClick={() => setHistoryMode("evolution")}
-                                className={`rounded-xl px-4 py-2 text-sm transition ${historyMode === "evolution"
+                                className={`rounded-xl px-4 py-2 text-sm transition ${
+                                    historyMode === "evolution"
                                         ? "bg-indigo-500/20 text-white"
                                         : "text-slate-400 hover:text-white"
-                                    }`}
+                                }`}
                             >
                                 Evolución
                             </button>
 
                             <button
                                 onClick={() => setHistoryMode("benchmark")}
-                                className={`rounded-xl px-4 py-2 text-sm transition ${historyMode === "benchmark"
+                                className={`rounded-xl px-4 py-2 text-sm transition ${
+                                    historyMode === "benchmark"
                                         ? "bg-indigo-500/20 text-white"
                                         : "text-slate-400 hover:text-white"
-                                    }`}
+                                }`}
                             >
                                 Benchmark
                             </button>
                         </div>
 
                         {historyMode === "evolution" && (
-                            <div className="flex gap-2">
+                            <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
                                 {METRIC_OPTIONS.map((opt) => (
                                     <button
                                         key={opt}
                                         onClick={() => setMetric(opt)}
-                                        className={`px-3 py-1.5 rounded-lg text-xs ${opt === metric
+                                        className={`shrink-0 rounded-lg px-3 py-1.5 text-xs ${
+                                            opt === metric
                                                 ? "bg-emerald-500/20 text-white"
                                                 : "bg-white/5 text-slate-300"
-                                            }`}
+                                        }`}
                                     >
                                         {opt === "TOTAL"
                                             ? "Total"
                                             : opt === "INVESTMENTS"
-                                                ? "Investments"
-                                                : "PnL"}
+                                              ? "Investments"
+                                              : "PnL"}
                                     </button>
                                 ))}
                             </div>
@@ -510,30 +524,46 @@ export default function HistoryView() {
                     </div>
                 </div>
 
-                <div className="h-[420px]">
+                <div className="h-[300px] md:h-[420px]">
                     {historyMode === "evolution" ? (
                         <ResponsiveContainer>
-                            <LineChart data={chartData}>
+                            <LineChart
+                                data={chartData}
+                                margin={{ top: 8, right: 8, left: -18, bottom: 0 }}
+                            >
                                 <CartesianGrid stroke="rgba(255,255,255,0.05)" />
+
                                 <XAxis
                                     dataKey="snapshot_date"
                                     tickFormatter={formatShortDate}
-                                    tick={{ fill: "#94a3b8", fontSize: 12 }}
+                                    tick={{ fill: "#94a3b8", fontSize: 11 }}
                                     axisLine={false}
                                     tickLine={false}
+                                    minTickGap={24}
                                 />
+
                                 <YAxis
                                     domain={["dataMin - 2000", "dataMax + 2000"]}
-                                    tickFormatter={(value) => Number(value).toLocaleString("es-AR")}
-                                    tick={{ fill: "#94a3b8", fontSize: 12 }}
+                                    tickFormatter={(value) =>
+                                        Number(value).toLocaleString("es-AR", {
+                                            maximumFractionDigits: 0,
+                                        })
+                                    }
+                                    tick={{ fill: "#94a3b8", fontSize: 11 }}
                                     axisLine={false}
                                     tickLine={false}
-                                    width={90}
+                                    width={64}
                                 />
+
                                 <Tooltip content={<CustomTooltip metric={metric} />} />
 
                                 {metric === "INVESTMENTS" && (
-                                    <Legend wrapperStyle={{ color: "#cbd5e1", fontSize: "12px" }} />
+                                    <Legend
+                                        wrapperStyle={{
+                                            color: "#cbd5e1",
+                                            fontSize: "12px",
+                                        }}
+                                    />
                                 )}
 
                                 <Line
@@ -541,7 +571,8 @@ export default function HistoryView() {
                                     dataKey={dataKey}
                                     stroke={strokeColor}
                                     strokeWidth={3}
-                                    dot={{ r: 4 }}
+                                    dot={false}
+                                    activeDot={{ r: 4 }}
                                     isAnimationActive={false}
                                     name={
                                         metric === "INVESTMENTS"
@@ -556,7 +587,8 @@ export default function HistoryView() {
                                         dataKey={activeMetric.secondaryKey}
                                         stroke={activeMetric.secondaryColor}
                                         strokeWidth={3}
-                                        dot={{ r: 4 }}
+                                        dot={false}
+                                        activeDot={{ r: 4 }}
                                         isAnimationActive={false}
                                         name="Costo"
                                     />
@@ -564,8 +596,11 @@ export default function HistoryView() {
                             </LineChart>
                         </ResponsiveContainer>
                     ) : (
-                        <ResponsiveContainer width="100%" height={420}>
-                            <LineChart data={benchmarkSeries}>
+                        <ResponsiveContainer width="100%" height="100%">
+                            <LineChart
+                                data={benchmarkSeries}
+                                margin={{ top: 8, right: 8, left: -18, bottom: 0 }}
+                            >
                                 <CartesianGrid
                                     strokeDasharray="3 3"
                                     stroke="rgba(148,163,184,0.12)"
@@ -574,24 +609,31 @@ export default function HistoryView() {
                                 <XAxis
                                     dataKey="date"
                                     tickFormatter={formatShortDate}
-                                    tick={{ fill: "#93c5fd", fontSize: 12 }}
+                                    tick={{ fill: "#93c5fd", fontSize: 11 }}
                                     tickLine={false}
                                     axisLine={false}
+                                    minTickGap={24}
                                 />
 
                                 <YAxis
-                                    tick={{ fill: "#93c5fd", fontSize: 12 }}
+                                    tick={{ fill: "#93c5fd", fontSize: 11 }}
                                     tickLine={false}
                                     axisLine={false}
                                     domain={["dataMin - 2", "dataMax + 2"]}
                                     tickFormatter={(value) =>
                                         `${(Number(value) - 100).toFixed(0)}%`
                                     }
+                                    width={56}
                                 />
 
                                 <Tooltip content={<BenchmarkTooltip />} />
 
-                                <Legend />
+                                <Legend
+                                    wrapperStyle={{
+                                        color: "#cbd5e1",
+                                        fontSize: "12px",
+                                    }}
+                                />
 
                                 <Line
                                     type="monotone"
@@ -600,6 +642,7 @@ export default function HistoryView() {
                                     stroke="#60a5fa"
                                     strokeWidth={3}
                                     dot={false}
+                                    activeDot={{ r: 4 }}
                                 />
 
                                 <Line
@@ -609,6 +652,7 @@ export default function HistoryView() {
                                     stroke="#f59e0b"
                                     strokeWidth={3}
                                     dot={false}
+                                    activeDot={{ r: 4 }}
                                 />
                             </LineChart>
                         </ResponsiveContainer>
