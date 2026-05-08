@@ -72,6 +72,9 @@ function AppContent() {
   });
 
   function handleLogin(user, token) {
+    window.localStorage.setItem("portfolio-auth-token", token);
+    window.localStorage.setItem("portfolio-auth-user", JSON.stringify(user));
+
     setAuthUser(user);
     setAuthToken(token);
   }
@@ -153,8 +156,10 @@ function AppContent() {
 
   useEffect(() => {
     if (!authToken) return;
+
+    refreshAll();
     loadDashboardExtraData();
-  }, [authToken]);
+  }, [authToken, refreshAll]);
 
   async function refreshMarketData() {
     try {
@@ -351,17 +356,17 @@ function AppContent() {
   const chartData =
     compositionMetric === "platform"
       ? platformAllocation
-          .filter((row) => Number(row.invested_usd || 0) > 0)
-          .map((row) => ({
-            name: row.broker,
-            value: Number(row.invested_usd || 0),
-          }))
+        .filter((row) => Number(row.invested_usd || 0) > 0)
+        .map((row) => ({
+          name: row.broker,
+          value: Number(row.invested_usd || 0),
+        }))
       : filteredAndSortedInvestments
-          .filter((inv) => Number(inv[compositionMetric] || 0) > 0)
-          .map((inv) => ({
-            name: inv.normalized_ticker || inv.ticker,
-            value: Number(inv[compositionMetric] || 0),
-          }));
+        .filter((inv) => Number(inv[compositionMetric] || 0) > 0)
+        .map((inv) => ({
+          name: inv.normalized_ticker || inv.ticker,
+          value: Number(inv[compositionMetric] || 0),
+        }));
 
   const filteredInvestments = filteredAndSortedInvestments;
 
@@ -374,12 +379,12 @@ function AppContent() {
   const compositionData =
     compositionOthersValue > 0
       ? [
-          ...compositionBase,
-          {
-            name: "Otros",
-            value: compositionOthersValue,
-          },
-        ]
+        ...compositionBase,
+        {
+          name: "Otros",
+          value: compositionOthersValue,
+        },
+      ]
       : compositionBase;
 
   const activeItem = activeIndex != null ? compositionData[activeIndex] : null;
