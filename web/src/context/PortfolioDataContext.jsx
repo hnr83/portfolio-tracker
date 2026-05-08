@@ -22,7 +22,25 @@ export function PortfolioDataProvider({ children }) {
   const [error, setError] = useState("");
   const [lastUpdated, setLastUpdated] = useState(null);
 
+  const clearData = useCallback(() => {
+    setSummary(null);
+    setPositions([]);
+    setMovements([]);
+    setMarketData([]);
+    setTradingSummary(null);
+    setLastUpdated(null);
+  }, []);
+
   const refreshAll = useCallback(async () => {
+    const token = window.localStorage.getItem("portfolio-auth-token");
+
+    if (!token) {
+      clearData();
+      setLoading(false);
+      setError("");
+      return;
+    }
+
     setLoading(true);
     setError("");
 
@@ -40,6 +58,17 @@ export function PortfolioDataProvider({ children }) {
         apiFetch("/api/portfolio/market"),
         apiFetch("/api/trading/summary"),
       ]);
+
+      if (
+        summaryRes.status === 401 ||
+        positionsRes.status === 401 ||
+        movementsRes.status === 401 ||
+        marketRes.status === 401 ||
+        tradingSummaryRes.status === 401
+      ) {
+        clearData();
+        throw new Error("Sesión expirada. Volvé a iniciar sesión.");
+      }
 
       if (
         !summaryRes.ok ||
@@ -65,7 +94,6 @@ export function PortfolioDataProvider({ children }) {
         tradingSummaryRes.json(),
       ]);
 
-
       setSummary(summaryData || null);
       setPositions(Array.isArray(positionsData) ? positionsData : []);
       setMovements(Array.isArray(movementsData) ? movementsData : []);
@@ -79,7 +107,7 @@ export function PortfolioDataProvider({ children }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [clearData]);
 
   useEffect(() => {
     refreshAll();
@@ -96,6 +124,7 @@ export function PortfolioDataProvider({ children }) {
       error,
       lastUpdated,
       refreshAll,
+      clearData,
     }),
     [
       summary,
@@ -107,6 +136,7 @@ export function PortfolioDataProvider({ children }) {
       error,
       lastUpdated,
       refreshAll,
+      clearData,
     ]
   );
 
