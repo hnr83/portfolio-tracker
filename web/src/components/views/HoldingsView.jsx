@@ -9,7 +9,7 @@ export default function HoldingsView({
     SectionShell,
     onSelectHolding,
 }) {
-    const { positions: holdings } = usePortfolioData();
+    const { holdings } = usePortfolioData();
 
 
     const [search, setSearch] = useState("");
