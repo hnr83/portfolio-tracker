@@ -1,13 +1,16 @@
 import React, { useMemo, useState } from "react";
 import AssetAvatar from "../shared/AssetAvatar";
+import { usePortfolioData } from "../../context/PortfolioDataContext";
 
 export default function HoldingsView({
-    holdings = [],
     formatNumber,
     formatCurrency,
     SectionShell,
     onSelectHolding,
 }) {
+    const { positions: holdings } = usePortfolioData();
+
+    
     const [search, setSearch] = useState("");
     const [categoryFilter, setCategoryFilter] = useState("ALL");
     const [sortBy, setSortBy] = useState("market_value_usd");

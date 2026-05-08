@@ -14,6 +14,11 @@ import Sidebar from "./components/layout/Sidebar";
 import KpiVisibilityRail from "./components/layout/KpiVisibilityRail";
 import PerformanceView from "./components/views/PerformanceView.jsx";
 import LoginView from "./components/auth/LoginView";
+import {
+  PortfolioDataProvider,
+  usePortfolioData,
+} from "./context/PortfolioDataContext";
+import { apiFetch } from "./utils/api";
 
 import {
   formatCurrency,
@@ -22,15 +27,7 @@ import {
   formatNumber,
 } from "./utils/formatters";
 
-import { sortRows, toggleSort } from "./utils/sort";
-
-import {
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
+import { sortRows } from "./utils/sort";
 
 const CHART_COLORS = [
   "#5B7CFA",
@@ -43,24 +40,6 @@ const CHART_COLORS = [
   "#FF8A4C",
 ];
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
-
-function apiFetch(path, options = {}) {
-  if (!API_BASE_URL) {
-    throw new Error("Falta configurar VITE_API_BASE_URL");
-  }
-
-  const token = window.localStorage.getItem("portfolio-auth-token");
-
-  return fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers: {
-      ...(options.headers || {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-  });
-}
-
 const inputBaseClass =
   "rounded-xl border border-slate-700/70 bg-slate-950/90 px-4 py-2.5 text-sm text-white outline-none placeholder:text-slate-500 transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500";
 
@@ -70,7 +49,14 @@ const buttonSecondaryClass =
 const buttonPrimaryClass =
   "rounded-2xl bg-gradient-to-r from-indigo-500 to-blue-500 px-5 py-3 font-medium text-white shadow-[0_10px_30px_rgba(93,124,250,0.32)] transition-all duration-200 hover:opacity-90";
 
-export default function App() {
+function AppContent() {
+  const {
+    summary,
+    positions,
+    movements,
+    marketData,
+    refreshAll,
+  } = usePortfolioData();
 
   const [authToken, setAuthToken] = useState(() =>
     window.localStorage.getItem("portfolio-auth-token")
@@ -99,13 +85,10 @@ export default function App() {
 
   const [selectedAssetMovements, setSelectedAssetMovements] = useState(null);
   const [activeView, setActiveView] = useState("dashboard");
-  const [movements, setMovements] = useState([]);
-  const [holdings, setHoldings] = useState([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState("");
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
-  const [positions, setPositions] = useState([]);
-  const [summary, setSummary] = useState(null);
+
   const [investments, setInvestments] = useState([]);
   const [activeIndex, setActiveIndex] = useState(null);
   const [selectedTicker, setSelectedTicker] = useState(null);
@@ -116,7 +99,8 @@ export default function App() {
   const [compositionMetric, setCompositionMetric] = useState("market_value_usd");
 
   const [investmentSearch, setInvestmentSearch] = useState("");
-  const [investmentCategoryFilter, setInvestmentCategoryFilter] = useState("ALL");
+  const [investmentCategoryFilter, setInvestmentCategoryFilter] =
+    useState("ALL");
   const [investmentSort, setInvestmentSort] = useState({
     key: "market_value_usd",
     direction: "desc",
@@ -129,7 +113,6 @@ export default function App() {
     direction: "desc",
   });
 
-  const [marketData, setMarketData] = useState([]);
   const [marketSearch, setMarketSearch] = useState("");
   const [marketTypeFilter, setMarketTypeFilter] = useState("ALL");
   const [marketSort, setMarketSort] = useState({
@@ -137,154 +120,41 @@ export default function App() {
     direction: "desc",
   });
 
-  async function loadBenchmark(code = "SPY") {
+  async function loadDashboardExtraData() {
     try {
-      setBenchmarkLoading(true);
+      const [investmentsRes, platformAllocationRes] = await Promise.all([
+        apiFetch("/api/portfolio/investments"),
+        apiFetch("/api/portfolio/platform-allocation"),
+      ]);
 
-      const res = await apiFetch(`/api/portfolio/benchmark?code=${code}`);
-      const data = await res.json();
-
-      const normalized = (data.rows || []).map((row) => ({
-        date: row.snapshot_date?.value || row.snapshot_date,
-        investmentsIndex: Number(row.investments_index || 0),
-        benchmarkIndex: Number(row.benchmark_index || 0),
-        alpha: Number(row.relative_alpha_index || 0),
-        investmentsUsd: Number(row.investments_usd || 0),
-        benchmarkPrice: Number(row.close_price_usd || 0),
-        benchmarkCode: row.benchmark_code,
-      }));
-
-      setBenchmarkSeries(normalized);
-    } catch (err) {
-      console.error("Error loading benchmark:", err);
-      setBenchmarkSeries([]);
-    } finally {
-      setBenchmarkLoading(false);
-    }
-  }
-
-  async function loadPlatformAllocation() {
-    try {
-      const res = await apiFetch("/api/portfolio/platform-allocation");
-
-      if (!res.ok) {
-        throw new Error(`Platform allocation HTTP ${res.status}`);
+      if (!investmentsRes.ok) {
+        throw new Error(`Investments HTTP ${investmentsRes.status}`);
       }
 
-      const data = await res.json();
-      setPlatformAllocation(data);
-    } catch (err) {
-      console.error("Error loading platform allocation:", err);
-    }
-  }
-
-  async function loadMarket() {
-    try {
-      const res = await apiFetch("/api/portfolio/market");
-
-      if (!res.ok) {
-        throw new Error(`Market HTTP ${res.status}`);
+      if (!platformAllocationRes.ok) {
+        throw new Error(
+          `Platform allocation HTTP ${platformAllocationRes.status}`
+        );
       }
 
-      const data = await res.json();
+      const [investmentsData, platformAllocationData] = await Promise.all([
+        investmentsRes.json(),
+        platformAllocationRes.json(),
+      ]);
 
-      const normalized = data.map((row) => ({
-        ...row,
-        market_price:
-          row.market_price == null || row.market_price === ""
-            ? null
-            : Number(row.market_price),
-
-        prev_market_price:
-          row.prev_market_price == null || row.prev_market_price === ""
-            ? null
-            : Number(row.prev_market_price),
-
-        change_1d:
-          row.change_1d == null || row.change_1d === ""
-            ? null
-            : Number(row.change_1d),
-
-        change_pct_1d:
-          row.change_pct_1d == null || row.change_pct_1d === ""
-            ? null
-            : Number(row.change_pct_1d),
-
-        ratio_numerator:
-          row.ratio_numerator == null || row.ratio_numerator === ""
-            ? null
-            : Number(row.ratio_numerator),
-
-        ratio_denominator:
-          row.ratio_denominator == null || row.ratio_denominator === ""
-            ? null
-            : Number(row.ratio_denominator),
-
-        underlying_price_usd:
-          row.underlying_price_usd == null || row.underlying_price_usd === ""
-            ? null
-            : Number(row.underlying_price_usd),
-
-        usdars:
-          row.usdars == null || row.usdars === ""
-            ? null
-            : Number(row.usdars),
-      }));
-
-      setMarketData(normalized);
+      setInvestments(Array.isArray(investmentsData) ? investmentsData : []);
+      setPlatformAllocation(
+        Array.isArray(platformAllocationData) ? platformAllocationData : []
+      );
     } catch (err) {
-      console.error("Error loading market:", err);
+      console.error("Error loading dashboard extra data:", err);
     }
   }
 
-  async function loadMovements(asset = null) {
-    try {
-      const url = asset
-        ? `/api/portfolio/movements?asset=${encodeURIComponent(asset)}`
-        : "/api/portfolio/movements";
-
-      const res = await apiFetch(url);
-
-      if (!res.ok) {
-        throw new Error(`Movements HTTP ${res.status}`);
-      }
-
-      const data = await res.json();
-      setMovements(data);
-    } catch (err) {
-      console.error("Error loading movements:", err);
-    }
-  }
-
-  async function openAssetTransactions(holdingOrTicker) {
-    const holding =
-      typeof holdingOrTicker === "string"
-        ? { ticker: holdingOrTicker, normalized_ticker: null }
-        : holdingOrTicker;
-
-    setSelectedAssetMovements({
-      ticker: holding.ticker,
-      normalized_ticker: holding.normalized_ticker || null,
-    });
-
-    setActiveView("transactions");
-    await loadMovements(holding.ticker);
-  }
-
-  async function loadHoldings() {
-    try {
-      const res = await apiFetch("/api/portfolio/holdings");
-
-      if (!res.ok) {
-        throw new Error(`Holdings HTTP ${res.status}`);
-      }
-
-      const data = await res.json();
-      setHoldings(data);
-    } catch (err) {
-      console.error("Error loading holdings:", err);
-    }
-  }
+  useEffect(() => {
+    if (!authToken) return;
+    loadDashboardExtraData();
+  }, [authToken]);
 
   async function refreshMarketData() {
     try {
@@ -307,14 +177,19 @@ export default function App() {
         throw new Error(`update-prices HTTP ${pricesRes.status}`);
       }
 
-      const benchmarkPricesRes = await apiFetch("/api/jobs/update-benchmark-prices", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ codes: ["SPY"] }),
-      });
+      const benchmarkPricesRes = await apiFetch(
+        "/api/jobs/update-benchmark-prices",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ codes: ["SPY"] }),
+        }
+      );
 
       if (!benchmarkPricesRes.ok) {
-        throw new Error(`update-benchmark-prices HTTP ${benchmarkPricesRes.status}`);
+        throw new Error(
+          `update-benchmark-prices HTTP ${benchmarkPricesRes.status}`
+        );
       }
 
       const snapshotRes = await apiFetch("/api/jobs/snapshot-portfolio", {
@@ -325,19 +200,8 @@ export default function App() {
         throw new Error(`snapshot-portfolio HTTP ${snapshotRes.status}`);
       }
 
-      await loadData();
-
-      if (activeView === "holdings") {
-        await loadHoldings();
-      }
-
-      if (activeView === "transactions") {
-        await loadMovements(selectedAssetMovements);
-      }
-
-      if (activeView === "market") {
-        await loadMarket();
-      }
+      await refreshAll();
+      await loadDashboardExtraData();
     } catch (err) {
       console.error("Error refreshing market data:", err);
       setRefreshError(err.message || "Error actualizando datos");
@@ -345,55 +209,6 @@ export default function App() {
       setIsRefreshing(false);
     }
   }
-
-  async function loadData() {
-    try {
-      const [summaryRes, investmentsRes, positionsRes, platformAllocationRes] =
-        await Promise.all([
-          apiFetch("/api/portfolio/summary"),
-          apiFetch("/api/portfolio/investments"),
-          apiFetch("/api/portfolio/positions"),
-          apiFetch("/api/portfolio/platform-allocation"),
-        ]);
-
-      if (!platformAllocationRes.ok) {
-        throw new Error(`Platform allocation HTTP ${platformAllocationRes.status}`);
-      }
-
-      if (!summaryRes.ok) {
-        throw new Error(`Summary HTTP ${summaryRes.status}`);
-      }
-
-      if (!investmentsRes.ok) {
-        throw new Error(`Investments HTTP ${investmentsRes.status}`);
-      }
-
-      if (!positionsRes.ok) {
-        throw new Error(`Positions HTTP ${positionsRes.status}`);
-      }
-
-      const [summaryData, investmentsData, positionsData, platformAllocationData] =
-        await Promise.all([
-          summaryRes.json(),
-          investmentsRes.json(),
-          positionsRes.json(),
-          platformAllocationRes.json(),
-        ]);
-
-      setSummary(summaryData);
-      setInvestments(investmentsData);
-      setPositions(positionsData);
-      setPlatformAllocation(platformAllocationData);
-    } catch (err) {
-      console.error("Error fetching data:", err);
-    }
-  }
-
-  useEffect(() => {
-    if (!authToken) return;
-
-    loadData();
-  }, [authToken]);
 
   useEffect(() => {
     try {
@@ -426,76 +241,30 @@ export default function App() {
     }
   }, [pinKpis, showKpis]);
 
-  function getMarketAssetType(row) {
-    if (row.is_cedear) return "CEDEAR";
+  const visibleMovements = useMemo(() => {
+    if (!selectedAssetMovements?.ticker) return movements || [];
 
-    const ticker = row.normalized_ticker || row.ticker || "";
-
-    if (
-      ticker.startsWith("CURRENCY:") ||
-      ["BTC", "ETH", "SOL", "RON", "USDT"].includes(ticker)
-    ) {
-      return "CRYPTO";
-    }
-
-    return "STOCK";
-  }
-
-  const filteredAndSortedMarket = useMemo(() => {
-    return sortRows(
-      marketData.filter((row) => {
-        if (row.market_price == null) return false;
-
-        const search = marketSearch.toLowerCase();
-
-        const matchesSearch =
-          !search ||
-          String(row.ticker || "").toLowerCase().includes(search) ||
-          String(row.underlying_ticker || "").toLowerCase().includes(search) ||
-          String(row.ratio_text || "").toLowerCase().includes(search);
-
-        const assetType = getMarketAssetType(row);
-
-        const matchesType =
-          marketTypeFilter === "ALL" ||
-          (marketTypeFilter === "STOCK" && assetType === "STOCK") ||
-          (marketTypeFilter === "CRYPTO" && assetType === "CRYPTO") ||
-          (marketTypeFilter === "CEDEAR" && assetType === "CEDEAR");
-
-        return matchesSearch && matchesType;
-      }),
-      marketSort
-    );
-  }, [marketData, marketSearch, marketTypeFilter, marketSort]);
-
-  const marketTopStats = useMemo(() => {
-    const validRows = marketData.filter(
-      (row) =>
-        row.market_price != null &&
-        row.change_pct_1d != null &&
-        row.ticker !== "USDT"
+    const selectedTicker = String(selectedAssetMovements.ticker || "");
+    const selectedNormalized = String(
+      selectedAssetMovements.normalized_ticker || ""
     );
 
-    if (!validRows.length) {
-      return {
-        topGainer: null,
-        topLoser: null,
-      };
-    }
+    return (movements || []).filter((m) => {
+      const ticker = String(m.ticker || "");
+      const normalized = String(m.normalized_ticker || "");
 
-    const sortedByChange = [...validRows].sort(
-      (a, b) => Number(b.change_pct_1d || 0) - Number(a.change_pct_1d || 0)
-    );
-
-    return {
-      topGainer: sortedByChange[0] || null,
-      topLoser: sortedByChange[sortedByChange.length - 1] || null,
-    };
-  }, [marketData]);
+      return (
+        ticker === selectedTicker ||
+        normalized === selectedTicker ||
+        ticker === selectedNormalized ||
+        normalized === selectedNormalized
+      );
+    });
+  }, [movements, selectedAssetMovements]);
 
   const filteredAndSortedMovements = useMemo(() => {
     return sortRows(
-      movements.filter((m) => {
+      visibleMovements.filter((m) => {
         const search = movementSearch.toLowerCase();
 
         const matchesSearch =
@@ -512,7 +281,12 @@ export default function App() {
       }),
       movementSort
     );
-  }, [movements, movementSearch, movementCategoryFilter, movementSort]);
+  }, [
+    visibleMovements,
+    movementSearch,
+    movementCategoryFilter,
+    movementSort,
+  ]);
 
   const filteredAndSortedInvestments = useMemo(() => {
     return sortRows(
@@ -545,15 +319,15 @@ export default function App() {
     investmentSort,
   ]);
 
-  const liquidityUsd = positions
+  const liquidityUsd = (positions || [])
     .filter((p) => ["CASH", "FX"].includes(p.category))
     .reduce((acc, p) => acc + Number(p.market_value_usd || 0), 0);
 
-  const cryptoUsd = positions
+  const cryptoUsd = (positions || [])
     .filter((p) => p.category === "CRYPTO")
     .reduce((acc, p) => acc + Number(p.market_value_usd || 0), 0);
 
-  const investmentsUsd = positions
+  const investmentsUsd = (positions || [])
     .filter((p) => p.category === "PORTFOLIO")
     .reduce((acc, p) => acc + Number(p.market_value_usd || 0), 0);
 
@@ -577,17 +351,17 @@ export default function App() {
   const chartData =
     compositionMetric === "platform"
       ? platformAllocation
-        .filter((row) => Number(row.invested_usd || 0) > 0)
-        .map((row) => ({
-          name: row.broker,
-          value: Number(row.invested_usd || 0),
-        }))
+          .filter((row) => Number(row.invested_usd || 0) > 0)
+          .map((row) => ({
+            name: row.broker,
+            value: Number(row.invested_usd || 0),
+          }))
       : filteredAndSortedInvestments
-        .filter((inv) => Number(inv[compositionMetric] || 0) > 0)
-        .map((inv) => ({
-          name: inv.normalized_ticker || inv.ticker,
-          value: Number(inv[compositionMetric] || 0),
-        }));
+          .filter((inv) => Number(inv[compositionMetric] || 0) > 0)
+          .map((inv) => ({
+            name: inv.normalized_ticker || inv.ticker,
+            value: Number(inv[compositionMetric] || 0),
+          }));
 
   const filteredInvestments = filteredAndSortedInvestments;
 
@@ -600,12 +374,12 @@ export default function App() {
   const compositionData =
     compositionOthersValue > 0
       ? [
-        ...compositionBase,
-        {
-          name: "Otros",
-          value: compositionOthersValue,
-        },
-      ]
+          ...compositionBase,
+          {
+            name: "Otros",
+            value: compositionOthersValue,
+          },
+        ]
       : compositionBase;
 
   const activeItem = activeIndex != null ? compositionData[activeIndex] : null;
@@ -628,16 +402,12 @@ export default function App() {
     return <LoginView onLogin={handleLogin} />;
   }
 
-
   return (
     <div className="min-h-screen bg-[#020617]">
       <Sidebar
         summary={summary}
         activeView={activeView}
         setActiveView={setActiveView}
-        loadMovements={loadMovements}
-        loadHoldings={loadHoldings}
-        loadMarket={loadMarket}
         setSelectedAssetMovements={setSelectedAssetMovements}
         authUser={authUser}
         onLogout={handleLogout}
@@ -656,11 +426,8 @@ export default function App() {
               handleToggleKpis={handleToggleKpis}
               handlePinKpisToggle={handlePinKpisToggle}
               pinKpis={pinKpis}
-              loadHoldings={loadHoldings}
-              loadMovements={loadMovements}
               selectedAssetMovements={selectedAssetMovements}
               activeView={activeView}
-              loadMarket={loadMarket}
               KpiVisibilityRail={KpiVisibilityRail}
               SectionShell={SectionShell}
               SummaryCard={SummaryCard}
@@ -684,7 +451,19 @@ export default function App() {
               setInvestmentCategoryFilter={setInvestmentCategoryFilter}
               investmentSort={investmentSort}
               setInvestmentSort={setInvestmentSort}
-              openAssetTransactions={openAssetTransactions}
+              openAssetTransactions={(holdingOrTicker) => {
+                const holding =
+                  typeof holdingOrTicker === "string"
+                    ? { ticker: holdingOrTicker, normalized_ticker: null }
+                    : holdingOrTicker;
+
+                setSelectedAssetMovements({
+                  ticker: holding.ticker,
+                  normalized_ticker: holding.normalized_ticker || null,
+                });
+
+                setActiveView("transactions");
+              }}
               summaryTotalMarketUsd={summary?.total_market_usd}
               totalPortfolioUsd={totalPortfolioUsd}
               investmentsUsd={investmentsUsd}
@@ -699,17 +478,16 @@ export default function App() {
 
           {activeView === "holdings" && (
             <HoldingsView
-              holdings={holdings}
               formatNumber={formatNumber}
               formatCurrency={formatCurrency}
               SectionShell={SectionShell}
-              onSelectHolding={async (holding) => {
+              onSelectHolding={(holding) => {
                 setSelectedAssetMovements({
                   ticker: holding.ticker,
                   normalized_ticker: holding.normalized_ticker,
                 });
+
                 setActiveView("transactions");
-                await loadMovements(holding.ticker);
               }}
             />
           )}
@@ -718,7 +496,6 @@ export default function App() {
             <TransactionsView
               selectedAssetMovements={selectedAssetMovements}
               setSelectedAssetMovements={setSelectedAssetMovements}
-              loadMovements={loadMovements}
               filteredAndSortedMovements={filteredAndSortedMovements}
               movementSearch={movementSearch}
               setMovementSearch={setMovementSearch}
@@ -744,8 +521,6 @@ export default function App() {
               setMarketTypeFilter={setMarketTypeFilter}
               marketSort={marketSort}
               setMarketSort={setMarketSort}
-              filteredAndSortedMarket={filteredAndSortedMarket}
-              marketTopStats={marketTopStats}
               formatCurrency={formatCurrency}
               formatPercent={formatPercent}
               SortableHeader={SortableHeader}
@@ -763,17 +538,18 @@ export default function App() {
         isOpen={isTransactionModalOpen}
         onClose={() => setIsTransactionModalOpen(false)}
         onSaved={async () => {
-          await loadData();
-
-          if (activeView === "holdings") {
-            await loadHoldings();
-          }
-
-          if (activeView === "transactions") {
-            await loadMovements(selectedAssetMovements);
-          }
+          await refreshAll();
+          await loadDashboardExtraData();
         }}
       />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <PortfolioDataProvider>
+      <AppContent />
+    </PortfolioDataProvider>
   );
 }

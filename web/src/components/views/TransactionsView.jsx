@@ -3,7 +3,6 @@ import React from "react";
 export default function TransactionsView({
     selectedAssetMovements,
     setSelectedAssetMovements,
-    loadMovements,
     filteredAndSortedMovements,
     movementSearch,
     setMovementSearch,
@@ -49,9 +48,8 @@ export default function TransactionsView({
 
                 {selectedAssetMovements && (
                     <button
-                        onClick={async () => {
+                        onClick={() => {
                             setSelectedAssetMovements(null);
-                            await loadMovements();
                         }}
                         className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-indigo-400 transition hover:bg-slate-900"
                     >

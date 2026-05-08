@@ -10,6 +10,7 @@ const tradingRoutes = require("./routes/tradingRoutes");
 const authRoutes = require("./routes/authRoutes");
 
 const { requireAuth } = require("./middlewares/authMiddleware");
+const { requireJobAuth } = require("./middlewares/jobAuthMiddleware");
 
 const app = express();
 
@@ -22,7 +23,7 @@ app.use(
       "https://portfolio-tracker-jubilacion.vercel.app",
     ],
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "x-cron-secret"],
   })
 );
 
@@ -43,7 +44,7 @@ app.get("/api/jobs/test2", requireAuth, (req, res) => {
 });
 
 app.use("/api/portfolio", requireAuth, portfolioRoutes);
-app.use("/api/jobs", requireAuth, jobRoutes);
+app.use("/api/jobs", requireJobAuth, jobRoutes);
 app.use("/api/transactions", requireAuth, transactionRoutes);
 app.use("/api/trading", requireAuth, tradingRoutes);
 

@@ -6,9 +6,6 @@ export default function Sidebar({
     summary,
     activeView,
     setActiveView,
-    loadMovements,
-    loadHoldings,
-    loadMarket,
     setSelectedAssetMovements,
     authUser,
     onLogout,
@@ -16,9 +13,6 @@ export default function Sidebar({
     const handleNavigate = async (view, callback) => {
         setActiveView(view);
 
-        if (callback) {
-            await callback();
-        }
     };
 
     const navClass = (view) =>
@@ -148,7 +142,7 @@ export default function Sidebar({
                     </div>
 
                     <div
-                        onClick={() => handleNavigate("holdings", loadHoldings)}
+                        onClick={() => handleNavigate("holdings")}
                         className={navClass("holdings")}
                     >
                         <div className="flex items-center gap-3">
@@ -158,7 +152,7 @@ export default function Sidebar({
                     </div>
 
                     <div
-                        onClick={() => handleNavigate("market", loadMarket)}
+                        onClick={() => handleNavigate("market")}
                         className={navClass("market")}
                     >
                         <div className="flex items-center gap-3">
@@ -178,12 +172,10 @@ export default function Sidebar({
                     </div>
 
                     <div
-                        onClick={() =>
-                            handleNavigate("transactions", async () => {
-                                setSelectedAssetMovements(null);
-                                await loadMovements();
-                            })
-                        }
+                        onClick={() => {
+                            setSelectedAssetMovements(null);
+                            handleNavigate("transactions");
+                        }}
                         className={navClass("transactions")}
                     >
                         <div className="flex items-center gap-3">
@@ -260,7 +252,7 @@ export default function Sidebar({
 
                 <button
                     type="button"
-                    onClick={() => handleNavigate("market", loadMarket)}
+                    onClick={() => handleNavigate("market")}
                     className={mobileNavClass("market")}
                 >
                     <span className="text-lg">◎</span>
@@ -312,7 +304,7 @@ export default function Sidebar({
                                 type="button"
                                 onClick={async () => {
                                     setShowMoreMenu(false);
-                                    await handleNavigate("holdings", loadHoldings);
+                                    await handleNavigate("holdings");
                                 }}
                                 className="flex w-full items-center justify-between rounded-2xl border border-slate-700/70 bg-slate-900/60 px-4 py-3 text-left text-sm text-slate-200"
                             >
@@ -325,13 +317,8 @@ export default function Sidebar({
                                 onClick={async () => {
                                     setShowMoreMenu(false);
 
-                                    await handleNavigate(
-                                        "transactions",
-                                        async () => {
-                                            setSelectedAssetMovements(null);
-                                            await loadMovements();
-                                        }
-                                    );
+                                    setSelectedAssetMovements(null);
+                                    handleNavigate("transactions");
                                 }}
                                 className="flex w-full items-center justify-between rounded-2xl border border-slate-700/70 bg-slate-900/60 px-4 py-3 text-left text-sm text-slate-200"
                             >
