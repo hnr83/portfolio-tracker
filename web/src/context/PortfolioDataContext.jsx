@@ -17,6 +17,7 @@ export function PortfolioDataProvider({ children }) {
   const [movements, setMovements] = useState([]);
   const [marketData, setMarketData] = useState([]);
   const [tradingSummary, setTradingSummary] = useState(null);
+  const [holdings, setHoldings] = useState([]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -48,12 +49,14 @@ export function PortfolioDataProvider({ children }) {
       const [
         summaryRes,
         positionsRes,
+        holdingsRes,
         movementsRes,
         marketRes,
         tradingSummaryRes,
       ] = await Promise.all([
         apiFetch("/api/portfolio/summary"),
         apiFetch("/api/portfolio/positions"),
+        apiFetch("/api/portfolio/holdings"),
         apiFetch("/api/portfolio/movements"),
         apiFetch("/api/portfolio/market"),
         apiFetch("/api/trading/summary"),
@@ -71,6 +74,7 @@ export function PortfolioDataProvider({ children }) {
       }
 
       if (
+        !holdingsRes.ok ||
         !summaryRes.ok ||
         !positionsRes.ok ||
         !movementsRes.ok ||
@@ -83,12 +87,14 @@ export function PortfolioDataProvider({ children }) {
       const [
         summaryData,
         positionsData,
+        holdingsData,
         movementsData,
         marketDataResult,
         tradingSummaryData,
       ] = await Promise.all([
         summaryRes.json(),
         positionsRes.json(),
+        holdingsRes.json(),
         movementsRes.json(),
         marketRes.json(),
         tradingSummaryRes.json(),
@@ -96,6 +102,7 @@ export function PortfolioDataProvider({ children }) {
 
       setSummary(summaryData || null);
       setPositions(Array.isArray(positionsData) ? positionsData : []);
+      setHoldings(Array.isArray(holdingsData) ? holdingsData : []);
       setMovements(Array.isArray(movementsData) ? movementsData : []);
       setMarketData(Array.isArray(marketDataResult) ? marketDataResult : []);
       setTradingSummary(tradingSummaryData || null);
@@ -117,6 +124,7 @@ export function PortfolioDataProvider({ children }) {
     () => ({
       summary,
       positions,
+      holdings,
       movements,
       marketData,
       tradingSummary,
@@ -129,6 +137,7 @@ export function PortfolioDataProvider({ children }) {
     [
       summary,
       positions,
+      holdings,
       movements,
       marketData,
       tradingSummary,
