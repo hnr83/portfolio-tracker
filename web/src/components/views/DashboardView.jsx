@@ -193,8 +193,8 @@ export default function DashboardView({
 
             <div
                 className={`overflow-hidden transition-all duration-300 ease-out ${showKpis
-                        ? "max-h-[900px] opacity-100"
-                        : "max-h-[900px] opacity-100 sm:max-h-0 sm:opacity-0"
+                    ? "max-h-[900px] opacity-100"
+                    : "max-h-[900px] opacity-100 sm:max-h-0 sm:opacity-0"
                     }`}
                 aria-hidden={!showKpis}
             >
@@ -220,6 +220,21 @@ export default function DashboardView({
                                 hideValues
                                     ? "US$ ••••••"
                                     : formatCurrency(investmentsUsd, "USD")
+                            }
+                            subtitle={
+                                hideValues
+                                    ? "••••••"
+                                    : `${summary?.total_pnl_usd >= 0 ? "+" : ""}${formatCurrency(
+                                        summary?.total_pnl_usd || 0,
+                                        "USD"
+                                    )} · ${summary?.total_pnl_pct >= 0 ? "+" : ""}${formatPortfolioPercent(
+                                        summary?.total_pnl_pct || 0
+                                    )}`
+                            }
+                            subtitleClassName={
+                                summary?.total_pnl_usd >= 0
+                                    ? "text-emerald-400"
+                                    : "text-red-400"
                             }
                             icon="↗"
                         />
@@ -285,9 +300,9 @@ export default function DashboardView({
                                         </div>
 
                                         <div className="mt-1 whitespace-nowrap text-lg font-semibold leading-tight text-white tabular-nums sm:text-2xl">
-                                         {hideValues
-                                            ? "US$ ••••••"
-                                            : formatCurrency(chartTotalValue, "USD")}   
+                                            {hideValues
+                                                ? "US$ ••••••"
+                                                : formatCurrency(chartTotalValue, "USD")}
                                         </div>
                                     </div>
                                 </div>
@@ -624,10 +639,10 @@ export default function DashboardView({
 
                                             <div className="shrink-0 text-right">
                                                 <div className="text-base font-semibold text-white tabular-nums">
-                                                   {
-                                                    hideValues
-                                                         ? "US$ ••••••"
-                                                        : formatCurrency(inv.market_value_usd, "USD")} 
+                                                    {
+                                                        hideValues
+                                                            ? "US$ ••••••"
+                                                            : formatCurrency(inv.market_value_usd, "USD")}
                                                 </div>
 
                                                 <div
