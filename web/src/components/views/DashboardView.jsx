@@ -227,9 +227,7 @@ export default function DashboardView({
                                     : `${summary?.total_pnl_usd >= 0 ? "+" : ""}${formatCurrency(
                                         summary?.total_pnl_usd || 0,
                                         "USD"
-                                    )} · ${summary?.total_pnl_pct >= 0 ? "+" : ""}${formatPortfolioPercent(
-                                        summary?.total_pnl_pct || 0
-                                    )}`
+                                    )} · ${formatPortfolioPercent((summary?.total_pnl_pct || 0) * 100)}`
                             }
                             subtitleClassName={
                                 summary?.total_pnl_usd >= 0

@@ -30,6 +30,7 @@ export function PortfolioDataProvider({ children }) {
     setMarketData([]);
     setTradingSummary(null);
     setLastUpdated(null);
+    setHoldings([]);
   }, []);
 
   const refreshAll = useCallback(async () => {
@@ -65,6 +66,7 @@ export function PortfolioDataProvider({ children }) {
       if (
         summaryRes.status === 401 ||
         positionsRes.status === 401 ||
+        holdingsRes.status === 401 ||
         movementsRes.status === 401 ||
         marketRes.status === 401 ||
         tradingSummaryRes.status === 401

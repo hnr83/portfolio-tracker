@@ -56,6 +56,8 @@ function AppContent() {
     movements,
     marketData,
     refreshAll,
+    error,
+    clearData,    
   } = usePortfolioData();
 
   const [authToken, setAuthToken] = useState(() =>
@@ -82,9 +84,18 @@ function AppContent() {
   function handleLogout() {
     window.localStorage.removeItem("portfolio-auth-token");
     window.localStorage.removeItem("portfolio-auth-user");
+    clearData();    
     setAuthUser(null);
     setAuthToken(null);
+
   }
+
+  useEffect(() => {
+  if (error === "SESSION_EXPIRED") {
+    clearData();
+    handleLogout();
+  }
+}, [error, clearData]);
 
   const [selectedAssetMovements, setSelectedAssetMovements] = useState(null);
   const [activeView, setActiveView] = useState("dashboard");
