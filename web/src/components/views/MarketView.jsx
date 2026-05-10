@@ -329,32 +329,39 @@ export default function MarketView({
                   className="border-t border-slate-800/80"
                 >
                   <td className="px-2.5 py-2">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <AssetAvatar
-                        ticker={getMobileTicker(row)}
-                        normalizedTicker={row.normalized_ticker}
-                        size={26}
-                      />
+                          <div className="flex min-w-0 items-center gap-2">
+                              <AssetAvatar
+                                  ticker={getMobileTicker(row)}
+                                  normalizedTicker={row.normalized_ticker}
+                                  size={26}
+                                  showText={false}
+                              />
 
-                      <div className="min-w-0 flex-1">
-                        {row.is_cedear && (
-                          <div className="truncate text-[10px] text-indigo-300">
-                            CEDEAR · {row.ratio_text || "-"}
-                          </div>
-                        )}
+                              <div className="min-w-0 flex-1">
+                                  <div className="truncate text-[15px] font-semibold text-white">
+                                      {row.is_cedear
+                                          ? row.underlying_ticker || row.ticker
+                                          : getMobileTicker(row)}
+                                  </div>
 
-                        {!row.is_cedear &&
-                          row.normalized_ticker &&
-                          row.normalized_ticker !== row.ticker && (
-                            <div className="truncate text-[10px] text-slate-500">
-                              {row.normalized_ticker}
-                            </div>
-                          )}
-                      </div>
+                                  {row.is_cedear && (
+                                      <div className="mt-0.5 truncate text-[10px] text-indigo-300">
+                                          {row.ticker} · {row.ratio_text || "-"}
+                                      </div>
+                                  )}
+
+                                  {!row.is_cedear &&
+                                      row.normalized_ticker &&
+                                      row.normalized_ticker !== row.ticker && (
+                                          <div className="mt-0.5 truncate text-[10px] text-slate-500">
+                                              {row.normalized_ticker}
+                                          </div>
+                                      )}
+                              </div>
                     </div>
                   </td>
 
-                  <td className="w-[88px] px-2.5 py-2 text-right text-[13px] tabular-nums text-white">
+                  <td className="w-[110px] px-2.5 py-2 text-right text-[13px] tabular-nums text-white">
                     {row.market_price == null
                       ? "-"
                       : formatCurrency(row.market_price, row.currency || "USD")}

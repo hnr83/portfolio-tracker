@@ -72,13 +72,12 @@ function HistoryKpiCard({ label, value, subvalue, positive }) {
             </div>
 
             <div
-                className={`mt-3 text-xl font-semibold md:mt-4 md:text-[30px] ${
-                    positive === undefined
+                className={`mt-3 text-xl font-semibold md:mt-4 md:text-[30px] ${positive === undefined
                         ? "text-white"
                         : positive
-                          ? "text-emerald-400"
-                          : "text-red-400"
-                }`}
+                            ? "text-emerald-400"
+                            : "text-red-400"
+                    }`}
             >
                 {value}
             </div>
@@ -98,44 +97,46 @@ function CustomTooltip({ active, payload, label, metric }) {
     const row = payload[0].payload;
 
     return (
-        <div className="rounded-2xl border border-white/10 bg-slate-950/95 px-4 py-3 shadow-xl">
-            <div className="text-xs uppercase tracking-[0.2em] text-slate-400">
+        <div className="rounded-2xl border border-white/10 bg-slate-950/95 px-3 py-2 shadow-xl backdrop-blur">
+            <div className="text-[10px] uppercase tracking-[0.16em] text-slate-400">
                 {formatLongDate(label)}
             </div>
 
             {metric === "INVESTMENTS" ? (
-                <div className="mt-3 space-y-2">
-                    <div>
-                        <div className="text-sm text-slate-300">Valor actual</div>
-                        <div className="text-lg font-semibold text-white">
+                <div className="mt-2 space-y-1.5 text-sm">
+                    <div className="flex items-center justify-between gap-6">
+                        <span className="text-slate-400">Valor</span>
+
+                        <span className="font-semibold text-white">
                             {formatCurrency(row.investments_usd, "USD")}
-                        </div>
+                        </span>
                     </div>
 
-                    <div>
-                        <div className="text-sm text-slate-300">Costo</div>
-                        <div className="text-lg font-semibold text-white">
+                    <div className="flex items-center justify-between gap-6">
+                        <span className="text-slate-400">Costo</span>
+
+                        <span className="font-semibold text-white">
                             {formatCurrency(row.investments_cost_usd, "USD")}
-                        </div>
+                        </span>
                     </div>
 
-                    <div>
-                        <div className="text-sm text-slate-400">Brecha</div>
-                        <div
-                            className={`text-sm font-medium ${
-                                Number(row.investments_usd || 0) -
-                                    Number(row.investments_cost_usd || 0) >=
+                    <div className="flex items-center justify-between gap-6">
+                        <span className="text-slate-400">PnL</span>
+
+                        <span
+                            className={`font-semibold ${Number(row.investments_usd || 0) -
+                                Number(row.investments_cost_usd || 0) >=
                                 0
-                                    ? "text-emerald-400"
-                                    : "text-red-400"
-                            }`}
+                                ? "text-emerald-400"
+                                : "text-red-400"
+                                }`}
                         >
                             {formatCurrency(
                                 Number(row.investments_usd || 0) -
-                                    Number(row.investments_cost_usd || 0),
+                                Number(row.investments_cost_usd || 0),
                                 "USD"
                             )}
-                        </div>
+                        </span>
                     </div>
                 </div>
             ) : (
@@ -147,9 +148,9 @@ function CustomTooltip({ active, payload, label, metric }) {
                     <div className="text-lg font-semibold text-white">
                         {metric === "TOTAL"
                             ? formatCurrency(
-                                  row.total_with_trading_usd ?? row.market_value_usd,
-                                  "USD"
-                              )
+                                row.total_with_trading_usd ?? row.market_value_usd,
+                                "USD"
+                            )
                             : formatCurrency(row.total_pnl_usd, "USD")}
                     </div>
 
@@ -174,38 +175,38 @@ function BenchmarkTooltip({ active, payload, label }) {
     const alpha = Number(row.alpha || 0);
 
     return (
-        <div className="rounded-2xl border border-white/10 bg-slate-950/95 px-4 py-3 shadow-xl">
-            <div className="text-xs uppercase tracking-[0.2em] text-slate-400">
+        <div className="rounded-2xl border border-white/10 bg-slate-950/95 px-3 py-2 shadow-xl backdrop-blur">
+            <div className="mb-2 text-[10px] uppercase tracking-[0.16em] text-slate-400">
                 {formatLongDate(label)}
             </div>
 
-            <div className="mt-3 space-y-2">
-                <div>
-                    <div className="text-sm text-slate-300">Portfolio</div>
-                    <div className="text-lg font-semibold text-white">
+            <div className="space-y-1.5 text-sm">
+                <div className="flex items-center justify-between gap-6">
+                    <span className="text-slate-400">Portfolio</span>
+                    <span className="font-semibold text-white">
                         {portfolioReturn >= 0 ? "+" : ""}
                         {portfolioReturn.toFixed(2)}%
-                    </div>
+                    </span>
                 </div>
 
-                <div>
-                    <div className="text-sm text-slate-300">Benchmark</div>
-                    <div className="text-lg font-semibold text-white">
+                <div className="flex items-center justify-between gap-6">
+                    <span className="text-slate-400">Benchmark</span>
+                    <span className="font-semibold text-white">
                         {benchmarkReturn >= 0 ? "+" : ""}
                         {benchmarkReturn.toFixed(2)}%
-                    </div>
+                    </span>
                 </div>
 
-                <div>
-                    <div className="text-sm text-slate-400">Alpha</div>
-                    <div
-                        className={`text-sm font-medium ${
+                <div className="flex items-center justify-between gap-6">
+                    <span className="text-slate-400">Alpha</span>
+                    <span
+                        className={`font-semibold ${
                             alpha >= 0 ? "text-emerald-400" : "text-red-400"
                         }`}
                     >
                         {alpha >= 0 ? "+" : ""}
                         {alpha.toFixed(2)}%
-                    </div>
+                    </span>
                 </div>
             </div>
         </div>
@@ -453,11 +454,10 @@ export default function HistoryView() {
                                 <button
                                     key={opt}
                                     onClick={() => setRange(opt)}
-                                    className={`shrink-0 rounded-lg px-3 py-1.5 text-xs ${
-                                        opt === range
+                                    className={`shrink-0 rounded-lg px-3 py-1.5 text-xs ${opt === range
                                             ? "bg-indigo-500/20 text-white"
                                             : "bg-white/5 text-slate-300"
-                                    }`}
+                                        }`}
                                 >
                                     {opt}
                                 </button>
@@ -467,22 +467,20 @@ export default function HistoryView() {
                         <div className="grid grid-cols-2 rounded-2xl bg-slate-950/60 p-1 md:flex">
                             <button
                                 onClick={() => setHistoryMode("evolution")}
-                                className={`rounded-xl px-4 py-2 text-sm transition ${
-                                    historyMode === "evolution"
+                                className={`rounded-xl px-4 py-2 text-sm transition ${historyMode === "evolution"
                                         ? "bg-indigo-500/20 text-white"
                                         : "text-slate-400 hover:text-white"
-                                }`}
+                                    }`}
                             >
                                 Evolución
                             </button>
 
                             <button
                                 onClick={() => setHistoryMode("benchmark")}
-                                className={`rounded-xl px-4 py-2 text-sm transition ${
-                                    historyMode === "benchmark"
+                                className={`rounded-xl px-4 py-2 text-sm transition ${historyMode === "benchmark"
                                         ? "bg-indigo-500/20 text-white"
                                         : "text-slate-400 hover:text-white"
-                                }`}
+                                    }`}
                             >
                                 Benchmark
                             </button>
@@ -494,17 +492,16 @@ export default function HistoryView() {
                                     <button
                                         key={opt}
                                         onClick={() => setMetric(opt)}
-                                        className={`shrink-0 rounded-lg px-3 py-1.5 text-xs ${
-                                            opt === metric
+                                        className={`shrink-0 rounded-lg px-3 py-1.5 text-xs ${opt === metric
                                                 ? "bg-emerald-500/20 text-white"
                                                 : "bg-white/5 text-slate-300"
-                                        }`}
+                                            }`}
                                     >
                                         {opt === "TOTAL"
                                             ? "Total"
                                             : opt === "INVESTMENTS"
-                                              ? "Investments"
-                                              : "PnL"}
+                                                ? "Investments"
+                                                : "PnL"}
                                     </button>
                                 ))}
                             </div>
