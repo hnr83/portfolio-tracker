@@ -316,7 +316,7 @@ export default function MarketView({
                   Precio
                 </th>
 
-                <th className="w-[64px] px-2.5 py-2 text-right text-[10px] uppercase tracking-[0.16em]">
+                <th className="w-[82px] px-2.5 py-2 text-right text-[10px] uppercase tracking-[0.16em]">
                   1D %
                 </th>
               </tr>
@@ -368,7 +368,7 @@ export default function MarketView({
                   </td>
 
                   <td
-                    className={`w-[64px] px-2.5 py-2 text-right text-[13px] font-semibold tabular-nums ${
+                    className={`w-[82px] px-2.5 py-2 text-right text-[13px] font-semibold tabular-nums ${
                       mobilePositive ? "text-emerald-400" : "text-red-400"
                     }`}
                   >
