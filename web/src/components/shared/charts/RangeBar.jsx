@@ -10,11 +10,34 @@ export function RangeBar({ low, high, position }) {
       ? "bg-green-400/80"
       : "bg-white";
 
+  function formatValue(value) {
+    const n = Number(value || 0);
+
+    if (n >= 1000) {
+      return n.toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+    }
+
+    if (n >= 1) {
+      return n.toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+    }
+
+    return n.toLocaleString("en-US", {
+      minimumFractionDigits: 4,
+      maximumFractionDigits: 6,
+    });
+  }
+
   return (
     <div className="flex w-full flex-col gap-1 text-xs">
       <div className="flex justify-between text-slate-400 tabular-nums">
-        <span>{low.toFixed(0)}</span>
-        <span>{high.toFixed(0)}</span>
+        <span>{formatValue(low)}</span>
+        <span>{formatValue(high)}</span>
       </div>
 
       <div className="relative h-2 rounded bg-slate-700">
