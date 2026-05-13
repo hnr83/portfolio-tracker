@@ -11,6 +11,8 @@ const {
   getPlatformAllocation,
   getBenchmarkComparison,
   getAssetPerformance,
+  getHistoricalPerformance,
+  getVintageReturns,
 
 } = require('../controllers/portfolioController');
 
@@ -24,6 +26,8 @@ router.get("/history", getHistory);
 router.get("/platform-allocation", getPlatformAllocation);
 router.get("/benchmark", getBenchmarkComparison);
 router.get("/performance",getAssetPerformance);
+router.get("/historical-performance", getHistoricalPerformance);
+router.get("/vintage-returns", getVintageReturns);
 
 
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import {
     ResponsiveContainer,
     LineChart,
@@ -12,6 +12,22 @@ import {
 
 const RANGE_OPTIONS = ["1M", "3M", "6M", "YTD", "1A", "MAX"];
 const METRIC_OPTIONS = ["TOTAL", "INVESTMENTS", "PNL"];
+const PERFORMANCE_TABS = ["CALENDAR", "VINTAGE"];
+const MONTH_NAMES = [
+    "enero",
+    "febrero",
+    "marzo",
+    "abril",
+    "mayo",
+    "junio",
+    "julio",
+    "agosto",
+    "septiembre",
+    "octubre",
+    "noviembre",
+    "diciembre",
+];
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 function apiFetch(path, options = {}) {
@@ -125,10 +141,10 @@ function CustomTooltip({ active, payload, label, metric }) {
 
                         <span
                             className={`font-semibold ${Number(row.investments_usd || 0) -
-                                Number(row.investments_cost_usd || 0) >=
-                                0
-                                ? "text-emerald-400"
-                                : "text-red-400"
+                                    Number(row.investments_cost_usd || 0) >=
+                                    0
+                                    ? "text-emerald-400"
+                                    : "text-red-400"
                                 }`}
                         >
                             {formatCurrency(
@@ -200,9 +216,8 @@ function BenchmarkTooltip({ active, payload, label }) {
                 <div className="flex items-center justify-between gap-6">
                     <span className="text-slate-400">Alpha</span>
                     <span
-                        className={`font-semibold ${
-                            alpha >= 0 ? "text-emerald-400" : "text-red-400"
-                        }`}
+                        className={`font-semibold ${alpha >= 0 ? "text-emerald-400" : "text-red-400"
+                            }`}
                     >
                         {alpha >= 0 ? "+" : ""}
                         {alpha.toFixed(2)}%
@@ -214,7 +229,7 @@ function BenchmarkTooltip({ active, payload, label }) {
 }
 
 export default function HistoryView() {
-    const [range, setRange] = useState("6M");
+    const [range, setRange] = useState("YTD");
     const [metric, setMetric] = useState("INVESTMENTS");
     const [history, setHistory] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -223,6 +238,11 @@ export default function HistoryView() {
     const [benchmarkCode, setBenchmarkCode] = useState("SPY");
     const [benchmarkSeries, setBenchmarkSeries] = useState([]);
     const [benchmarkLoading, setBenchmarkLoading] = useState(false);
+
+    const [performanceTab, setPerformanceTab] = useState("CALENDAR");
+    const [historicalPerformance, setHistoricalPerformance] = useState([]);
+    const [vintageReturns, setVintageReturns] = useState([]);
+    const [expandedYears, setExpandedYears] = useState({});
 
     useEffect(() => {
         async function loadHistory() {
@@ -275,6 +295,31 @@ export default function HistoryView() {
             loadBenchmark();
         }
     }, [historyMode, benchmarkCode, range]);
+
+    useEffect(() => {
+        async function loadPerformanceTables() {
+            try {
+                const [calendarRes, vintageRes] = await Promise.all([
+                    apiFetch("/api/portfolio/historical-performance"),
+                    apiFetch("/api/portfolio/vintage-returns"),
+                ]);
+
+                const calendarData = await calendarRes.json();
+                const vintageData = await vintageRes.json();
+
+                setHistoricalPerformance(
+                    Array.isArray(calendarData) ? calendarData : []
+                );
+                setVintageReturns(Array.isArray(vintageData) ? vintageData : []);
+            } catch (error) {
+                console.error("Error loading performance tables:", error);
+                setHistoricalPerformance([]);
+                setVintageReturns([]);
+            }
+        }
+
+        loadPerformanceTables();
+    }, []);
 
     const chartData = useMemo(() => {
         return history.map((row) => ({
@@ -356,6 +401,13 @@ export default function HistoryView() {
 
     const investmentsPeriodPositive = investmentsPeriodChangeUsd >= 0;
     const investmentsCostPeriodPositive = investmentsCostPeriodChangeUsd >= 0;
+
+    function toggleYear(year) {
+        setExpandedYears((prev) => ({
+            ...prev,
+            [year]: !prev[year],
+        }));
+    }
 
     return (
         <div className="space-y-5 md:space-y-8">
@@ -653,6 +705,249 @@ export default function HistoryView() {
                                 />
                             </LineChart>
                         </ResponsiveContainer>
+                    )}
+                </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-800/80 p-4 md:rounded-[24px] md:p-6">
+                <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                    <div>
+                        <div className="text-[11px] uppercase tracking-[0.24em] text-slate-500 md:text-xs">
+                            Performance histórica
+                        </div>
+
+                        <div className="mt-1 text-lg font-semibold text-white md:text-xl">
+                            {performanceTab === "CALENDAR"
+                                ? "Retorno calendario ajustado (TWR)"
+                                : "Retorno por año invertido a hoy"}
+                        </div>
+
+                        <p className="mt-2 max-w-3xl text-sm text-slate-400">
+                            {performanceTab === "CALENDAR"
+                                ? "Mide cómo rindió el portfolio durante cada año, ajustando los aportes del período."
+                                : "Mide cómo rinden hoy las compras realizadas en cada año, usando lotes FIFO abiertos."}
+                        </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 rounded-2xl bg-slate-950/60 p-1 md:flex">
+                        {PERFORMANCE_TABS.map((tab) => (
+                            <button
+                                key={tab}
+                                onClick={() => setPerformanceTab(tab)}
+                                className={`rounded-xl px-4 py-2 text-sm transition ${performanceTab === tab
+                                        ? "bg-cyan-500/20 text-white"
+                                        : "text-slate-400 hover:text-white"
+                                    }`}
+                            >
+                                {tab === "CALENDAR" ? "Calendario" : "Año invertido"}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                    {performanceTab === "CALENDAR" ? (
+                        <table className="min-w-full border-separate border-spacing-y-2">
+                            <thead>
+                                <tr className="text-left text-xs uppercase tracking-[0.18em] text-slate-500">
+                                    <th className="px-3 py-2">Año</th>
+                                    <th className="px-3 py-2">TWR</th>
+                                    <th className="px-3 py-2">PnL</th>
+                                    <th className="px-3 py-2">Aportes</th>
+                                    <th className="px-3 py-2">Portfolio cierre</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                {historicalPerformance.map((row) => {
+                                    const expanded = expandedYears[row.year];
+
+                                    return (
+                                        <Fragment key={row.year}>
+                                            <tr
+                                                onClick={() => toggleYear(row.year)}
+                                                className="cursor-pointer rounded-2xl bg-white/[0.03] transition hover:bg-white/[0.05]"
+                                            >
+                                                <td className="rounded-l-2xl px-3 py-4 font-semibold text-white">
+                                                    <div className="flex items-center gap-2">
+                                                        <span>
+                                                            {expanded ? "▼" : "▶"}
+                                                        </span>
+
+                                                        <span>{row.year}</span>
+                                                    </div>
+                                                </td>
+
+                                                <td
+                                                    className={`px-3 py-4 font-semibold ${Number(row.twr_performance_pct) >=
+                                                            0
+                                                            ? "text-emerald-400"
+                                                            : "text-red-400"
+                                                        }`}
+                                                >
+                                                    {formatPercentFromDecimal(
+                                                        row.twr_performance_pct
+                                                    )}
+                                                </td>
+
+                                                <td
+                                                    className={`px-3 py-4 ${Number(
+                                                        row.total_adjusted_pnl_usd
+                                                    ) >= 0
+                                                            ? "text-emerald-400"
+                                                            : "text-red-400"
+                                                        }`}
+                                                >
+                                                    {formatCurrency(
+                                                        row.total_adjusted_pnl_usd,
+                                                        "USD"
+                                                    )}
+                                                </td>
+
+                                                <td className="px-3 py-4 text-slate-300">
+                                                    {formatCurrency(
+                                                        row.net_asset_flow_usd,
+                                                        "USD"
+                                                    )}
+                                                </td>
+
+                                                <td className="rounded-r-2xl px-3 py-4 text-white">
+                                                    {formatCurrency(
+                                                        row.approx_end_value_usd,
+                                                        "USD"
+                                                    )}
+                                                </td>
+                                            </tr>
+
+                                            {expanded &&
+                                                [...(row.months || [])]
+                                                    .sort(
+                                                        (a, b) =>
+                                                            Number(a.month) -
+                                                            Number(b.month)
+                                                    )
+                                                    .map((month) => (
+                                                        <tr
+                                                            key={`${row.year}-${month.month}`}
+                                                            className="bg-slate-950/40 text-sm"
+                                                        >
+                                                            <td className="px-8 py-3 text-slate-300">
+                                                                {
+                                                                    MONTH_NAMES[
+                                                                    Number(
+                                                                        month.month
+                                                                    ) - 1
+                                                                    ]
+                                                                }
+                                                            </td>
+
+                                                            <td
+                                                                className={`px-3 py-3 ${Number(
+                                                                    month.adjusted_performance_pct
+                                                                ) >= 0
+                                                                        ? "text-emerald-400"
+                                                                        : "text-red-400"
+                                                                    }`}
+                                                            >
+                                                                {formatPercentFromDecimal(
+                                                                    month.adjusted_performance_pct
+                                                                )}
+                                                            </td>
+
+                                                            <td
+                                                                className={`px-3 py-3 ${Number(
+                                                                    month.adjusted_pnl_usd
+                                                                ) >= 0
+                                                                        ? "text-emerald-400"
+                                                                        : "text-red-400"
+                                                                    }`}
+                                                            >
+                                                                {formatCurrency(
+                                                                    month.adjusted_pnl_usd,
+                                                                    "USD"
+                                                                )}
+                                                            </td>
+
+                                                            <td className="px-3 py-3 text-slate-400">
+                                                                {formatCurrency(
+                                                                    month.net_asset_flow_usd,
+                                                                    "USD"
+                                                                )}
+                                                            </td>
+
+                                                            <td className="px-3 py-3 text-slate-300">
+                                                                {formatCurrency(
+                                                                    month.end_value_usd,
+                                                                    "USD"
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                        </Fragment>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    ) : (
+                        <table className="min-w-full border-separate border-spacing-y-2">
+                            <thead>
+                                <tr className="text-left text-xs uppercase tracking-[0.18em] text-slate-500">
+                                    <th className="px-3 py-2">Año compra</th>
+                                    <th className="px-3 py-2">Invertido</th>
+                                    <th className="px-3 py-2">Valor actual</th>
+                                    <th className="px-3 py-2">PnL</th>
+                                    <th className="px-3 py-2">Return</th>
+                                    <th className="px-3 py-2">Activos</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                {vintageReturns.map((row) => (
+                                    <tr
+                                        key={row.buy_year}
+                                        className="rounded-2xl bg-white/[0.03] transition hover:bg-white/[0.05]"
+                                    >
+                                        <td className="rounded-l-2xl px-3 py-4 font-semibold text-white">
+                                            {row.buy_year}
+                                        </td>
+
+                                        <td className="px-3 py-4 text-slate-300">
+                                            {formatCurrency(row.invested_usd, "USD")}
+                                        </td>
+
+                                        <td className="px-3 py-4 text-white">
+                                            {formatCurrency(
+                                                row.current_value_usd,
+                                                "USD"
+                                            )}
+                                        </td>
+
+                                        <td
+                                            className={`px-3 py-4 ${Number(row.pnl_usd) >= 0
+                                                    ? "text-emerald-400"
+                                                    : "text-red-400"
+                                                }`}
+                                        >
+                                            {formatCurrency(row.pnl_usd, "USD")}
+                                        </td>
+
+                                        <td
+                                            className={`px-3 py-4 font-semibold ${Number(row.pnl_pct) >= 0
+                                                    ? "text-emerald-400"
+                                                    : "text-red-400"
+                                                }`}
+                                        >
+                                            {formatPercentFromDecimal(row.pnl_pct)}
+                                        </td>
+
+                                        <td className="rounded-r-2xl px-3 py-4 text-slate-400">
+                                            {Number(row.assets_count || 0)} activos ·{" "}
+                                            {Number(row.lots_count || 0)} lotes
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     )}
                 </div>
             </div>

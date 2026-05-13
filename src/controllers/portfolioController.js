@@ -721,7 +721,92 @@ async function getAssetPerformance(req, res) {
   }
 }
 
+async function getHistoricalPerformance(req, res) {
+  try {
+    const query = `
+      SELECT
+        y.year,
+        y.start_date,
+        y.end_date,
+        y.approx_start_value_usd,
+        y.approx_end_value_usd,
+        y.net_asset_flow_usd,
+        y.total_adjusted_pnl_usd,
+        y.twr_performance_pct,
 
+        ARRAY_AGG(
+          STRUCT(
+            m.month,
+            m.month_date,
+            m.start_date,
+            m.end_date,
+            m.start_value_usd,
+            m.end_value_usd,
+            m.net_asset_flow_usd,
+            m.adjusted_pnl_usd,
+            m.adjusted_performance_pct,
+            m.gross_performance_pct,
+            m.movements_count
+          )
+          ORDER BY m.month
+        ) AS months
+
+      FROM ${table("vw_portfolio_calendar_year_performance_twr")} y
+
+      LEFT JOIN ${table("vw_portfolio_calendar_month_performance_adjusted")} m
+        ON m.year = y.year
+
+      GROUP BY
+        y.year,
+        y.start_date,
+        y.end_date,
+        y.approx_start_value_usd,
+        y.approx_end_value_usd,
+        y.net_asset_flow_usd,
+        y.total_adjusted_pnl_usd,
+        y.twr_performance_pct
+
+      ORDER BY y.year DESC
+    `;
+
+    const rows = await runQuery(query);
+
+    res.json(normalizeBigQueryRows(rows));
+  } catch (error) {
+    console.error("Error in getHistoricalPerformance:", error);
+
+    res.status(500).json({
+      error: "Error fetching historical performance",
+    });
+  }
+}
+
+async function getVintageReturns(req, res) {
+  try {
+    const query = `
+      SELECT
+        buy_year,
+        invested_usd,
+        current_value_usd,
+        pnl_usd,
+        pnl_pct,
+        assets_count,
+        lots_count
+      FROM ${table("vw_portfolio_vintage_returns")}
+      ORDER BY buy_year DESC
+    `;
+
+    const rows = await runQuery(query);
+
+    res.json(normalizeBigQueryRows(rows));
+  } catch (error) {
+    console.error("Error in getVintageReturns:", error);
+
+    res.status(500).json({
+      error: "Error fetching vintage returns",
+    });
+  }
+}
 
 module.exports = {
   getSummary,
@@ -734,4 +819,6 @@ module.exports = {
   getPlatformAllocation,
   getBenchmarkComparison,
   getAssetPerformance,
+  getHistoricalPerformance,
+  getVintageReturns,
 };
