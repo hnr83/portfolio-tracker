@@ -194,7 +194,7 @@ export default function DashboardView({
                 aria-hidden={!showKpis}
             >
                 {summary && (
-                    <div className="grid auto-rows-fr grid-cols-1 gap-3 pb-1 sm:grid-cols-2 xl:grid-cols-4 2xl:gap-4">
+                    <div className="grid auto-rows-fr grid-cols-2 gap-3 pb-1 xl:grid-cols-4 2xl:gap-4">
                         <SummaryCard
                             title="Total Portfolio USD"
                             value={
