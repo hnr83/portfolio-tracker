@@ -2,6 +2,7 @@ const { updatePricesJob } = require('../jobs/updatePricesJob');
 const { snapshotPortfolioJob } = require("../jobs/snapshotPortfolioJob");
 const { updateFxRatesJob } = require("../jobs/updateFxRatesJob");
 const { updateBenchmarkPricesJob, backfillBenchmarkHistoryJob } = require("../jobs/updateBenchmarkPricesJob");
+const { rebuildPositionLotsJob } = require("../jobs/rebuildPositionLotsJob");
 
 
 async function updateFx(req, res) {
@@ -76,10 +77,31 @@ async function backfillBenchmarkHistory(req, res) {
   }
 }
 
+async function rebuildPositionLots(req, res) {
+  try {
+    console.log("POST /api/jobs/rebuild-position-lots");
+
+    await rebuildPositionLotsJob();
+
+    res.json({
+      success: true,
+      message: "Position lots FIFO rebuilt successfully",
+    });
+  } catch (error) {
+    console.error("Error rebuilding position lots:", error);
+
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+}
+
 module.exports = {
   snapshotPortfolio,
   runUpdatePrices,
   updateFx,
   updateBenchmarkPrices,
   backfillBenchmarkHistory,
+  rebuildPositionLots,
 };

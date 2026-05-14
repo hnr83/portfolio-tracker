@@ -429,8 +429,8 @@ function AppContent() {
         onLogout={handleLogout}
       />
 
-      <main className="min-h-screen min-w-0 bg-[radial-gradient(circle_at_top_left,rgba(78,99,255,0.16),transparent_22%),radial-gradient(circle_at_top_right,rgba(23,183,229,0.10),transparent_20%),linear-gradient(180deg,#030817_0%,#020617_100%)] xl:pl-80">
-        <div className="mx-auto w-full max-w-[1600px] px-3 pb-28 pt-5 sm:px-5 sm:py-6 lg:px-8 xl:pb-6 xl:pt-6">
+      <main className="min-h-screen min-w-0 bg-[radial-gradient(circle_at_top_left,rgba(78,99,255,0.16),transparent_22%),radial-gradient(circle_at_top_right,rgba(23,183,229,0.10),transparent_20%),linear-gradient(180deg,#030817_0%,#020617_100%)] xl:pl-72 2xl:pl-80">
+        <div className="mx-auto w-full max-w-[1500px] px-3 pb-28 pt-3 text-[13px] sm:px-4 sm:py-4 lg:px-5 xl:px-6 xl:pb-5 xl:pt-4 2xl:max-w-[1720px] 2xl:px-8 2xl:text-[15px]">
           {activeView === "dashboard" && (
             <DashboardView
               summary={summary}

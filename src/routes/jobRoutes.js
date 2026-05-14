@@ -7,6 +7,7 @@ const {
   updateFx,
   updateBenchmarkPrices,
   backfillBenchmarkHistory,
+  rebuildPositionLots,
 } = require('../controllers/jobController');
 
 router.post('/update-fx', updateFx);
@@ -14,5 +15,6 @@ router.post('/update-prices', runUpdatePrices);
 router.post('/snapshot-portfolio', snapshotPortfolio);
 router.post('/update-benchmark-prices', updateBenchmarkPrices);
 router.post('/backfill-benchmark-history', backfillBenchmarkHistory);
+router.post('/rebuild-position-lots', rebuildPositionLots);
 
 module.exports = router;

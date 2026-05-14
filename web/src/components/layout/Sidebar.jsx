@@ -16,7 +16,7 @@ export default function Sidebar({
     };
 
     const navClass = (view) =>
-        `group cursor-pointer rounded-2xl px-4 py-3 transition-all duration-200 ${activeView === view
+        `group cursor-pointer rounded-2xl px-4 py-2.5 transition-all duration-200 ${activeView === view
             ? "border border-indigo-500/20 bg-[linear-gradient(90deg,rgba(93,124,250,0.18)_0%,rgba(93,124,250,0.08)_100%)] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
             : "text-slate-400 hover:bg-slate-900/70 hover:text-white"
         }`;
@@ -67,29 +67,29 @@ export default function Sidebar({
 
     return (
         <>
-            <aside className="hidden xl:fixed xl:inset-y-0 xl:left-0 xl:z-40 xl:flex xl:w-80 xl:shrink-0 xl:flex-col xl:overflow-y-auto xl:border-r xl:border-slate-800/80 xl:bg-[#020617] xl:px-5 xl:py-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <aside className="hidden xl:fixed xl:inset-y-0 xl:left-0 xl:z-40 xl:flex xl:w-72 2xl:w-80 xl:shrink-0 xl:flex-col xl:overflow-y-auto xl:border-r xl:border-slate-800/80 xl:bg-[#020617] xl:px-4 xl:py-5 2xl:px-5 2xl:py-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 <div className="px-2 pt-2">
                     <div className="flex items-start gap-3">
-                        <div className="mt-1 h-16 w-[3px] rounded-full bg-gradient-to-b from-indigo-300 via-indigo-400 to-indigo-600" />
+                        <div className="mt-1 h-12 w-[3px] rounded-full bg-gradient-to-b from-indigo-300 via-indigo-400 to-indigo-600" />
 
                         <div>
                             <div className="text-[11px] uppercase tracking-[0.28em] text-white/90">
                                 Portfolio
                             </div>
 
-                            <div className="mt-1 text-[28px] font-bold leading-none tracking-tight text-white">
+                            <div className="mt-1 text-[24px] 2xl:text-[28px] font-bold leading-none tracking-tight text-white">
                                 Jubilación
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div className="mt-6 rounded-[28px] border border-white/10 bg-white/[0.03] px-6 py-5">
+                <div className="mt-5 rounded-[24px] border border-white/10 bg-white/[0.03] px-5 py-4">
                     <div className="text-[12px] uppercase tracking-[0.28em] text-slate-400">
                         Valor de portfolio
                     </div>
 
-                    <div className="mt-5 whitespace-nowrap text-[24px] font-semibold leading-tight tracking-tight text-white sm:text-[27px]">
+                    <div className="mt-4 whitespace-nowrap text-[21px] 2xl:text-[26px] font-semibold leading-tight tracking-tight text-white">
                         {formatCurrency(totalUsd, "USD")}
                     </div>
 
@@ -130,14 +130,14 @@ export default function Sidebar({
                     </div>
                 </div>
 
-                <nav className="mt-8 space-y-2">
+                <nav className="mt-6 space-y-1.5">
                     <div
                         onClick={() => handleNavigate("dashboard")}
                         className={navClass("dashboard")}
                     >
                         <div className="flex items-center gap-3">
                             <span className={dotClass("dashboard")} />
-                            <span className="font-medium">Portfolio Jubilación</span>
+                            <span className="text-sm font-medium">Portfolio Jubilación</span>
                         </div>
                     </div>
 
@@ -147,7 +147,7 @@ export default function Sidebar({
                     >
                         <div className="flex items-center gap-3">
                             <span className={dotClass("holdings")} />
-                            <span>Holdings</span>
+                            <span className="text-sm">Holdings</span>
                         </div>
                     </div>
 
@@ -157,7 +157,7 @@ export default function Sidebar({
                     >
                         <div className="flex items-center gap-3">
                             <span className={dotClass("market")} />
-                            <span>Mercado</span>
+                            <span className="text-sm">Mercado</span>
                         </div>
                     </div>
 
@@ -167,7 +167,7 @@ export default function Sidebar({
                     >
                         <div className="flex items-center gap-3">
                             <span className={dotClass("history")} />
-                            <span>Histórico</span>
+                            <span className="text-sm">Histórico</span>
                         </div>
                     </div>
 
@@ -180,7 +180,7 @@ export default function Sidebar({
                     >
                         <div className="flex items-center gap-3">
                             <span className={dotClass("transactions")} />
-                            <span>Transacciones</span>
+                            <span className="text-sm">Transacciones</span>
                         </div>
                     </div>
 
@@ -190,7 +190,7 @@ export default function Sidebar({
                     >
                         <div className="flex items-center gap-3">
                             <span className={dotClass("trading")} />
-                            <span>Trading</span>
+                            <span className="text-sm">Trading</span>
                         </div>
                     </div>
 
@@ -200,7 +200,7 @@ export default function Sidebar({
                     >
                         <div className="flex items-center gap-3">
                             <span className={dotClass("performance")} />
-                            <span>Performance</span>
+                            <span className="text-sm">Performance</span>
                         </div>
                     </div>
                 </nav>

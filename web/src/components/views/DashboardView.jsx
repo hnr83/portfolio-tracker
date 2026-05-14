@@ -50,13 +50,10 @@ export default function DashboardView({
     investmentsUsd,
     liquidityUsd,
     cryptoUsd,
-    compositionTopCount,
     compositionMetric,
     setCompositionMetric,
     chartTotalValue,
 }) {
-    const activeItem = activeIndex != null ? compositionData[activeIndex] : null;
-
     const touchStartY = useRef(0);
     const touchEndY = useRef(0);
 
@@ -129,7 +126,7 @@ export default function DashboardView({
                 </div>
             </div>
 
-            <div className="flex flex-col gap-3 border-slate-800/80 pb-4 sm:gap-6 sm:pb-8 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex flex-col gap-3 border-slate-800/80 pb-4 sm:gap-4 sm:pb-5 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0">
                     <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
@@ -137,14 +134,12 @@ export default function DashboardView({
                                 Dashboard
                             </div>
 
-                            <h1 className="mt-2 text-2xl font-bold tracking-tight text-white sm:mt-3 sm:text-4xl lg:text-5xl">
+                            <h1 className="mt-1 text-2xl font-bold tracking-tight text-white sm:text-3xl xl:text-[34px] 2xl:text-5xl"></h1><h1 className="mt-2 text-2xl font-bold tracking-tight text-white sm:mt-3 sm:text-4xl lg:text-5xl">
                                 Portfolio{" "}
-                                <span className="text-indigo-400">
-                                    Jubilación
-                                </span>
+                                <span className="text-indigo-400">Jubilación</span>
                             </h1>
 
-                            <p className="mt-2 max-w-2xl text-xs text-slate-400 sm:mt-3 sm:text-base">
+                            <p className="mt-1.5 max-w-2xl text-xs text-slate-400 sm:text-sm 2xl:text-base">
                                 Visión general de tu portfolio y su evolución
                             </p>
                         </div>
@@ -176,7 +171,7 @@ export default function DashboardView({
                 </div>
             </div>
 
-            <div className="hidden sm:block">
+            <div className="-mt-1 hidden sm:block">
                 <KpiVisibilityRail
                     isOpen={showKpis}
                     isPinned={pinKpis}
@@ -199,7 +194,7 @@ export default function DashboardView({
                 aria-hidden={!showKpis}
             >
                 {summary && (
-                    <div className="grid grid-cols-2 gap-3 pb-1 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
+                    <div className="grid auto-rows-fr grid-cols-1 gap-3 pb-1 sm:grid-cols-2 xl:grid-cols-4 2xl:gap-4">
                         <SummaryCard
                             title="Total Portfolio USD"
                             value={
@@ -214,6 +209,7 @@ export default function DashboardView({
                             }
                             icon="◫"
                         />
+
                         <SummaryCard
                             title="Investments USD"
                             value={
@@ -227,7 +223,9 @@ export default function DashboardView({
                                     : `${summary?.total_pnl_usd >= 0 ? "+" : ""}${formatCurrency(
                                         summary?.total_pnl_usd || 0,
                                         "USD"
-                                    )} · ${formatPortfolioPercent((summary?.total_pnl_pct || 0) * 100)}`
+                                    )} · ${formatPortfolioPercent(
+                                        (summary?.total_pnl_pct || 0) * 100
+                                    )}`
                             }
                             subtitleClassName={
                                 summary?.total_pnl_usd >= 0
@@ -236,6 +234,7 @@ export default function DashboardView({
                             }
                             icon="↗"
                         />
+
                         <SummaryCard
                             title="Liquidez USD"
                             value={
@@ -245,6 +244,7 @@ export default function DashboardView({
                             }
                             icon="◉"
                         />
+
                         <SummaryCard
                             title="Crypto USD"
                             value={
@@ -265,9 +265,9 @@ export default function DashboardView({
             )}
 
             {chartData.length > 0 && summary && (
-                <div className="mt-6 grid grid-cols-1 gap-4 sm:mt-8 sm:gap-6 xl:grid-cols-5">
-                    <SectionShell className="xl:col-span-3 xl:min-h-[620px]">
-                        <div className="flex h-full flex-col">
+                <div className="mt-4 grid grid-cols-1 gap-4 sm:mt-5 xl:grid-cols-5 2xl:gap-6">
+                    <SectionShell className="xl:col-span-3 xl:min-h-[270px] 2xl:min-h-[330px]">
+                        <div className="flex h-full min-h-[300px] flex-col 2xl:min-h-[380px]">
                             <div className="flex flex-col gap-3 sm:gap-4 lg:flex-row lg:items-start lg:justify-between">
                                 <div className="min-w-0">
                                     <div className="text-base font-semibold text-white sm:text-[20px]">
@@ -281,7 +281,7 @@ export default function DashboardView({
                                     </div>
                                 </div>
 
-                                <div className="flex flex-col gap-2 sm:flex-row sm:items-center lg:justify-end">
+                                <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-end sm:gap-4 lg:justify-end">
                                     <select
                                         value={compositionMetric}
                                         onChange={(e) => setCompositionMetric(e.target.value)}
@@ -324,12 +324,18 @@ export default function DashboardView({
                                                     stroke="#07101F"
                                                     strokeWidth={2}
                                                 >
-                                                    {compositionData.slice(0, 4).map((entry, index) => (
-                                                        <Cell
-                                                            key={`cell-mobile-${index}`}
-                                                            fill={CHART_COLORS[index % CHART_COLORS.length]}
-                                                        />
-                                                    ))}
+                                                    {compositionData
+                                                        .slice(0, 4)
+                                                        .map((entry, index) => (
+                                                            <Cell
+                                                                key={`cell-mobile-${index}`}
+                                                                fill={
+                                                                    CHART_COLORS[
+                                                                    index % CHART_COLORS.length
+                                                                    ]
+                                                                }
+                                                            />
+                                                        ))}
                                                 </Pie>
                                             </PieChart>
                                         </ResponsiveContainer>
@@ -356,7 +362,9 @@ export default function DashboardView({
                                                         className="h-2.5 w-2.5 shrink-0 rounded-full"
                                                         style={{
                                                             backgroundColor:
-                                                                CHART_COLORS[index % CHART_COLORS.length],
+                                                                CHART_COLORS[
+                                                                index % CHART_COLORS.length
+                                                                ],
                                                         }}
                                                     />
 
@@ -375,116 +383,70 @@ export default function DashboardView({
                             </div>
 
                             {/* DESKTOP */}
-                            <div className="mt-5 hidden flex-1 grid-cols-1 gap-5 lg:grid lg:grid-cols-[1.05fr_0.95fr] lg:gap-6">
-                                <div className="flex w-full items-center justify-center">
-                                    <div className="h-[320px] w-full max-w-[430px]">
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <PieChart>
-                                                <Pie
-                                                    data={compositionData}
-                                                    dataKey="value"
-                                                    nameKey="name"
-                                                    cx="50%"
-                                                    cy="50%"
-                                                    innerRadius="52%"
-                                                    outerRadius="82%"
-                                                    paddingAngle={3}
-                                                    stroke="#07101F"
-                                                    strokeWidth={2}
-                                                    onMouseEnter={(_, index) => setActiveIndex(index)}
-                                                    onMouseLeave={() => setActiveIndex(null)}
-                                                    onClick={(data) => {
-                                                        if (data?.name !== "Otros") {
-                                                            setSelectedTicker(data.name);
-                                                        }
-                                                    }}
-                                                >
-                                                    {compositionData.map((entry, index) => (
-                                                        <Cell
-                                                            key={`cell-${index}`}
-                                                            fill={CHART_COLORS[index % CHART_COLORS.length]}
-                                                            stroke={index === activeIndex ? "#ffffff" : "#07101F"}
-                                                            strokeWidth={index === activeIndex ? 3 : 2}
-                                                        />
-                                                    ))}
-                                                </Pie>
-
-                                                <Tooltip
-                                                    formatter={(value, name) => [
-                                                        formatCurrency(value, "USD"),
-                                                        name,
-                                                    ]}
-                                                    contentStyle={{
-                                                        backgroundColor: "#0b1220",
-                                                        border: "1px solid #1e293b",
-                                                        borderRadius: "14px",
-                                                        color: "#fff",
-                                                        boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
-                                                    }}
-                                                    labelStyle={{ color: "#cbd5e1" }}
-                                                />
-                                            </PieChart>
-                                        </ResponsiveContainer>
-                                    </div>
-                                </div>
-
-                                <div className="max-h-[420px] space-y-3 overflow-y-auto pr-1">
-                                    {compositionData.map((item, index) => {
-                                        const pct = chartTotalValue
-                                            ? (item.value / chartTotalValue) * 100
-                                            : 0;
-
-                                        const isOthers = item.name === "Otros";
-
-                                        return (
-                                            <button
-                                                key={item.name}
-                                                onClick={() => {
-                                                    if (!isOthers) {
-                                                        setSelectedTicker(item.name);
+                            <div className="hidden flex-1 items-center justify-center lg:flex">
+                                <div className="h-[210px] w-full max-w-[300px] 2xl:h-[300px] 2xl:max-w-[400px]">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <PieChart>
+                                            <Pie
+                                                data={compositionData}
+                                                dataKey="value"
+                                                nameKey="name"
+                                                cx="50%"
+                                                cy="50%"
+                                                innerRadius="52%"
+                                                outerRadius="82%"
+                                                paddingAngle={3}
+                                                stroke="#07101F"
+                                                strokeWidth={2}
+                                                onMouseEnter={(_, index) => setActiveIndex(index)}
+                                                onMouseLeave={() => setActiveIndex(null)}
+                                                onClick={(data) => {
+                                                    if (data?.name !== "Otros") {
+                                                        setSelectedTicker(data.name);
                                                     }
                                                 }}
-                                                className={`flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left transition-all sm:px-4 ${!isOthers && selectedTicker === item.name
-                                                    ? "border-indigo-500/40 bg-indigo-500/10"
-                                                    : "border-slate-800/80 bg-slate-950/50 hover:border-slate-700"
-                                                    } ${isOthers ? "cursor-default" : "cursor-pointer"}`}
                                             >
-                                                <span
-                                                    className="h-3.5 w-3.5 shrink-0 rounded-full"
-                                                    style={{
-                                                        backgroundColor:
-                                                            CHART_COLORS[index % CHART_COLORS.length],
-                                                    }}
-                                                />
+                                                {compositionData.map((entry, index) => (
+                                                    <Cell
+                                                        key={`cell-${index}`}
+                                                        fill={
+                                                            CHART_COLORS[
+                                                            index % CHART_COLORS.length
+                                                            ]
+                                                        }
+                                                        stroke={
+                                                            index === activeIndex
+                                                                ? "#ffffff"
+                                                                : "#07101F"
+                                                        }
+                                                        strokeWidth={index === activeIndex ? 3 : 2}
+                                                    />
+                                                ))}
+                                            </Pie>
 
-                                                <div className="min-w-0 flex-1">
-                                                    <div className="truncate text-sm font-semibold text-white">
-                                                        {item.name}
-                                                    </div>
-
-                                                    <div className="mt-0.5 text-xs text-slate-500">
-                                                        {isOthers
-                                                            ? `${formatPortfolioPercent(pct)} · ${Math.max(
-                                                                chartData.length - compositionTopCount,
-                                                                0
-                                                            )} posiciones`
-                                                            : compositionMetric === "platform"
-                                                                ? `${formatPortfolioPercent(
-                                                                    pct
-                                                                )} del capital invertido`
-                                                                : `${formatPortfolioPercent(pct)} del portfolio`}
-                                                    </div>
-                                                </div>
-                                            </button>
-                                        );
-                                    })}
+                                            <Tooltip
+                                                formatter={(value, name) => [
+                                                    formatCurrency(value, "USD"),
+                                                    name,
+                                                ]}
+                                                contentStyle={{
+                                                    backgroundColor: "#0b1220",
+                                                    border: "1px solid #1e293b",
+                                                    borderRadius: "14px",
+                                                    color: "#fff",
+                                                    boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
+                                                }}
+                                                labelStyle={{ color: "#cbd5e1" }}
+                                            />
+                                        </PieChart>
+                                    </ResponsiveContainer>
                                 </div>
                             </div>
                         </div>
                     </SectionShell>
 
-                    <SectionShell className="hidden xl:flex xl:min-h-[620px] xl:col-span-2">
-                        <div className="flex h-full flex-col">
+                    <SectionShell className="hidden xl:flex xl:min-h-[300px] xl:col-span-2 2xl:min-h-[380px]">
+                        <div className="flex h-full w-full flex-col">
                             <div>
                                 <div className="mb-1 text-lg font-semibold text-white sm:text-[20px]">
                                     Top Holdings
@@ -495,59 +457,62 @@ export default function DashboardView({
                                 </div>
                             </div>
 
-                            <div className="mt-5 max-h-[430px] flex-1 space-y-3 overflow-y-auto pr-1 xl:max-h-[520px]">
-                                {chartData.map((item, index) => {
-                                    const pct = chartTotalValue
-                                        ? (item.value / chartTotalValue) * 100
-                                        : 0;
+                            <div className="mt-3 max-h-[275px] flex-1 space-y-2 overflow-y-auto scrollbar-hide overscroll-contain 2xl:max-h-[300px] 2xl:space-y-3">                                {chartData.map((item, index) => {
+                                const pct = chartTotalValue
+                                    ? (item.value / chartTotalValue) * 100
+                                    : 0;
 
-                                    return (
-                                        <div
-                                            key={item.name}
-                                            onClick={() => setSelectedTicker(item.name)}
-                                            className={`flex cursor-pointer items-center justify-between gap-3 rounded-xl border px-3 py-3 transition-all sm:px-4 ${selectedTicker === item.name
-                                                ? "border-indigo-500 bg-indigo-500/10"
-                                                : "border-slate-800 bg-slate-900/60 hover:border-slate-700"
-                                                }`}
-                                        >
-                                            <div className="flex min-w-0 items-center gap-3">
-                                                <span
-                                                    className="h-3.5 w-3.5 shrink-0 rounded-full"
-                                                    style={{
-                                                        backgroundColor:
-                                                            CHART_COLORS[index % CHART_COLORS.length],
-                                                    }}
-                                                />
+                                return (
+                                    <div
+                                        key={item.name}
+                                        onClick={() => setSelectedTicker(item.name)}
+                                        className={`flex w-full cursor-pointer items-center justify-between gap-3 rounded-xl border px-3 py-2.5 transition-all 2xl:px-4 2xl:py-3 ${selectedTicker === item.name
+                                            ? "border-indigo-500 bg-indigo-500/10"
+                                            : "border-slate-800 bg-slate-900/60 hover:border-slate-700"
+                                            }`}
+                                    >
+                                        <div className="flex min-w-0 items-center gap-3">
+                                            <span
+                                                className="h-3.5 w-3.5 shrink-0 rounded-full"
+                                                style={{
+                                                    backgroundColor:
+                                                        CHART_COLORS[
+                                                        index % CHART_COLORS.length
+                                                        ],
+                                                }}
+                                            />
 
-                                                <div className="min-w-0">
-                                                    <div className="truncate font-semibold text-white">
-                                                        {item.name}
-                                                    </div>
-
-                                                    <div className="text-[12px] text-slate-500">
-                                                        {compositionMetric === "platform"
-                                                            ? `${formatPortfolioPercent(
-                                                                pct
-                                                            )} del capital invertido`
-                                                            : `${formatPortfolioPercent(pct)} del portfolio`}
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <div className="shrink-0 text-right">
-                                                <div className="whitespace-nowrap text-sm font-semibold text-white tabular-nums">
-                                                    {formatCurrency(item.value, "USD")}
+                                            <div className="min-w-0">
+                                                <div className="truncate font-semibold text-white">
+                                                    {item.name}
                                                 </div>
 
-                                                {index === 0 && (
-                                                    <div className="mt-1 inline-flex rounded-full border border-indigo-500/25 bg-indigo-500/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-indigo-300">
-                                                        Largest
-                                                    </div>
-                                                )}
+                                                <div className="text-[12px] text-slate-500">
+                                                    {compositionMetric === "platform"
+                                                        ? `${formatPortfolioPercent(
+                                                            pct
+                                                        )} del capital invertido`
+                                                        : `${formatPortfolioPercent(
+                                                            pct
+                                                        )} del portfolio`}
+                                                </div>
                                             </div>
                                         </div>
-                                    );
-                                })}
+
+                                        <div className="shrink-0 text-right">
+                                            <div className="whitespace-nowrap text-sm font-semibold text-white tabular-nums">
+                                                {formatCurrency(item.value, "USD")}
+                                            </div>
+
+                                            {index === 0 && (
+                                                <div className="mt-1 inline-flex rounded-full border border-indigo-500/25 bg-indigo-500/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-indigo-300">
+                                                    Largest
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })}
                             </div>
                         </div>
                     </SectionShell>
@@ -555,7 +520,7 @@ export default function DashboardView({
             )}
 
             {filteredAndSortedInvestments.length > 0 && (
-                <SectionShell className="mt-8 sm:mt-12 xl:mt-16">
+                <SectionShell className="mt-5 sm:mt-6 xl:mt-8 2xl:mt-12">
                     <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                         <div>
                             <h2 className="text-xl font-semibold text-white sm:text-2xl">
@@ -577,8 +542,7 @@ export default function DashboardView({
                                 selectedTicker ? (
                                     <button
                                         onClick={() => setSelectedTicker(null)}
-                                        className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-indigo-400 transition hover:bg-slate-900 sm:w-auto"
-                                    >
+                                        className="h-[54px] w-full rounded-2xl border border-slate-700/70 bg-slate-950/90 px-4 text-sm text-white outline-none transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 sm:w-auto"                                    >
                                         Clear filter ({selectedTicker})
                                     </button>
                                 ) : null
@@ -589,13 +553,14 @@ export default function DashboardView({
                                 placeholder="Buscar ticker..."
                                 value={investmentSearch}
                                 onChange={(e) => setInvestmentSearch(e.target.value)}
-                                className="w-full rounded-xl border border-slate-700/70 bg-slate-950/90 px-4 py-2.5 text-sm text-white outline-none placeholder:text-slate-500 transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 sm:w-auto"
-                            />
+                                className="h-[54px] w-full rounded-2xl border border-slate-700/70 bg-slate-950/90 px-4 text-sm text-white outline-none transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 sm:w-auto"                            />
 
                             <select
                                 value={investmentCategoryFilter}
-                                onChange={(e) => setInvestmentCategoryFilter(e.target.value)}
-                                className="w-full rounded-xl border border-slate-700/70 bg-slate-950/90 px-4 py-2.5 text-sm text-white outline-none placeholder:text-slate-500 transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 sm:w-auto"
+                                onChange={(e) =>
+                                    setInvestmentCategoryFilter(e.target.value)
+                                }
+                                className="h-[54px] w-full rounded-2xl border border-slate-700/70 bg-slate-950/90 px-4 py-2.5 text-sm text-white outline-none placeholder:text-slate-500 transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 sm:w-auto"
                             >
                                 <option value="ALL">Todas las categorías</option>
                                 <option value="PORTFOLIO">PORTFOLIO</option>
@@ -637,14 +602,18 @@ export default function DashboardView({
 
                                             <div className="shrink-0 text-right">
                                                 <div className="text-base font-semibold text-white tabular-nums">
-                                                    {
-                                                        hideValues
-                                                            ? "US$ ••••••"
-                                                            : formatCurrency(inv.market_value_usd, "USD")}
+                                                    {hideValues
+                                                        ? "US$ ••••••"
+                                                        : formatCurrency(
+                                                            inv.market_value_usd,
+                                                            "USD"
+                                                        )}
                                                 </div>
 
                                                 <div
-                                                    className={`mt-1 text-xs font-semibold tabular-nums ${inv.pnl_pct >= 0 ? "text-emerald-400" : "text-red-400"
+                                                    className={`mt-1 text-xs font-semibold tabular-nums ${inv.pnl_pct >= 0
+                                                        ? "text-emerald-400"
+                                                        : "text-red-400"
                                                         }`}
                                                 >
                                                     {formatPercent(inv.pnl_pct)}
@@ -658,7 +627,7 @@ export default function DashboardView({
 
                         {/* DESKTOP */}
                         <div className="hidden overflow-x-auto rounded-[18px] border border-slate-800/80 bg-slate-950/70 sm:rounded-[22px] lg:block">
-                            <table className="min-w-[980px] text-sm">
+                            <table className="min-w-[980px] text-xs 2xl:text-sm">
                                 <thead className="bg-slate-950/95 text-slate-400">
                                     <tr>
                                         <SortableHeader
@@ -732,12 +701,13 @@ export default function DashboardView({
                                                 key={`${inv.ticker}-${i}`}
                                                 onClick={() => openAssetTransactions(inv.ticker)}
                                                 className={`cursor-pointer border-t border-slate-800/80 transition-colors hover:bg-slate-800/30 ${selectedTicker &&
-                                                    (inv.normalized_ticker || inv.ticker) === selectedTicker
+                                                    (inv.normalized_ticker || inv.ticker) ===
+                                                    selectedTicker
                                                     ? "bg-indigo-500/8"
                                                     : ""
                                                     }`}
                                             >
-                                                <td className="px-4 py-4">
+                                                <td className="px-3 py-3 2xl:px-4 2xl:py-4">
                                                     <AssetAvatar
                                                         ticker={inv.ticker}
                                                         normalizedTicker={inv.normalized_ticker}
@@ -745,35 +715,35 @@ export default function DashboardView({
                                                     />
                                                 </td>
 
-                                                <td className="px-4 py-4 text-slate-300">
+                                                <td className="px-3 py-3 2xl:px-4 2xl:py-4 text-slate-300">
                                                     {inv.normalized_ticker}
                                                 </td>
 
-                                                <td className="px-4 py-4 text-right text-white">
+                                                <td className="px-3 py-3 2xl:px-4 2xl:py-4 text-right text-white">
                                                     {formatNumber(inv.quantity_net, 4)}
                                                 </td>
 
-                                                <td className="px-4 py-4 text-right text-slate-300">
+                                                <td className="px-3 py-3 2xl:px-4 2xl:py-4 text-right text-slate-300">
                                                     {formatCurrency(
                                                         inv.market_price,
                                                         inv.price_currency || "USD"
                                                     )}
                                                 </td>
 
-                                                <td className="px-4 py-4 text-right text-white tabular-nums">
+                                                <td className="px-3 py-3 2xl:px-4 2xl:py-4 text-right text-white tabular-nums">
                                                     {formatCurrency(inv.market_value_usd, "USD")}
                                                 </td>
 
-                                                <td className="px-4 py-4 text-right text-slate-300 tabular-nums">
+                                                <td className="px-3 py-3 2xl:px-4 2xl:py-4 text-right text-slate-300 tabular-nums">
                                                     {formatPortfolioPercent(portfolioPct)}
                                                 </td>
 
-                                                <td className="px-4 py-4 text-right text-white tabular-nums">
+                                                <td className="px-3 py-3 2xl:px-4 2xl:py-4 text-right text-white tabular-nums">
                                                     {formatCurrency(inv.cost_value_usd, "USD")}
                                                 </td>
 
                                                 <td
-                                                    className={`px-4 py-4 text-right font-semibold tabular-nums ${inv.pnl_usd >= 0
+                                                    className={`px-3 py-3 2xl:px-4 2xl:py-4 text-right font-semibold tabular-nums ${inv.pnl_usd >= 0
                                                         ? "text-emerald-400"
                                                         : "text-red-400"
                                                         }`}
@@ -782,7 +752,7 @@ export default function DashboardView({
                                                 </td>
 
                                                 <td
-                                                    className={`px-4 py-4 text-right font-semibold tabular-nums ${inv.pnl_pct >= 0
+                                                    className={`px-3 py-3 2xl:px-4 2xl:py-4 text-right font-semibold tabular-nums ${inv.pnl_pct >= 0
                                                         ? "text-emerald-400"
                                                         : "text-red-400"
                                                         }`}
