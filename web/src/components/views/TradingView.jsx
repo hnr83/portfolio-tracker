@@ -684,14 +684,14 @@ export default function TradingView() {
                 <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-lg shadow-slate-950/30 md:rounded-3xl md:p-5">
                     <div className="flex items-center justify-between">
                         <div>
-                            <div className="flex items-center justify-between gap-4">
-                                <h2 className="text-3xl font-semibold text-slate-100">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <h2 className="text-xl font-semibold text-slate-100 md:text-3xl">
                                     Balances Trading
                                 </h2>
 
                                 <button
                                     onClick={() => setRebalanceOpen(true)}
-                                    className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-300 transition hover:bg-cyan-500/20"
+                                    className="w-full rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-300 transition hover:bg-cyan-500/20 sm:w-auto md:px-4 md:text-sm"
                                 >
                                     Rebalancear
                                 </button>
@@ -709,7 +709,7 @@ export default function TradingView() {
                                     </div>
 
                                     <div
-                                        className={`mt-2 text-3xl font-semibold ${pnlClass(
+                                        className={`mt-2 text-2xl font-semibold md:text-3xl ${pnlClass(
                                             totalTradingBalance
                                         )}`}
                                     >
@@ -720,7 +720,7 @@ export default function TradingView() {
                         </div>
                     </div>
 
-                    <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                         {balances.map((row) => (
                             <div
                                 key={`${row.exchange}-${row.asset}`}
@@ -735,7 +735,7 @@ export default function TradingView() {
                                 </div>
 
                                 <div
-                                    className={`mt-4 text-2xl font-semibold ${pnlClass(
+                                    className={`mt-3 text-xl font-semibold md:mt-4 md:text-2xl ${pnlClass(
                                         row.market_value_usd
                                     )}`}
                                 >
