@@ -925,6 +925,169 @@ async function syncBingxTradesConfirm(req, res) {
   }
 }
 
+async function getTradingBalances(req, res) {
+  try {
+    const query = `
+      SELECT *
+      FROM ${table('vw_trading_asset_balances')}
+      ORDER BY asset
+    `;
+
+    const rows = await runQuery(query);
+
+    res.json(normalizeBigQueryRows(rows));
+  } catch (error) {
+    console.error("Error in getTradingBalances:", error);
+
+    res.status(500).json({
+      error: "Error fetching trading balances",
+    });
+  }
+}
+
+async function getTradingBalancesValued(req, res) {
+  try {
+    const query = `
+      SELECT *
+      FROM ${table('vw_trading_balances_valued')}
+      ORDER BY asset
+    `;
+
+    const rows = await runQuery(query);
+
+    res.json(normalizeBigQueryRows(rows));
+  } catch (error) {
+    console.error("Error in getTradingBalancesValued:", error);
+
+    res.status(500).json({
+      error: "Error fetching trading balances valued",
+    });
+  }
+}
+
+
+async function createTradingRebalance(req, res) {
+  try {
+    const {
+      movement_date,
+      exchange = "Bingx",
+      from_asset,
+      to_asset,
+      from_quantity,
+      to_quantity,
+      amount_usd,
+      notes,
+    } = req.body;
+
+    const cleanFromAsset = String(from_asset || "").toUpperCase();
+    const cleanToAsset = String(to_asset || "").toUpperCase();
+
+    const fromQty = Number(from_quantity || 0);
+    const toQty = Number(to_quantity || 0);
+    const amountUsd = Number(amount_usd || 0);
+
+    if (!movement_date) {
+      return res.status(400).json({ error: "movement_date es obligatorio" });
+    }
+
+    if (!cleanFromAsset || !cleanToAsset) {
+      return res.status(400).json({ error: "from_asset y to_asset son obligatorios" });
+    }
+
+    if (cleanFromAsset === cleanToAsset) {
+      return res.status(400).json({ error: "from_asset y to_asset no pueden ser iguales" });
+    }
+
+    if (fromQty <= 0 || toQty <= 0 || amountUsd <= 0) {
+      return res.status(400).json({
+        error: "from_quantity, to_quantity y amount_usd deben ser mayores a 0",
+      });
+    }
+
+    const transferGroupId = `TRADING-REBALANCE-${Date.now()}`;
+
+    const fromFxPriceUsd =
+      cleanFromAsset === "USDT" ? 1 : amountUsd / fromQty;
+
+    const toFxPriceUsd =
+      cleanToAsset === "USDT" ? 1 : amountUsd / toQty;
+
+    const query = `
+      INSERT INTO ${table("trading_account_movements")}
+      (
+        movement_id,
+        movement_date,
+        movement_type,
+        exchange,
+        asset,
+        quantity,
+        amount_usd,
+        fx_price_usd,
+        transfer_group_id,
+        notes,
+        source,
+        created_at
+      )
+      VALUES
+      (
+        GENERATE_UUID(),
+        @movement_date,
+        'CONVERT_OUT',
+        @exchange,
+        @from_asset,
+        @from_quantity_signed,
+        @from_amount_usd_signed,
+        @from_fx_price_usd,
+        @transfer_group_id,
+        @notes,
+        'manual_app_rebalance',
+        CURRENT_TIMESTAMP()
+      ),
+      (
+        GENERATE_UUID(),
+        @movement_date,
+        'CONVERT_IN',
+        @exchange,
+        @to_asset,
+        @to_quantity,
+        @to_amount_usd,
+        @to_fx_price_usd,
+        @transfer_group_id,
+        @notes,
+        'manual_app_rebalance',
+        CURRENT_TIMESTAMP()
+      )
+    `;
+
+    await runQuery(query, {
+      movement_date,
+      exchange,
+      from_asset: cleanFromAsset,
+      to_asset: cleanToAsset,
+      from_quantity_signed: -Math.abs(fromQty),
+      from_amount_usd_signed: -Math.abs(amountUsd),
+      to_quantity: Math.abs(toQty),
+      to_amount_usd: Math.abs(amountUsd),
+      from_fx_price_usd: fromFxPriceUsd,
+      to_fx_price_usd: toFxPriceUsd,
+      transfer_group_id: transferGroupId,
+      notes: notes || `Rebalance ${cleanFromAsset} a ${cleanToAsset}`,
+    });
+
+    res.status(201).json({
+      ok: true,
+      transfer_group_id: transferGroupId,
+    });
+  } catch (error) {
+    console.error("Error in createTradingRebalance:", error);
+
+    res.status(500).json({
+      error: "Error creating trading rebalance",
+      detail: error.message,
+    });
+  }
+}
+
 module.exports = {
   getTrading,
   getTradingSummary,
@@ -936,4 +1099,7 @@ module.exports = {
   getBingxPositionHistoryBuilt,
   getBingxSyncPreview,
   syncBingxTradesConfirm,
+  getTradingBalances,
+  getTradingBalancesValued,
+  createTradingRebalance,
 };

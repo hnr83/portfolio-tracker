@@ -11,7 +11,10 @@ const {
   getBingxFillOrders,
   getBingxPositionHistoryBuilt,
   getBingxSyncPreview,
-  syncBingxTradesConfirm,  
+  syncBingxTradesConfirm,
+  getTradingBalances,
+  getTradingBalancesValued,
+  createTradingRebalance,
 } = require("../controllers/tradingController");
 
 router.get("/", getTrading);
@@ -25,5 +28,7 @@ router.get("/bingx/fill-orders", getBingxFillOrders);
 router.get("/bingx/position-history-built", getBingxPositionHistoryBuilt);
 router.get("/bingx/sync-preview", getBingxSyncPreview);
 router.post("/bingx/sync-confirm", syncBingxTradesConfirm);
-
+router.get("/balances", getTradingBalances);
+router.get("/balances-valued", getTradingBalancesValued);
+router.post("/rebalance", createTradingRebalance);
 module.exports = router;

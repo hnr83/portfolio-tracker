@@ -8,7 +8,9 @@ import {
     ResponsiveContainer,
     Cell,
 } from "recharts";
+
 import TradingModal from "../modals/TradingModal";
+import TradingRebalanceModal from "../modals/TradingRebalanceModal";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
@@ -137,25 +139,7 @@ function Badge({ children, compact = false }) {
     );
 }
 
-function KpiCard({ title, value, subtitle, valueClassName = "text-slate-100" }) {
-    return (
-        <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3 shadow-lg shadow-slate-950/30 md:rounded-3xl md:p-5">
-            <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500 md:text-xs md:tracking-[0.22em]">
-                {title}
-            </div>
 
-            <div className={`mt-2 text-lg font-semibold md:mt-3 md:text-2xl ${valueClassName}`}>
-                {value}
-            </div>
-
-            {subtitle ? (
-                <div className="mt-1 hidden text-sm text-slate-500 md:mt-2 md:block">
-                    {subtitle}
-                </div>
-            ) : null}
-        </div>
-    );
-}
 
 function EmptyState({ text }) {
     return (
@@ -222,6 +206,12 @@ function MobileTradeCard({ row }) {
 }
 
 export default function TradingView() {
+
+    const [balances, setBalances] = useState([]);
+    const [rebalanceOpen, setRebalanceOpen] = useState(false);
+    const [rebalanceSaving, setRebalanceSaving] = useState(false);
+    const [rebalanceError, setRebalanceError] = useState("");
+
     const [summary, setSummary] = useState(null);
     const [byAsset, setByAsset] = useState([]);
     const [trades, setTrades] = useState([]);
@@ -249,25 +239,30 @@ export default function TradingView() {
             setLoading(true);
             setError("");
 
-            const [summaryRes, byAssetRes, tradesRes] = await Promise.all([
+            const [summaryRes, byAssetRes, tradesRes, balancesRes] = await Promise.all([
                 apiFetch(`/api/trading/summary`),
                 apiFetch(`/api/trading/by-asset`),
                 apiFetch(`/api/trading`),
+                apiFetch(`/api/trading/balances-valued`)
             ]);
 
             if (!summaryRes.ok || !byAssetRes.ok || !tradesRes.ok) {
                 throw new Error("No se pudo cargar la información de trading.");
             }
 
-            const [summaryData, byAssetData, tradesData] = await Promise.all([
-                summaryRes.json(),
-                byAssetRes.json(),
-                tradesRes.json(),
-            ]);
+            const [summaryData, byAssetData, tradesData, balancesData] =
+                await Promise.all([
+                    summaryRes.json(),
+                    byAssetRes.json(),
+                    tradesRes.json(),
+                    balancesRes.json(),
+                ]);
 
             setSummary(summaryData || {});
             setByAsset(Array.isArray(byAssetData) ? byAssetData : []);
             setTrades(Array.isArray(tradesData) ? tradesData : []);
+            setBalances(Array.isArray(balancesData) ? balancesData : []);
+
         } catch (err) {
             console.error(err);
             setError(err.message || "Error cargando trading.");
@@ -275,6 +270,41 @@ export default function TradingView() {
             setLoading(false);
         }
     }, []);
+
+    async function handleSubmitRebalance(payload) {
+        try {
+            setRebalanceSaving(true);
+            setRebalanceError("");
+
+            const response = await apiFetch("/api/trading/rebalance", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(payload),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+
+                throw new Error(
+                    errorData?.error || "Error creando rebalanceo"
+                );
+            }
+
+            setRebalanceOpen(false);
+
+            await loadTradingData();
+        } catch (err) {
+            console.error(err);
+
+            setRebalanceError(
+                err?.message || "Error creando rebalanceo"
+            );
+        } finally {
+            setRebalanceSaving(false);
+        }
+    }
 
     useEffect(() => {
         loadTradingData();
@@ -447,6 +477,11 @@ export default function TradingView() {
             return matchesAsset && matchesDirection && matchesDestination && matchesSearch;
         });
     }, [trades, assetFilter, directionFilter, destinationFilter, search]);
+
+    const totalTradingBalance = balances.reduce(
+        (acc, row) => acc + Number(row.market_value_usd || 0),
+        0
+    );
 
     const chartData = useMemo(() => {
         return byAsset.map((row) => ({
@@ -644,45 +679,103 @@ export default function TradingView() {
                 </div>
             ) : null}
 
-            <div className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
-                <KpiCard
-                    title="PnL total"
-                    value={formatUsd(summary?.total_pnl_usd)}
-                    subtitle="Resultado valuado actual"
-                    valueClassName={pnlClass(summary?.total_pnl_usd)}
-                />
 
-                <KpiCard
-                    title="Retenido"
-                    value={formatUsd(summary?.retained_result_usd)}
-                    subtitle="Según is_capital_held"
-                    valueClassName={pnlClass(summary?.retained_result_usd)}
-                />
+            {balances.length ? (
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-lg shadow-slate-950/30 md:rounded-3xl md:p-5">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <div className="flex items-center justify-between gap-4">
+                                <h2 className="text-3xl font-semibold text-slate-100">
+                                    Balances Trading
+                                </h2>
 
-                <KpiCard
-                    title="Hold coin"
-                    value={formatUsd(summary?.pnl_hold_coin_usd)}
-                    subtitle="Resultado en BTC / ETH / ADA valuado"
-                    valueClassName={pnlClass(summary?.pnl_hold_coin_usd)}
-                />
+                                <button
+                                    onClick={() => setRebalanceOpen(true)}
+                                    className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-300 transition hover:bg-cyan-500/20"
+                                >
+                                    Rebalancear
+                                </button>
+                            </div>
 
-                <KpiCard
-                    title="Hold USDT"
-                    value={formatUsd(summary?.pnl_hold_usdt_usd)}
-                    subtitle="Resultado liquidado en USDT"
-                    valueClassName={pnlClass(summary?.pnl_hold_usdt_usd)}
-                />
-            </div>
+                            <p className="mt-1 text-sm text-slate-500">
+                                Saldos actuales derivados de trades y movimientos de cuenta.
+                            </p>
+
+
+                            <div className="mt-5 flex items-end justify-between rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
+                                <div>
+                                    <div className="text-sm uppercase tracking-[0.2em] text-slate-500">
+                                        Trading neto
+                                    </div>
+
+                                    <div
+                                        className={`mt-2 text-3xl font-semibold ${pnlClass(
+                                            totalTradingBalance
+                                        )}`}
+                                    >
+                                        {formatUsd(totalTradingBalance)}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                        {balances.map((row) => (
+                            <div
+                                key={`${row.exchange}-${row.asset}`}
+                                className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4"
+                            >
+                                <div className="flex items-center justify-between">
+                                    <div className="text-sm font-medium text-slate-400">
+                                        {row.exchange}
+                                    </div>
+
+                                    <Badge compact>{row.asset}</Badge>
+                                </div>
+
+                                <div
+                                    className={`mt-4 text-2xl font-semibold ${pnlClass(
+                                        row.market_value_usd
+                                    )}`}
+                                >
+                                    {formatUsd(row.market_value_usd)}
+                                </div>
+
+                                <div className="mt-3 space-y-1 text-sm text-slate-400">
+                                    <div className="flex items-center justify-between">
+                                        <span>Cantidad</span>
+                                        <span className="font-medium text-slate-200">
+                                            {formatNumber(row.quantity, 6)}
+                                        </span>
+                                    </div>
+
+                                    <div className="flex items-center justify-between">
+                                        <span>Precio</span>
+                                        <span className="font-medium text-slate-200">
+                                            {formatUsd(row.price_usd)}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="mt-2 text-sm text-slate-500">
+                                    Balance actual
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            ) : null}
 
             <div className="grid gap-5 xl:grid-cols-[1fr_420px] xl:gap-6">
                 <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-lg shadow-slate-950/30 md:rounded-3xl md:p-5">
                     <div className="mb-4 flex items-center justify-between gap-4 md:mb-5">
                         <div>
                             <h2 className="text-lg font-semibold text-slate-100">
-                                PnL por instrumento
+                                Performance histórica
                             </h2>
                             <p className="mt-1 hidden text-sm text-slate-500 md:block">
-                                Agrupado desde vw_trading_by_asset.
+                                Resultado acumulado por trades cerrados.
                             </p>
                         </div>
                     </div>
@@ -745,7 +838,7 @@ export default function TradingView() {
                 </div>
 
                 <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-lg shadow-slate-950/30 md:rounded-3xl md:p-5">
-                    <h2 className="text-lg font-semibold text-slate-100">Breakdown</h2>
+                    <h2 className="text-lg font-semibold text-slate-100">Resultado histórico por asset</h2>
 
                     <div className="mt-4 space-y-3 md:mt-5 md:space-y-4">
                         {byAsset.map((row) => (
@@ -952,6 +1045,17 @@ export default function TradingView() {
                 </div>
             </div>
 
+            <TradingRebalanceModal
+                open={rebalanceOpen}
+                saving={rebalanceSaving}
+                error={rebalanceError}
+                onClose={() => {
+                    if (!rebalanceSaving) {
+                        setRebalanceOpen(false);
+                    }
+                }}
+                onSubmit={handleSubmitRebalance}
+            />
             <TradingModal
                 open={openModal}
                 form={form}
@@ -962,5 +1066,7 @@ export default function TradingView() {
                 onSubmit={handleSubmit}
             />
         </div>
+
+        
     );
 }
