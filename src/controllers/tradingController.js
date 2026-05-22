@@ -306,14 +306,13 @@ function toNumber(value) {
 }
 
 function toDateString(ms) {
-  const date = new Date(Number(ms));
+  const bingxMs = Number(ms);
 
-  // Ajuste UTC-3 (Argentina)
-  const offsetMs = 3 * 60 * 60 * 1000;
+  // BingX devuelve el timestamp como si fuera UTC,
+  // pero la pantalla lo muestra en hora local. Ajustamos +3h para AR.
+  const adjusted = new Date(bingxMs + 3 * 60 * 60 * 1000);
 
-  const local = new Date(date.getTime() - offsetMs);
-
-  return local.toISOString().split("T")[0];
+  return adjusted.toISOString().split("T")[0];
 }
 
 function toDateTime(ms) {
@@ -408,40 +407,94 @@ function buildPositionHistoryFromOrders(orders = [], incomes = []) {
 
 
           // ======================
-          // INCOMES FILTRADOS
+          // INCOMES CERCA DEL CIERRE
           // ======================
-          const relevantIncomes = incomes.filter((i) => {
+          const closeRelatedIncomes = incomes.filter((i) => {
             const sameSymbol =
               getInstrument(i.symbol) === getInstrument(position.symbol);
 
-            const inRange =
-              Number(i.time) >= Number(position.open_time) &&
-              Number(i.time) <= closeTime;
+            const incomeTime = Number(i.time);
 
-            return sameSymbol && inRange;
+            return (
+              sameSymbol &&
+              Math.abs(incomeTime - closeTime) <= 10 * 60 * 1000
+            );
           });
 
-          // CLOSED PNL DESDE INCOME (PRECISO)
-          const closedPnl = relevantIncomes
+          // ======================
+          // INCOMES DURANTE LA VIDA
+          // ======================
+          const periodIncomes = incomes.filter((i) => {
+            const sameSymbol =
+              getInstrument(i.symbol) === getInstrument(position.symbol);
+
+            const incomeTime = Number(i.time);
+
+            return (
+              sameSymbol &&
+              incomeTime >= Number(position.open_time) &&
+              incomeTime <= closeTime + 10 * 60 * 1000
+            );
+          });
+
+          console.log(
+            "MATCHED CLOSE INCOMES",
+            position.symbol,
+            closeRelatedIncomes.map((i) => ({
+              type: i.incomeType,
+              income: i.income,
+              time: i.time,
+              iso: new Date(Number(i.time)).toISOString(),
+            }))
+          );
+
+          // ======================
+          // CLOSED PNL
+          // ======================
+          const closedPnl = closeRelatedIncomes
             .filter((i) =>
-              String(i.incomeType || "").toUpperCase().includes("PNL")
+              String(i.incomeType || "")
+                .toUpperCase()
+                .includes("PNL")
             )
             .reduce((acc, i) => acc + toNumber(i.income), 0);
 
+          // ======================
           // FUNDING
-          const funding = relevantIncomes
-            .filter((i) =>
-              String(i.incomeType || "").toUpperCase() === "FUNDING_FEE"
+          // ======================
+          const funding = periodIncomes
+            .filter(
+              (i) =>
+                String(i.incomeType || "").toUpperCase() ===
+                "FUNDING_FEE"
             )
             .reduce((acc, i) => acc + toNumber(i.income), 0);
 
-          // COMMISSIONS (orders)
+          // ======================
+          // COMMISSIONS
+          // ======================
           const commissions = [
             ...position.open_orders,
             ...position.close_orders,
           ].reduce((acc, o) => acc + toNumber(o.commission), 0);
 
-          const realizedPnl = closedPnl + funding + commissions;
+          // ======================
+          // REALIZED PNL FINAL
+          // ======================
+          const realizedPnl =
+            closedPnl +
+            funding +
+            commissions;
+
+          console.log("FINAL PNL", {
+            symbol: position.symbol,
+            closedPnl,
+            funding,
+            commissions,
+            realizedPnl,
+          });
+
+          
 
           const openDate = new Date(Number(position.open_time));
           const closeDate = new Date(closeTime);
@@ -677,22 +730,22 @@ async function getBingxSyncPreview(req, res) {
     let allOrders = [];
     let allIncomes = [];
 
-// 1) Traer orders por ventanas
-while (cursor < finalEndTime) {
-  const windowEnd = Math.min(cursor + maxWindowMs - 1, finalEndTime);
+    // 1) Traer orders por ventanas
+    while (cursor < finalEndTime) {
+      const windowEnd = Math.min(cursor + maxWindowMs - 1, finalEndTime);
 
-  const ordersResult = await getBingxSwapAllOrders({
-    symbol,
-    startTime: cursor,
-    endTime: windowEnd,
-    limit: limit ? Number(limit) : 100,
-  });
+      const ordersResult = await getBingxSwapAllOrders({
+        symbol,
+        startTime: cursor,
+        endTime: windowEnd,
+        limit: limit ? Number(limit) : 100,
+      });
 
-  const rawOrders = ordersResult?.orders || ordersResult || [];
-  allOrders = allOrders.concat(Array.isArray(rawOrders) ? rawOrders : []);
+      const rawOrders = ordersResult?.orders || ordersResult || [];
+      allOrders = allOrders.concat(Array.isArray(rawOrders) ? rawOrders : []);
 
-  cursor = windowEnd + 1;
-}
+      cursor = windowEnd + 1;
+    }
 
     // 2) Detectar símbolos reales
     const symbols = symbol

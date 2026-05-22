@@ -78,7 +78,21 @@ function formatPercent(value) {
 function formatDate(value) {
     if (!value) return "-";
 
-    const raw = typeof value === "object" && value.value ? value.value : value;
+    const raw =
+        typeof value === "object" && value.value
+            ? value.value
+            : value;
+
+    // Caso YYYY-MM-DD
+    if (
+        typeof raw === "string" &&
+        /^\d{4}-\d{2}-\d{2}$/.test(raw)
+    ) {
+        const [year, month, day] = raw.split("-");
+
+        return `${day}/${month}/${year.slice(2)}`;
+    }
+
     const date = new Date(raw);
 
     if (Number.isNaN(date.getTime())) return String(raw);
