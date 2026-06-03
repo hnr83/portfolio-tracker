@@ -125,8 +125,8 @@ export default function TradingTransferToInvestmentModal({
         qty > availableQty;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-3 backdrop-blur-sm sm:items-center">
-            <div className="w-full max-w-lg rounded-3xl border border-slate-800 bg-slate-950 p-5 shadow-2xl shadow-black/40">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 p-3 backdrop-blur-sm sm:items-center sm:p-6">
+            <div className="my-4 max-h-[calc(100vh-2rem)] w-full max-w-lg overflow-y-auto rounded-3xl border border-slate-800 bg-slate-950 p-5 shadow-2xl shadow-black/40 sm:my-0 sm:max-h-[calc(100vh-3rem)]">
                 <div className="flex items-start justify-between gap-4">
                     <div>
                         <div className="text-xs uppercase tracking-[0.22em] text-violet-300">
