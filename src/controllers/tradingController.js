@@ -1141,6 +1141,176 @@ async function createTradingRebalance(req, res) {
   }
 }
 
+async function createTradingTransferToInvestment(req, res) {
+  try {
+    const {
+      movement_date,
+      exchange = "Bingx",
+      asset,
+      quantity,
+      amount_usd,
+      notes,
+    } = req.body;
+
+    const cleanAsset = String(asset || "").toUpperCase();
+    const qty = Number(quantity || 0);
+    const amountUsd = Number(amount_usd || 0);
+
+    if (!movement_date) {
+      return res.status(400).json({ error: "movement_date es obligatorio" });
+    }
+
+    if (!cleanAsset) {
+      return res.status(400).json({ error: "asset es obligatorio" });
+    }
+
+    if (qty <= 0 || amountUsd <= 0) {
+      return res.status(400).json({
+        error: "quantity y amount_usd deben ser mayores a 0",
+      });
+    }
+
+    const transferGroupId = `TRADING-TO-INVESTMENT-${Date.now()}`;
+    const fxPriceUsd = cleanAsset === "USDT" ? 1 : amountUsd / qty;
+
+    const query = `
+      BEGIN TRANSACTION;
+
+      DECLARE available NUMERIC DEFAULT (
+        SELECT COALESCE(SUM(CAST(quantity AS NUMERIC)), 0)
+        FROM ${table("trading_account_movements")}
+        WHERE exchange = @exchange
+          AND asset = @asset
+      );
+
+      IF available + 0.00000001 < @quantity THEN
+        RAISE USING MESSAGE = FORMAT(
+          'Fondos insuficientes. Disponible: %t %s. Solicitado: %t %s',
+          available,
+          @asset,
+          @quantity,
+          @asset
+        );
+      END IF;
+
+      INSERT INTO ${table("trading_account_movements")}
+      (
+        movement_id,
+        movement_date,
+        movement_type,
+        exchange,
+        asset,
+        quantity,
+        amount_usd,
+        fx_price_usd,
+        transfer_group_id,
+        notes,
+        source,
+        created_at
+      )
+      VALUES
+      (
+        GENERATE_UUID(),
+        @movement_date,
+        'TRANSFER_TO_INVESTMENT',
+        @exchange,
+        @asset,
+        -@quantity,
+        -@amount_usd,
+        @fx_price_usd,
+        @transfer_group_id,
+        @notes,
+        'manual_app_transfer_to_investment',
+        CURRENT_TIMESTAMP()
+      );
+
+      INSERT INTO ${table("movements")}
+      (
+        id,
+        source_table,
+        fecha,
+        movement_type,
+        category,
+        owner,
+        ticker,
+        instrument_type,
+        side,
+        quantity,
+        unit_price,
+        price_currency,
+        gross_amount,
+        net_amount,
+        settlement_currency,
+        fx_rate,
+        broker,
+        description,
+        raw_payload
+      )
+      VALUES
+      (
+        GENERATE_UUID(),
+        'trading_transfer',
+        @movement_date,
+        'BUY_ASSET',
+        'PORTFOLIO',
+        'Horacio',
+        @asset,
+        @asset,
+        'BUY',
+        @quantity,
+        @fx_price_usd,
+        'USD',
+        @amount_usd,
+        @amount_usd,
+        'USD',
+        1,
+        @exchange,
+        @notes,
+        TO_JSON_STRING(STRUCT(
+          'TRADING_TO_INVESTMENT' AS family,
+          @movement_date AS fecha,
+          @asset AS ticker,
+          @quantity AS quantity,
+          @amount_usd AS gross_amount,
+          @fx_price_usd AS unit_price,
+          @exchange AS broker,
+          @notes AS description,
+          @transfer_group_id AS transfer_group_id
+        ))
+      );
+
+      COMMIT TRANSACTION;
+    `;
+
+    await runQuery(query, {
+      movement_date,
+      exchange,
+      asset: cleanAsset,
+      quantity: qty,
+      amount_usd: amountUsd,
+      fx_price_usd: fxPriceUsd,
+      transfer_group_id: transferGroupId,
+      notes: notes || `Transfer ${cleanAsset} de trading a inversión`,
+    });
+
+    res.status(201).json({
+      ok: true,
+      transfer_group_id: transferGroupId,
+      asset: cleanAsset,
+      quantity: qty,
+      amount_usd: amountUsd,
+      fx_price_usd: fxPriceUsd,
+    });
+  } catch (error) {
+    console.error("Error in createTradingTransferToInvestment:", error);
+
+    res.status(500).json({
+      error: "Error creating trading transfer to investment",
+      detail: error.message,
+    });
+  }
+}
+
 module.exports = {
   getTrading,
   getTradingSummary,
@@ -1155,4 +1325,5 @@ module.exports = {
   getTradingBalances,
   getTradingBalancesValued,
   createTradingRebalance,
+  createTradingTransferToInvestment,
 };

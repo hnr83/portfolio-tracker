@@ -15,6 +15,7 @@ const {
   getTradingBalances,
   getTradingBalancesValued,
   createTradingRebalance,
+  createTradingTransferToInvestment,
 } = require("../controllers/tradingController");
 
 router.get("/", getTrading);
@@ -31,4 +32,5 @@ router.post("/bingx/sync-confirm", syncBingxTradesConfirm);
 router.get("/balances", getTradingBalances);
 router.get("/balances-valued", getTradingBalancesValued);
 router.post("/rebalance", createTradingRebalance);
+router.post("/transfer-to-investment", createTradingTransferToInvestment);
 module.exports = router;

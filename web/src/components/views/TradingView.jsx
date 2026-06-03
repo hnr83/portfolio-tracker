@@ -11,6 +11,7 @@ import {
 
 import TradingModal from "../modals/TradingModal";
 import TradingRebalanceModal from "../modals/TradingRebalanceModal";
+import TradingTransferToInvestmentModal from "../modals/TradingTransferToInvestmentModal";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
@@ -226,6 +227,10 @@ export default function TradingView() {
     const [rebalanceSaving, setRebalanceSaving] = useState(false);
     const [rebalanceError, setRebalanceError] = useState("");
 
+    const [transferOpen, setTransferOpen] = useState(false);
+    const [transferSaving, setTransferSaving] = useState(false);
+    const [transferError, setTransferError] = useState("");
+
     const [summary, setSummary] = useState(null);
     const [byAsset, setByAsset] = useState([]);
     const [trades, setTrades] = useState([]);
@@ -317,6 +322,49 @@ export default function TradingView() {
             );
         } finally {
             setRebalanceSaving(false);
+        }
+    }
+
+    async function handleSubmitTransferToInvestment(payload) {
+        try {
+            setTransferSaving(true);
+            setTransferError("");
+
+            const response = await apiFetch("/api/trading/transfer-to-investment", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(payload),
+            });
+
+            const data = await response.json().catch(() => ({}));
+
+            if (!response.ok) {
+                throw new Error(
+                    data?.detail ||
+                    data?.error ||
+                    "Error transfiriendo a inversión"
+                );
+            }
+
+            await apiFetch("/api/jobs/snapshot-portfolio", {
+                method: "POST",
+            }).catch((err) => {
+                console.warn("No se pudo actualizar snapshot después del transfer", err);
+            });
+
+            setTransferOpen(false);
+
+            await loadTradingData();
+        } catch (err) {
+            console.error(err);
+
+            setTransferError(
+                err?.message || "Error transfiriendo a inversión"
+            );
+        } finally {
+            setTransferSaving(false);
         }
     }
 
@@ -703,12 +751,21 @@ export default function TradingView() {
                                     Balances Trading
                                 </h2>
 
-                                <button
-                                    onClick={() => setRebalanceOpen(true)}
-                                    className="w-full rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-300 transition hover:bg-cyan-500/20 sm:w-auto md:px-4 md:text-sm"
-                                >
-                                    Rebalancear
-                                </button>
+                                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                                    <button
+                                        onClick={() => setTransferOpen(true)}
+                                        className="w-full rounded-xl border border-violet-500/30 bg-violet-500/10 px-3 py-2 text-xs font-semibold text-violet-300 transition hover:bg-violet-500/20 sm:w-auto md:px-4 md:text-sm"
+                                    >
+                                        Transferir a inversión
+                                    </button>
+
+                                    <button
+                                        onClick={() => setRebalanceOpen(true)}
+                                        className="w-full rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-300 transition hover:bg-cyan-500/20 sm:w-auto md:px-4 md:text-sm"
+                                    >
+                                        Rebalancear
+                                    </button>
+                                </div>
                             </div>
 
                             <p className="mt-1 text-sm text-slate-500">
@@ -1070,6 +1127,19 @@ export default function TradingView() {
                 }}
                 onSubmit={handleSubmitRebalance}
             />
+            <TradingTransferToInvestmentModal
+                open={transferOpen}
+                balances={balances}
+                saving={transferSaving}
+                error={transferError}
+                onClose={() => {
+                    if (!transferSaving) {
+                        setTransferOpen(false);
+                        setTransferError("");
+                    }
+                }}
+                onSubmit={handleSubmitTransferToInvestment}
+            />
             <TradingModal
                 open={openModal}
                 form={form}
@@ -1081,6 +1151,6 @@ export default function TradingView() {
             />
         </div>
 
-        
+
     );
 }
