@@ -1156,12 +1156,26 @@ async function createTradingTransferToInvestment(req, res) {
     const qty = Number(quantity || 0);
     const amountUsd = Number(amount_usd || 0);
 
+    const portfolioTickerMap = {
+      BTC: "CURRENCY:BTCARS",
+      ETH: "CURRENCY:ETHARS",
+      SOL: "CURRENCY:SOLARS",
+    };
+
+    const portfolioTicker = portfolioTickerMap[cleanAsset] || cleanAsset;
+    const portfolioInstrumentType =
+      portfolioTickerMap[cleanAsset] ? "ASSET" : cleanAsset;
+
     if (!movement_date) {
-      return res.status(400).json({ error: "movement_date es obligatorio" });
+      return res.status(400).json({
+        error: "movement_date es obligatorio",
+      });
     }
 
     if (!cleanAsset) {
-      return res.status(400).json({ error: "asset es obligatorio" });
+      return res.status(400).json({
+        error: "asset es obligatorio",
+      });
     }
 
     if (qty <= 0 || amountUsd <= 0) {
@@ -1170,29 +1184,38 @@ async function createTradingTransferToInvestment(req, res) {
       });
     }
 
+    const balanceQuery = `
+      SELECT
+        COALESCE(SUM(CAST(quantity AS NUMERIC)), 0) AS available
+      FROM ${table("vw_trading_asset_balances")}
+      WHERE exchange = @exchange
+        AND asset = @asset
+    `;
+
+    const balanceRows = await runQuery(balanceQuery, {
+      exchange,
+      asset: cleanAsset,
+    });
+
+    const available = Number(balanceRows?.[0]?.available || 0);
+
+    if (qty > available + 0.00000001) {
+      return res.status(400).json({
+        error: `Fondos insuficientes. Disponible ${available} ${cleanAsset}`,
+      });
+    }
+
     const transferGroupId = `TRADING-TO-INVESTMENT-${Date.now()}`;
-    const fxPriceUsd = cleanAsset === "USDT" ? 1 : amountUsd / qty;
 
-    const query = `
-      BEGIN TRANSACTION;
+    const fxPriceUsd =
+      cleanAsset === "USDT"
+        ? 1
+        : amountUsd / qty;
 
-      DECLARE available NUMERIC DEFAULT (
-        SELECT COALESCE(SUM(CAST(quantity AS NUMERIC)), 0)
-        FROM ${table("trading_account_movements")}
-        WHERE exchange = @exchange
-          AND asset = @asset
-      );
+    const finalNotes =
+      notes || `Transfer ${cleanAsset} de trading a inversión`;
 
-      IF available + 0.00000001 < @quantity THEN
-        RAISE USING MESSAGE = FORMAT(
-          'Fondos insuficientes. Disponible: %t %s. Solicitado: %t %s',
-          available,
-          @asset,
-          @quantity,
-          @asset
-        );
-      END IF;
-
+    const tradingMovementQuery = `
       INSERT INTO ${table("trading_account_movements")}
       (
         movement_id,
@@ -1215,15 +1238,28 @@ async function createTradingTransferToInvestment(req, res) {
         'TRANSFER_TO_INVESTMENT',
         @exchange,
         @asset,
-        -@quantity,
-        -@amount_usd,
+        @quantity_signed,
+        @amount_usd_signed,
         @fx_price_usd,
         @transfer_group_id,
         @notes,
         'manual_app_transfer_to_investment',
         CURRENT_TIMESTAMP()
-      );
+      )
+    `;
 
+    await runQuery(tradingMovementQuery, {
+      movement_date,
+      exchange,
+      asset: cleanAsset,
+      quantity_signed: -Math.abs(qty),
+      amount_usd_signed: -Math.abs(amountUsd),
+      fx_price_usd: fxPriceUsd,
+      transfer_group_id: transferGroupId,
+      notes: finalNotes,
+    });
+
+    const portfolioMovementQuery = `
       INSERT INTO ${table("movements")}
       (
         id,
@@ -1254,8 +1290,8 @@ async function createTradingTransferToInvestment(req, res) {
         'BUY_ASSET',
         'PORTFOLIO',
         'Horacio',
-        @asset,
-        @asset,
+        @portfolio_ticker,
+        @portfolio_instrument_type,
         'BUY',
         @quantity,
         @fx_price_usd,
@@ -1266,43 +1302,51 @@ async function createTradingTransferToInvestment(req, res) {
         1,
         @exchange,
         @notes,
-        TO_JSON_STRING(STRUCT(
-          'TRADING_TO_INVESTMENT' AS family,
-          @movement_date AS fecha,
-          @asset AS ticker,
-          @quantity AS quantity,
-          @amount_usd AS gross_amount,
-          @fx_price_usd AS unit_price,
-          @exchange AS broker,
-          @notes AS description,
-          @transfer_group_id AS transfer_group_id
-        ))
-      );
-
-      COMMIT TRANSACTION;
+        TO_JSON_STRING(
+          STRUCT(
+            'TRADING_TO_INVESTMENT' AS family,
+            @movement_date AS fecha,
+            @asset AS asset,
+            @portfolio_ticker AS ticker,
+            @quantity AS quantity,
+            @amount_usd AS gross_amount,
+            @fx_price_usd AS unit_price,
+            @exchange AS broker,
+            @notes AS description,
+            @transfer_group_id AS transfer_group_id
+          )
+        )
+      )
     `;
 
-    await runQuery(query, {
+    await runQuery(portfolioMovementQuery, {
       movement_date,
       exchange,
       asset: cleanAsset,
+      portfolio_ticker: portfolioTicker,
+      portfolio_instrument_type: portfolioInstrumentType,
       quantity: qty,
       amount_usd: amountUsd,
       fx_price_usd: fxPriceUsd,
       transfer_group_id: transferGroupId,
-      notes: notes || `Transfer ${cleanAsset} de trading a inversión`,
+      notes: finalNotes,
     });
 
     res.status(201).json({
       ok: true,
       transfer_group_id: transferGroupId,
       asset: cleanAsset,
+      portfolio_ticker: portfolioTicker,
       quantity: qty,
       amount_usd: amountUsd,
       fx_price_usd: fxPriceUsd,
+      available_before: available,
     });
   } catch (error) {
-    console.error("Error in createTradingTransferToInvestment:", error);
+    console.error(
+      "Error in createTradingTransferToInvestment:",
+      error
+    );
 
     res.status(500).json({
       error: "Error creating trading transfer to investment",
