@@ -729,7 +729,13 @@ async function getHistoricalPerformance(req, res) {
         y.start_date,
         y.end_date,
         y.approx_start_value_usd,
-        y.approx_end_value_usd,
+
+        ARRAY_AGG(
+          m.end_value_usd
+          ORDER BY CAST(m.month AS INT64) DESC
+          LIMIT 1
+        )[OFFSET(0)] AS approx_end_value_usd,
+
         y.net_asset_flow_usd,
         y.total_adjusted_pnl_usd,
         y.twr_performance_pct,
@@ -761,7 +767,6 @@ async function getHistoricalPerformance(req, res) {
         y.start_date,
         y.end_date,
         y.approx_start_value_usd,
-        y.approx_end_value_usd,
         y.net_asset_flow_usd,
         y.total_adjusted_pnl_usd,
         y.twr_performance_pct

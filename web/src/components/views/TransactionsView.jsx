@@ -23,14 +23,7 @@ export default function TransactionsView({
     const selectedNormalizedTicker =
         selectedAssetMovements?.normalized_ticker || null;
 
-    const movementsToShow = selectedAssetMovements
-        ? filteredAndSortedMovements.filter((m) => {
-            return (
-                m.ticker === selectedTicker ||
-                m.normalized_ticker === selectedNormalizedTicker
-            );
-        })
-        : filteredAndSortedMovements;
+    const movementsToShow = filteredAndSortedMovements;
 
     return (
         <SectionShell className="mt-8">

@@ -57,7 +57,7 @@ function AppContent() {
     marketData,
     refreshAll,
     error,
-    clearData,    
+    clearData,
   } = usePortfolioData();
 
   const [authToken, setAuthToken] = useState(() =>
@@ -84,20 +84,22 @@ function AppContent() {
   function handleLogout() {
     window.localStorage.removeItem("portfolio-auth-token");
     window.localStorage.removeItem("portfolio-auth-user");
-    clearData();    
+    clearData();
     setAuthUser(null);
     setAuthToken(null);
 
   }
 
   useEffect(() => {
-  if (error === "SESSION_EXPIRED") {
-    clearData();
-    handleLogout();
-  }
-}, [error, clearData]);
+    if (error === "SESSION_EXPIRED") {
+      clearData();
+      handleLogout();
+    }
+  }, [error, clearData]);
 
   const [selectedAssetMovements, setSelectedAssetMovements] = useState(null);
+  const [assetMovements, setAssetMovements] = useState([]);
+  const [assetMovementsLoading, setAssetMovementsLoading] = useState(false);
   const [activeView, setActiveView] = useState("dashboard");
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState("");
@@ -133,6 +135,37 @@ function AppContent() {
     key: "change_pct_1d",
     direction: "desc",
   });
+
+
+  async function loadAssetMovements(asset) {
+    if (!asset) {
+      setAssetMovements([]);
+      return;
+    }
+
+    try {
+      setAssetMovementsLoading(true);
+
+      const response = await apiFetch(
+        `/api/portfolio/movements?asset=${encodeURIComponent(asset)}`
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          `Error loading movements for ${asset} (${response.status})`
+        );
+      }
+
+      const data = await response.json();
+
+      setAssetMovements(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Error loading asset movements:", error);
+      setAssetMovements([]);
+    } finally {
+      setAssetMovementsLoading(false);
+    }
+  }
 
   async function loadDashboardExtraData() {
     try {
@@ -257,26 +290,27 @@ function AppContent() {
     }
   }, [pinKpis, showKpis]);
 
+
+  useEffect(() => {
+    if (!selectedAssetMovements?.ticker) {
+      setAssetMovements([]);
+      return;
+    }
+
+    loadAssetMovements(selectedAssetMovements.ticker);
+  }, [selectedAssetMovements]);
+
   const visibleMovements = useMemo(() => {
-    if (!selectedAssetMovements?.ticker) return movements || [];
+    if (selectedAssetMovements?.ticker) {
+      return assetMovements || [];
+    }
 
-    const selectedTicker = String(selectedAssetMovements.ticker || "");
-    const selectedNormalized = String(
-      selectedAssetMovements.normalized_ticker || ""
-    );
-
-    return (movements || []).filter((m) => {
-      const ticker = String(m.ticker || "");
-      const normalized = String(m.normalized_ticker || "");
-
-      return (
-        ticker === selectedTicker ||
-        normalized === selectedTicker ||
-        ticker === selectedNormalized ||
-        normalized === selectedNormalized
-      );
-    });
-  }, [movements, selectedAssetMovements]);
+    return movements || [];
+  }, [
+    movements,
+    assetMovements,
+    selectedAssetMovements,
+  ]);
 
   const filteredAndSortedMovements = useMemo(() => {
     return sortRows(
