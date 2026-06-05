@@ -6,6 +6,7 @@ import TransactionsView from "./components/views/TransactionsView";
 import HoldingsView from "./components/views/HoldingsView";
 import DashboardView from "./components/views/DashboardView";
 import TradingView from "./components/views/TradingView";
+import DecisionMaker from "./components/views/DecisionMaker";
 import SortableHeader from "./components/shared/SortableHeader";
 import SectionShell from "./components/layout/SectionShell";
 import FilterToolbar from "./components/layout/FilterToolbar";
@@ -581,6 +582,7 @@ function AppContent() {
 
           {activeView === "history" && <HistoryView />}
           {activeView === "trading" && <TradingView />}
+          {activeView === "decision-maker" && <DecisionMaker />}
         </div>
       </main>
 

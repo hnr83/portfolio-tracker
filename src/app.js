@@ -9,6 +9,7 @@ const transactionRoutes = require("./routes/transactionRoutes");
 const tradingRoutes = require("./routes/tradingRoutes");
 const authRoutes = require("./routes/authRoutes");
 
+
 const { requireAuth } = require("./middlewares/authMiddleware");
 const { requireJobAuth } = require("./middlewares/jobAuthMiddleware");
 
@@ -47,6 +48,7 @@ app.use("/api/portfolio", requireAuth, portfolioRoutes);
 app.use("/api/jobs", requireJobAuth, jobRoutes);
 app.use("/api/transactions", requireAuth, transactionRoutes);
 app.use("/api/trading", requireAuth, tradingRoutes);
+
 
 const PORT = process.env.PORT || 8080;
 

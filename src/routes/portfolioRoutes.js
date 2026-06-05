@@ -13,6 +13,7 @@ const {
   getAssetPerformance,
   getHistoricalPerformance,
   getVintageReturns,
+  getDecisionMaker,
 
 } = require('../controllers/portfolioController');
 
@@ -28,6 +29,7 @@ router.get("/benchmark", getBenchmarkComparison);
 router.get("/performance",getAssetPerformance);
 router.get("/historical-performance", getHistoricalPerformance);
 router.get("/vintage-returns", getVintageReturns);
+router.get("/decision-maker", getDecisionMaker);
 
 
 

@@ -203,6 +203,15 @@ export default function Sidebar({
                             <span className="text-sm">Performance</span>
                         </div>
                     </div>
+                    <div
+                        onClick={() => handleNavigate("decision-maker")}
+                        className={navClass("decision-maker")}
+                    >
+                        <div className="flex items-center gap-3">
+                            <span className={dotClass("decision-maker")} />
+                            <span className="text-sm">Decision Maker</span>
+                        </div>
+                    </div>
                 </nav>
 
                 <div className="mt-auto border-t border-slate-800 pt-6">
@@ -336,6 +345,18 @@ export default function Sidebar({
                             >
                                 <span>Performance</span>
                                 <span>▥</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={async () => {
+                                    setShowMoreMenu(false);
+                                    await handleNavigate("decision-maker");
+                                }}
+                                className="flex w-full items-center justify-between rounded-2xl border border-slate-700/70 bg-slate-900/60 px-4 py-3 text-left text-sm text-slate-200"
+                            >
+                                <span>Decision Maker</span>
+                                <span>🎯</span>
                             </button>
 
                             <button

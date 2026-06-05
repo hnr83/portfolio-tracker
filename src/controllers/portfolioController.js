@@ -1,5 +1,7 @@
 const { runQuery } = require('../services/bigQueryService');
 const { table } = require('../utils/bigqueryHelper');
+const { buildDecisionMaker } = require("../services/decisionMakerService");
+const investmentThesis = require("../config/investmentThesis");
 
 function isBigQueryNumericObject(value) {
   return (
@@ -813,6 +815,57 @@ async function getVintageReturns(req, res) {
   }
 }
 
+async function getDecisionMaker(req, res) {
+  try {
+    const holdingsQuery = `
+      SELECT
+        ticker,
+        normalized_ticker,
+        market_price,
+        market_value_usd,
+        cost_value_usd
+      FROM ${table('vw_portfolio_valued')}
+      WHERE market_value_usd IS NOT NULL
+    `;
+
+    const marketQuery = `
+      SELECT *
+      FROM ${table('vw_market_watch')}
+    `;
+
+    const tradingQuery = `
+      SELECT
+        retained_result_usd
+      FROM ${table('vw_trading_summary')}
+    `;
+
+    const [holdingsRows, marketRows, tradingRows] = await Promise.all([
+      runQuery(holdingsQuery),
+      runQuery(marketQuery),
+      runQuery(tradingQuery),
+    ]);
+
+    const holdings = normalizeBigQueryRows(holdingsRows);
+    const marketData = normalizeBigQueryRows(marketRows);
+    const tradingSummary = normalizeBigQueryRows(tradingRows)[0] || {};
+
+    const result = await buildDecisionMaker({
+      holdings,
+      marketData,
+      tradingSummary,
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error("Error in getDecisionMaker:", error);
+
+    res.status(500).json({
+      error: "Error building decision maker",
+      details: error.message,
+    });
+  }
+}
+
 module.exports = {
   getSummary,
   getPositions,
@@ -826,4 +879,5 @@ module.exports = {
   getAssetPerformance,
   getHistoricalPerformance,
   getVintageReturns,
+  getDecisionMaker,
 };
