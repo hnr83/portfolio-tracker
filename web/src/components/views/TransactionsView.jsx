@@ -1,5 +1,5 @@
 import React from "react";
-import { formatDate } from "../../utils/formatter";
+import { formatDate } from "../../utils/formatters";
 
 export default function TransactionsView({
     selectedAssetMovements,
