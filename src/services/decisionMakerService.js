@@ -266,8 +266,21 @@ async function buildDecisionMaker({
     const totalThesisCapitalUsd =
         btcInvestedUsd + ethInvestedUsd + usdtUsd + tradingAvailableUsd;
 
-    const btcTargetUsd = totalThesisCapitalUsd * thesis.allocation.BTC;
-    const ethTargetUsd = totalThesisCapitalUsd * thesis.allocation.ETH;
+    const btcTargetUsd =
+        totalThesisCapitalUsd * thesis.allocation.BTC;
+
+    let ethTargetUsd =
+        totalThesisCapitalUsd * thesis.allocation.ETH;
+
+    const ethRecoveryTarget =
+        thesis.recovery?.ETH?.enabled
+            ? toNumber(thesis.recovery.ETH.targetInvestedUsd)
+            : 0;
+
+    ethTargetUsd = Math.max(
+        ethTargetUsd,
+        ethRecoveryTarget
+    );
 
     const btc = buildAssetDecision({
         asset: "BTC",
