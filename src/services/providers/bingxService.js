@@ -74,9 +74,50 @@ async function getBingxSwapFillOrders({ symbol, startTime, endTime, limit = 100 
   return bingxRequest("/openApi/swap/v2/trade/allFillOrders", params);
 }
 
+async function getBingxSpotOpenOrders({ symbol, limit = 100 } = {}) {
+  const params = { limit };
+
+  if (symbol) params.symbol = symbol;
+
+  return bingxRequest("/openApi/spot/v1/trade/openOrders", params);
+}
+
+async function getBingxSpotHistoryOrders({
+  symbol,
+  startTime,
+  endTime,
+  limit = 100,
+} = {}) {
+  const params = { limit };
+
+  if (symbol) params.symbol = symbol;
+  if (startTime) params.startTime = startTime;
+  if (endTime) params.endTime = endTime;
+
+  return bingxRequest("/openApi/spot/v1/trade/historyOrders", params);
+}
+
+async function getBingxSpotMyTrades({
+  symbol,
+  startTime,
+  endTime,
+  limit = 100,
+} = {}) {
+  const params = { limit };
+
+  if (symbol) params.symbol = symbol;
+  if (startTime) params.startTime = startTime;
+  if (endTime) params.endTime = endTime;
+
+  return bingxRequest("/openApi/spot/v1/trade/myTrades", params);
+}
+
 module.exports = {
   getBingxSwapPositions,
   getBingxSwapAllOrders,
   getBingxSwapFillOrders,
   getBingxIncome,
+  getBingxSpotOpenOrders,
+  getBingxSpotHistoryOrders,
+  getBingxSpotMyTrades,
 };

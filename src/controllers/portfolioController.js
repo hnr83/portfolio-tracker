@@ -2,6 +2,8 @@ const { runQuery } = require('../services/bigQueryService');
 const { table } = require('../utils/bigqueryHelper');
 const { buildDecisionMaker } = require("../services/decisionMakerService");
 const investmentThesis = require("../config/investmentThesis");
+const { getBingxSpotHistoryOrders, getBingxSpotMyTrades, } = require("../services/providers/bingxService");
+
 
 function isBigQueryNumericObject(value) {
   return (
@@ -833,26 +835,33 @@ async function getDecisionMaker(req, res) {
       FROM ${table('vw_market_watch')}
     `;
 
-    const tradingQuery = `
+    const tradingBalancesQuery = `
       SELECT
-        retained_result_usd
-      FROM ${table('vw_trading_summary')}
+        asset,
+        quantity,
+        price_usd,
+        market_value_usd
+      FROM ${table('vw_trading_balances_valued')}
     `;
 
-    const [holdingsRows, marketRows, tradingRows] = await Promise.all([
+    const [holdingsRows, marketRows, tradingBalancesRows] = await Promise.all([
       runQuery(holdingsQuery),
       runQuery(marketQuery),
-      runQuery(tradingQuery),
+      runQuery(tradingBalancesQuery),
     ]);
 
     const holdings = normalizeBigQueryRows(holdingsRows);
     const marketData = normalizeBigQueryRows(marketRows);
-    const tradingSummary = normalizeBigQueryRows(tradingRows)[0] || {};
+    const tradingBalances = normalizeBigQueryRows(tradingBalancesRows);
+
+    const tradingUsd = tradingBalances.reduce((sum, row) => {
+      return sum + Number(row.market_value_usd || 0);
+    }, 0);
 
     const result = await buildDecisionMaker({
       holdings,
       marketData,
-      tradingSummary,
+      tradingUsd,
     });
 
     res.json(result);
@@ -865,6 +874,575 @@ async function getDecisionMaker(req, res) {
     });
   }
 }
+
+async function getBingxSpotDebug(req, res) {
+  try {
+    const { symbol = "BTC-USDT", lookbackDays = 7, limit = 100 } = req.query;
+
+    const endTime = Date.now();
+    const startTime =
+      endTime - Number(lookbackDays) * 24 * 60 * 60 * 1000;
+
+    const [orders, trades] = await Promise.all([
+      getBingxSpotHistoryOrders({
+        symbol,
+        startTime,
+        endTime,
+        limit: Number(limit),
+      }),
+      getBingxSpotMyTrades({
+        symbol,
+        startTime,
+        endTime,
+        limit: Number(limit),
+      }),
+    ]);
+
+    res.json({
+      provider: "BINGX",
+      type: "SPOT_DEBUG",
+      symbol,
+      startTime,
+      endTime,
+      orders,
+      trades,
+    });
+  } catch (error) {
+    console.error("getBingxSpotDebug error:", error);
+    res.status(500).json({
+      error: "Error consultando BingX Spot",
+      detail: error.message,
+    });
+  }
+}
+
+function toNumber(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function toDateStringFromMs(ms) {
+  return new Date(Number(ms)).toISOString().slice(0, 10);
+}
+
+function getSpotAssetFromSymbol(symbol) {
+  return String(symbol || "").replace("-USDT", "").replace("USDT", "");
+}
+
+function getPortfolioTickerForCrypto(asset) {
+  const cleanAsset = String(asset || "").toUpperCase();
+
+  const map = {
+    BTC: "CURRENCY:BTCARS",
+    ETH: "CURRENCY:ETHARS",
+    SOL: "CURRENCY:SOLARS",
+  };
+
+  return map[cleanAsset] || cleanAsset;
+}
+
+function buildBingxSpotExternalId(order) {
+  return `BINGX_SPOT_${order.orderId}`;
+}
+
+function normalizeBingxSpotOrdersPayload(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.orders)) return payload.orders;
+  if (Array.isArray(payload?.data)) return payload.data;
+  return [];
+}
+
+async function getExistingBingxSpotExternalIds() {
+  const query = `
+    SELECT DISTINCT
+      JSON_VALUE(raw_payload, '$.external_id') AS external_id
+    FROM ${table("movements")}
+    WHERE source_table = 'bingx_spot'
+      AND JSON_VALUE(raw_payload, '$.external_id') IS NOT NULL
+  `;
+
+  const rows = await runQuery(query);
+  const normalized = normalizeBigQueryRows(rows);
+
+  return new Set(
+    normalized
+      .map((r) => r.external_id)
+      .filter(Boolean)
+  );
+}
+
+function mapBingxSpotOrderToPreviewItem(order) {
+  const asset = getSpotAssetFromSymbol(order.symbol);
+  const side = String(order.side || "").toUpperCase();
+
+  const quantity = toNumber(order.executedQty);
+  const amountUsd = toNumber(order.cummulativeQuoteQty);
+  const priceUsd =
+    toNumber(order.avgPrice) ||
+    (quantity > 0 ? amountUsd / quantity : toNumber(order.price));
+
+  const date = toDateStringFromMs(order.updateTime || order.time);
+  const externalId = buildBingxSpotExternalId(order);
+
+  return {
+    externalId,
+    orderId: String(order.orderId),
+    symbol: order.symbol,
+    asset,
+    side,
+    date,
+    quantity,
+    amountUsd,
+    priceUsd,
+    type: order.type,
+    status: order.status,
+    friendlyText:
+      side === "BUY"
+        ? `Compra ${asset} con USDT`
+        : `Venta ${asset} a USDT`,
+    rawOrder: order,
+  };
+}
+
+async function getBingxSpotSyncPreview(req, res) {
+  try {
+    const {
+      symbol = "BTC-USDT",
+      lookbackDays,
+      limit = 100,
+    } = req.query;
+
+    const endTime = Date.now();
+
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const startTime = lookbackDays
+      ? endTime - Number(lookbackDays) * 24 * 60 * 60 * 1000
+      : startOfToday.getTime();
+
+    const [ordersPayload, tradesPayload] = await Promise.all([
+      getBingxSpotHistoryOrders({
+        symbol,
+        startTime,
+        endTime,
+        limit: Number(limit),
+      }),
+      getBingxSpotMyTrades({
+        symbol,
+        startTime,
+        endTime,
+        limit: Number(limit),
+      }),
+    ]);
+
+    const orders = normalizeBingxSpotOrdersPayload(ordersPayload);
+    const fills = normalizeBingxSpotTradesPayload(tradesPayload);
+
+    const orderById = new Map(
+      orders.map((order) => [String(order.orderId), order])
+    );
+
+    const groupedFills = groupSpotFillsByOrderId(fills);
+
+    const previewItems = Array.from(groupedFills.entries())
+      .map(([orderId, orderFills]) =>
+        buildSpotPreviewItemFromFills(
+          orderId,
+          orderFills,
+          orderById.get(orderId) || null
+        )
+      )
+      .filter((item) => {
+        return (
+          item.quantity > 0 &&
+          item.amountUsd > 0 &&
+          ["BUY", "SELL"].includes(item.side)
+        );
+      })
+      .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    const existingExternalIds = await getExistingBingxSpotExternalIds();
+
+    const rowsToInsert = previewItems.filter(
+      (item) => !existingExternalIds.has(item.externalId)
+    );
+
+    const alreadyExistsRows = previewItems.filter((item) =>
+      existingExternalIds.has(item.externalId)
+    );
+
+    res.json({
+      provider: "BINGX",
+      type: "SPOT_SYNC_PREVIEW",
+      symbol,
+      lookbackDays: lookbackDays ? Number(lookbackDays) : 0,
+      mode: lookbackDays ? "LOOKBACK_DAYS" : "TODAY",
+      totalOrders: orders.length,
+      totalFills: fills.length,
+      groupedOrders: previewItems.length,
+      newOrders: rowsToInsert.length,
+      alreadyExists: alreadyExistsRows.length,
+      rowsToInsert,
+      alreadyExistsRows,
+    });
+  } catch (error) {
+    console.error("getBingxSpotSyncPreview error:", error);
+
+    res.status(500).json({
+      error: "Error generando preview spot BingX",
+      detail: error.message,
+    });
+  }
+}
+
+async function syncBingxSpotConfirm(req, res) {
+  try {
+    const {
+      symbol = "BTC-USDT",
+      lookbackDays,
+      limit = 100,
+    } = req.query;
+
+    let previewPayload;
+
+    const previewReq = {
+      query: {
+        symbol,
+        lookbackDays,
+        limit,
+      },
+    };
+
+    const previewRes = {
+      json: (data) => {
+        previewPayload = data;
+      },
+      status: (code) => ({
+        json: (data) => {
+          throw new Error(data.detail || data.error || `Preview failed ${code}`);
+        },
+      }),
+    };
+
+    await getBingxSpotSyncPreview(previewReq, previewRes);
+
+    const rowsToInsert = previewPayload.rowsToInsert || [];
+    const movementRows = rowsToInsert
+      .flatMap(buildBingxSpotMovements)
+      .map((row) => ({
+        source_table: row.source_table || "",
+        fecha: row.fecha || "",
+        movement_type: row.movement_type || "",
+        category: row.category || "",
+        owner: row.owner || "",
+        ticker: row.ticker || "",
+        instrument_type: row.instrument_type || "",
+        side: row.side || "",
+        quantity: String(row.quantity || 0),
+        unit_price: String(row.unit_price || 0),
+        price_currency: row.price_currency || "USD",
+        gross_amount: String(row.gross_amount || 0),
+        net_amount: String(row.net_amount || 0),
+        settlement_currency: row.settlement_currency || "USD",
+        broker: row.broker || "Bingx",
+        description: row.description || "",
+        raw_payload: row.raw_payload || "{}",
+      }));
+
+    if (!movementRows.length) {
+      return res.json({
+        ok: true,
+        inserted: 0,
+        message: "No hay compras spot nuevas para importar",
+        preview: previewPayload,
+      });
+    }
+
+    const query = `
+      INSERT INTO ${table("movements")}
+      (
+        id,
+        source_table,
+        fecha,
+        movement_type,
+        category,
+        owner,
+        ticker,
+        instrument_type,
+        side,
+        quantity,
+        unit_price,
+        price_currency,
+        gross_amount,
+        net_amount,
+        settlement_currency,
+        fx_rate,
+        broker,
+        description,
+        raw_payload
+      )
+      SELECT
+        GENERATE_UUID(),
+        source_table,
+        DATE(fecha),
+        movement_type,
+        category,
+        owner,
+        ticker,
+        instrument_type,
+        side,
+        CAST(quantity AS NUMERIC),
+        CAST(unit_price AS NUMERIC),
+        price_currency,
+        CAST(gross_amount AS NUMERIC),
+        CAST(net_amount AS NUMERIC),
+        settlement_currency,
+        CAST(NULL AS NUMERIC),
+        broker,
+        description,
+        raw_payload
+      FROM UNNEST(@rows)
+    `;
+
+    await runQuery(query, {
+      rows: movementRows,
+    });
+
+    res.json({
+      ok: true,
+      inserted: movementRows.length,
+      importedOrders: rowsToInsert.length,
+      insertedRows: movementRows,
+      preview: previewPayload,
+    });
+  } catch (error) {
+    console.error("syncBingxSpotConfirm error:", error);
+
+    res.status(500).json({
+      error: "Error confirmando import spot BingX",
+      detail: error.message,
+    });
+  }
+}
+
+function buildBingxSpotMovements(item) {
+  const asset = String(item.asset || "").toUpperCase();
+  const side = String(item.side || "").toUpperCase();
+
+  const portfolioTicker = getPortfolioTickerForCrypto(asset);
+  const transferGroupId = item.externalId;
+
+  const commonRawPayload = {
+    family: "BINGX_SPOT_SWAP",
+    external_id: item.externalId,
+    order_id: item.orderId,
+    symbol: item.symbol,
+    asset,
+    side,
+    date: item.date,
+    quantity: item.quantity,
+    gross_quantity: item.grossQuantity,
+    amount_usd: item.amountUsd,
+    price_usd: item.priceUsd,
+    commission_asset: item.commissionAsset,
+    commission_quantity: item.commissionQuantity,
+    type: item.type,
+    status: item.status,
+    transfer_group_id: transferGroupId,
+    raw_order: item.rawOrder,
+    raw_fills: item.rawFills,
+  };
+
+  if (side === "BUY") {
+    return [
+      {
+        source_table: "bingx_spot",
+        fecha: item.date,
+        movement_type: "SELL_USDT",
+        category: "CRYPTO",
+        owner: "Horacio",
+        ticker: "USDT",
+        instrument_type: "USDT",
+        side: "SELL",
+        quantity: item.amountUsd,
+        unit_price: 1,
+        price_currency: "USD",
+        gross_amount: item.amountUsd,
+        net_amount: item.amountUsd,
+        settlement_currency: "USD",
+        fx_rate: null,
+        broker: "Bingx",
+        description: `Swap USDT a ${asset}`,
+        raw_payload: JSON.stringify({
+          ...commonRawPayload,
+          leg: "SELL_USDT",
+        }),
+      },
+      {
+        source_table: "bingx_spot",
+        fecha: item.date,
+        movement_type: "BUY_ASSET",
+        category: "PORTFOLIO",
+        owner: "Horacio",
+        ticker: portfolioTicker,
+        instrument_type: "ASSET",
+        side: "BUY",
+        quantity: item.quantity,
+        unit_price: item.priceUsd,
+        price_currency: "USD",
+        gross_amount: item.amountUsd,
+        net_amount: item.amountUsd,
+        settlement_currency: "USD",
+        fx_rate: null,
+        broker: "Bingx",
+        description: `Swap USDT a ${asset}`,
+        raw_payload: JSON.stringify({
+          ...commonRawPayload,
+          leg: "BUY_ASSET",
+        }),
+      },
+    ];
+  }
+
+  if (side === "SELL") {
+    return [
+      {
+        source_table: "bingx_spot",
+        fecha: item.date,
+        movement_type: "SELL_ASSET",
+        category: "PORTFOLIO",
+        owner: "Horacio",
+        ticker: portfolioTicker,
+        instrument_type: "ASSET",
+        side: "SELL",
+        quantity: item.quantity,
+        unit_price: item.priceUsd,
+        price_currency: "USD",
+        gross_amount: item.amountUsd,
+        net_amount: item.amountUsd,
+        settlement_currency: "USD",
+        fx_rate: null,
+        broker: "Bingx",
+        description: `Swap ${asset} a USDT`,
+        raw_payload: JSON.stringify({
+          ...commonRawPayload,
+          leg: "SELL_ASSET",
+        }),
+      },
+      {
+        source_table: "bingx_spot",
+        fecha: item.date,
+        movement_type: "BUY_USDT",
+        category: "CRYPTO",
+        owner: "Horacio",
+        ticker: "USDT",
+        instrument_type: "USDT",
+        side: "BUY",
+        quantity: item.amountUsd,
+        unit_price: 1,
+        price_currency: "USD",
+        gross_amount: item.amountUsd,
+        net_amount: item.amountUsd,
+        settlement_currency: "USD",
+        fx_rate: null,
+        broker: "Bingx",
+        description: `Swap ${asset} a USDT`,
+        raw_payload: JSON.stringify({
+          ...commonRawPayload,
+          leg: "BUY_USDT",
+        }),
+      },
+    ];
+  }
+
+  return [];
+}
+
+function normalizeBingxSpotTradesPayload(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.fills)) return payload.fills;
+  if (Array.isArray(payload?.data)) return payload.data;
+  return [];
+}
+
+function groupSpotFillsByOrderId(fills = []) {
+  const grouped = new Map();
+
+  for (const fill of fills) {
+    const orderId = String(fill.orderId || "");
+    if (!orderId) continue;
+
+    if (!grouped.has(orderId)) {
+      grouped.set(orderId, []);
+    }
+
+    grouped.get(orderId).push(fill);
+  }
+
+  return grouped;
+}
+
+function buildSpotPreviewItemFromFills(orderId, fills, order = null) {
+  const firstFill = fills[0];
+
+  const symbol = firstFill.symbol;
+  const asset = getSpotAssetFromSymbol(symbol);
+  const isBuyer = Boolean(firstFill.isBuyer);
+  const side = isBuyer ? "BUY" : "SELL";
+
+  const grossQuantity = fills.reduce(
+    (sum, fill) => sum + toNumber(fill.qty),
+    0
+  );
+
+  const amountUsd = fills.reduce(
+    (sum, fill) => sum + toNumber(fill.quoteQty),
+    0
+  );
+
+  const commissionInAsset = fills
+    .filter((fill) => String(fill.commissionAsset || "").toUpperCase() === asset)
+    .reduce((sum, fill) => sum + toNumber(fill.commission), 0);
+
+  const netQuantity =
+    side === "BUY"
+      ? grossQuantity + commissionInAsset
+      : grossQuantity;
+
+  const priceUsd =
+    netQuantity > 0
+      ? amountUsd / netQuantity
+      : amountUsd / grossQuantity;
+
+  const lastTime = Math.max(...fills.map((fill) => Number(fill.time || 0)));
+
+  const externalId = `BINGX_SPOT_${orderId}`;
+
+  return {
+    externalId,
+    orderId,
+    symbol,
+    asset,
+    side,
+    date: toDateStringFromMs(lastTime),
+    quantity: netQuantity,
+    grossQuantity,
+    amountUsd,
+    priceUsd,
+    commissionAsset: asset,
+    commissionQuantity: commissionInAsset,
+    type: order?.type || "UNKNOWN",
+    status: order?.status || "FILLED",
+    friendlyText:
+      side === "BUY"
+        ? `Compra ${asset} con USDT`
+        : `Venta ${asset} a USDT`,
+    rawOrder: order,
+    rawFills: fills,
+  };
+}
+
 
 module.exports = {
   getSummary,
@@ -880,4 +1458,7 @@ module.exports = {
   getHistoricalPerformance,
   getVintageReturns,
   getDecisionMaker,
+  getBingxSpotDebug,
+  getBingxSpotSyncPreview,
+  syncBingxSpotConfirm,
 };

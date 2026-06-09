@@ -157,7 +157,7 @@ function buildAssetDecision({
 async function buildDecisionMaker({
     holdings = [],
     marketData = [],
-    tradingSummary = null,
+    tradingUsd = 0,
 } = {}) {
     const thesis = investmentThesis.crypto2026;
 
@@ -203,16 +203,7 @@ async function buildDecisionMaker({
         ])
     );
 
-    const tradingUsd = toNumber(
-        getField(tradingSummary, [
-            "retained_result_usd",
-            "retainedResultUsd",
-            "trading_retained_result_usd",
-            "tradingRetainedResultUsd",
-            "total_pnl_usd",
-            "totalPnlUsd",
-        ])
-    );
+    const tradingAvailableUsd = toNumber(tradingUsd);
 
     const btcCurrentPrice = toNumber(
         getField(
@@ -273,7 +264,7 @@ async function buildDecisionMaker({
     );
 
     const totalThesisCapitalUsd =
-        btcInvestedUsd + ethInvestedUsd + usdtUsd + tradingUsd;
+        btcInvestedUsd + ethInvestedUsd + usdtUsd + tradingAvailableUsd;
 
     const btcTargetUsd = totalThesisCapitalUsd * thesis.allocation.BTC;
     const ethTargetUsd = totalThesisCapitalUsd * thesis.allocation.ETH;
@@ -315,7 +306,7 @@ async function buildDecisionMaker({
         totalThesisCapitalUsd,
         deployedUsd: btcInvestedUsd + ethInvestedUsd,
         liquidityUsd: usdtUsd,
-        tradingUsd,
+        tradingUsd: tradingAvailableUsd,
 
         allocation: {
             BTC: thesis.allocation.BTC,

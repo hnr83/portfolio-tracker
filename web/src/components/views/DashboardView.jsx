@@ -1,6 +1,7 @@
 import React, { useRef, useState } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import AssetAvatar from "../shared/AssetAvatar";
+import BingxSpotImportModal from "../modals/BingxSpotImportModal";
 
 const CHART_COLORS = [
     "#5B7CFA",
@@ -57,6 +58,7 @@ export default function DashboardView({
     const touchStartY = useRef(0);
     const touchEndY = useRef(0);
 
+    const [isBingxSpotModalOpen, setIsBingxSpotModalOpen] = useState(false);
     const [pullDistance, setPullDistance] = useState(0);
     const [isPullRefreshing, setIsPullRefreshing] = useState(false);
     const [hideValues, setHideValues] = useState(() => {
@@ -102,6 +104,8 @@ export default function DashboardView({
 
         localStorage.setItem("portfolio-hide-values", String(next));
     };
+
+
 
     return (
         <div
@@ -161,6 +165,13 @@ export default function DashboardView({
                     >
                         {isRefreshing ? "Actualizando..." : "Actualizar datos"}
                     </button>
+
+                    <button
+                        onClick={() => setIsBingxSpotModalOpen(true)}
+                        className="flex-1 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs font-medium text-emerald-200 transition-all duration-200 hover:bg-emerald-500/20 sm:w-auto sm:rounded-2xl sm:px-5 sm:py-3 sm:text-sm"
+                    >
+                        Importar BingX Spot
+                    </button>                    
 
                     <button
                         onClick={() => setIsTransactionModalOpen(true)}
@@ -768,6 +779,11 @@ export default function DashboardView({
                     </>
                 </SectionShell>
             )}
+            <BingxSpotImportModal
+                isOpen={isBingxSpotModalOpen}
+                onClose={() => setIsBingxSpotModalOpen(false)}
+                onImported={refreshMarketData}
+            />            
         </div>
     );
 }
