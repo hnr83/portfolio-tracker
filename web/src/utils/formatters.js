@@ -52,3 +52,13 @@ export function formatNumberDisplay(value, decimals = 2) {
     maximumFractionDigits: decimals,
   }).format(n);
 }
+
+export function formatDate(value) {
+  if (!value) return "-";
+
+  const [year, month, day] = String(value).slice(0, 10).split("-");
+
+  if (!year || !month || !day) return "-";
+
+  return `${Number(day)}/${Number(month)}/${year}`;
+}

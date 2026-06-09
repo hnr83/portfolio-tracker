@@ -1,4 +1,5 @@
 import React from "react";
+import { formatDate } from "../../utils/formatter";
 
 export default function TransactionsView({
     selectedAssetMovements,
@@ -162,9 +163,7 @@ export default function TransactionsView({
                                     }`}
                             >
                                 <td className="px-4 py-4 text-slate-300">
-                                    {m.fecha
-                                        ? new Date(m.fecha).toLocaleDateString("es-AR")
-                                        : "-"}
+                                    {formatDate(m.fecha)}
                                 </td>
 
                                 <td className="px-4 py-4 text-slate-200">
