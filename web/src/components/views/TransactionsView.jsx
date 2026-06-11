@@ -16,8 +16,44 @@ export default function TransactionsView({
     SortableHeader,
     FilterToolbar,
     SectionShell,
+    marketData,
 
 }) {
+
+    const normalizeTicker = (ticker) =>
+        String(ticker || "")
+            .replace("CURRENCY:", "")
+            .replace("ARS", "");
+
+    const getUnitPrice = (m) => {
+        if (m.unit_price != null) return Number(m.unit_price);
+
+        const qty = Number(m.quantity);
+        const gross = Number(m.gross_amount);
+
+        if (!qty || !gross) return null;
+
+        return gross / qty;
+    };
+
+    const getCurrentPrice = (m) => {
+        const ticker = normalizeTicker(m.ticker);
+
+        const asset = marketData?.find(
+            (x) => normalizeTicker(x.ticker) === ticker
+        );
+
+        return asset?.price ?? asset?.price_usd ?? asset?.last_price ?? null;
+    };
+
+    const getPnlPct = (m) => {
+        const buyPrice = getUnitPrice(m);
+        const current = getCurrentPrice(m);
+
+        if (!buyPrice || !current) return null;
+
+        return ((current - buyPrice) / buyPrice) * 100;
+    };
     const selectedTicker =
         selectedAssetMovements?.ticker || null;
 
@@ -25,6 +61,19 @@ export default function TransactionsView({
         selectedAssetMovements?.normalized_ticker || null;
 
     const movementsToShow = filteredAndSortedMovements;
+
+    const getUnitPrice = (m) => {
+        if (m.unit_price != null) return Number(m.unit_price);
+
+        const qty = Number(m.quantity);
+        const gross = Number(m.gross_amount);
+
+        if (!qty || !gross || isNaN(qty) || isNaN(gross)) {
+            return null;
+        }
+
+        return gross / qty;
+    };
 
     return (
         <SectionShell className="mt-8">
@@ -122,6 +171,15 @@ export default function TransactionsView({
                                 onSort={setMovementSort}
                                 align="right"
                             />
+
+                            <SortableHeader
+                                label="PnL %"
+                                sortKey="pnl_pct"
+                                sortState={movementSort}
+                                onSort={setMovementSort}
+                                align="right"
+                            />
+
                             <SortableHeader
                                 label="Monto Bruto"
                                 sortKey="gross_amount"
@@ -156,10 +214,10 @@ export default function TransactionsView({
                             <tr
                                 key={m.id || i}
                                 className={`border-t border-slate-800/80 text-slate-200 transition-colors hover:bg-slate-800/20 ${selectedAssetMovements &&
-                                        (m.ticker === selectedTicker ||
-                                            m.normalized_ticker === selectedNormalizedTicker)
-                                        ? "bg-indigo-500/8"
-                                        : ""
+                                    (m.ticker === selectedTicker ||
+                                        m.normalized_ticker === selectedNormalizedTicker)
+                                    ? "bg-indigo-500/8"
+                                    : ""
                                     }`}
                             >
                                 <td className="px-4 py-4 text-slate-300">
@@ -187,10 +245,19 @@ export default function TransactionsView({
                                 </td>
 
                                 <td className="px-4 py-4 text-right tabular-nums text-slate-200">
-                                    {m.unit_price == null
+                                    {getUnitPrice(m) == null
                                         ? "-"
-                                        : formatCurrency(m.unit_price, m.price_currency || "USD")}
+                                        : formatCurrency(getUnitPrice(m), m.price_currency || "USD")}
                                 </td>
+
+                                <td
+                                    className={`px-4 py-4 text-right font-semibold ${getPnlPct(m) >= 0 ? "text-emerald-400" : "text-red-400"
+                                        }`}
+                                >
+                                    {getPnlPct(m) == null
+                                        ? "-"
+                                        : `${getPnlPct(m).toFixed(2)}%`}
+                                </td>                                
 
                                 <td className="px-4 py-4 text-right tabular-nums text-slate-200">
                                     {m.gross_amount == null

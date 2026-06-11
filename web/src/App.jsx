@@ -559,6 +559,7 @@ function AppContent() {
               SortableHeader={SortableHeader}
               FilterToolbar={FilterToolbar}
               SectionShell={SectionShell}
+              marketData={marketData}
             />
           )}
 
