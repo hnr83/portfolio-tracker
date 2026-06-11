@@ -43,7 +43,9 @@ export default function TransactionsView({
             (x) => normalizeTicker(x.ticker) === ticker
         );
 
-        return asset?.price ?? asset?.price_usd ?? asset?.last_price ?? null;
+        return asset?.market_price == null
+            ? null
+            : Number(asset.market_price);
     };
 
     const getPnlPct = (m) => {
@@ -61,19 +63,8 @@ export default function TransactionsView({
         selectedAssetMovements?.normalized_ticker || null;
 
     const movementsToShow = filteredAndSortedMovements;
-
-    const getUnitPrice = (m) => {
-        if (m.unit_price != null) return Number(m.unit_price);
-
-        const qty = Number(m.quantity);
-        const gross = Number(m.gross_amount);
-
-        if (!qty || !gross || isNaN(qty) || isNaN(gross)) {
-            return null;
-        }
-
-        return gross / qty;
-    };
+    console.log("marketData en TransactionsView:", marketData);
+    console.log("primer marketData:", marketData?.[0]);
 
     return (
         <SectionShell className="mt-8">
