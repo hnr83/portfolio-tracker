@@ -313,31 +313,70 @@ function AppContent() {
     selectedAssetMovements,
   ]);
 
-  const filteredAndSortedMovements = useMemo(() => {
-    return sortRows(
-      visibleMovements.filter((m) => {
-        const search = movementSearch.toLowerCase();
+const normalizeTicker = (ticker) =>
+  String(ticker || "")
+    .toUpperCase()
+    .replace("CURRENCY:", "")
+    .replace("BATS:", "")
+    .replace("BCBA:", "")
+    .replace("ARS", "")
+    .replace("USD", "")
+    .trim();
 
-        const matchesSearch =
-          !search ||
-          String(m.ticker || "").toLowerCase().includes(search) ||
-          String(m.movement_type || "").toLowerCase().includes(search) ||
-          String(m.broker || "").toLowerCase().includes(search);
+const filteredAndSortedMovements = useMemo(() => {
+  const rows = visibleMovements
+    .filter((m) => {
+      const search = movementSearch.toLowerCase();
 
-        const matchesCategory =
-          movementCategoryFilter === "ALL" ||
-          m.category === movementCategoryFilter;
+      const matchesSearch =
+        !search ||
+        String(m.ticker || "").toLowerCase().includes(search) ||
+        String(m.movement_type || "").toLowerCase().includes(search) ||
+        String(m.broker || "").toLowerCase().includes(search);
 
-        return matchesSearch && matchesCategory;
-      }),
-      movementSort
-    );
-  }, [
-    visibleMovements,
-    movementSearch,
-    movementCategoryFilter,
-    movementSort,
-  ]);
+      const matchesCategory =
+        movementCategoryFilter === "ALL" ||
+        m.category === movementCategoryFilter;
+
+      return matchesSearch && matchesCategory;
+    })
+    .map((m) => {
+      const qty = Number(m.quantity);
+      const gross = Number(m.gross_amount);
+
+      const calculated_unit_price =
+        m.unit_price != null
+          ? Number(m.unit_price)
+          : qty && gross
+            ? gross / qty
+            : null;
+
+      const currentPrice = marketData?.find(
+        (x) => normalizeTicker(x.ticker) === normalizeTicker(m.ticker)
+      )?.market_price;
+
+      const calculated_pnl_pct =
+        calculated_unit_price && currentPrice
+          ? ((Number(currentPrice) - calculated_unit_price) /
+              calculated_unit_price) *
+            100
+          : null;
+
+      return {
+        ...m,
+        calculated_unit_price,
+        calculated_pnl_pct,
+      };
+    });
+
+  return sortRows(rows, movementSort);
+}, [
+  visibleMovements,
+  movementSearch,
+  movementCategoryFilter,
+  movementSort,
+  marketData,
+]);
 
   const filteredAndSortedInvestments = useMemo(() => {
     return sortRows(

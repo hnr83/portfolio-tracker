@@ -157,7 +157,7 @@ export default function TransactionsView({
                             />
                             <SortableHeader
                                 label="Precio Unit."
-                                sortKey="unit_price"
+                                sortKey="calculated_unit_price"
                                 sortState={movementSort}
                                 onSort={setMovementSort}
                                 align="right"
@@ -165,7 +165,7 @@ export default function TransactionsView({
 
                             <SortableHeader
                                 label="PnL %"
-                                sortKey="pnl_pct"
+                                sortKey="calculated_pnl_pct"
                                 sortState={movementSort}
                                 onSort={setMovementSort}
                                 align="right"
