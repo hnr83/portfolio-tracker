@@ -16,6 +16,7 @@ const LOGO_MAP = {
   "BATS:ARKG": `https://img.logo.dev/ark-funds.com?token=${LOGO_DEV_TOKEN}`,
   "BCBA:TSLA": `https://img.logo.dev/tesla.com?token=${LOGO_DEV_TOKEN}`, 
   "BCBA:GOOGL": `https://img.logo.dev/google.com?token=${LOGO_DEV_TOKEN}`,
+  "BCBA:MELI": `https://img.logo.dev/mercadolibre.com?token=${LOGO_DEV_TOKEN}`,
 
   DEFAULT: "",
 };
