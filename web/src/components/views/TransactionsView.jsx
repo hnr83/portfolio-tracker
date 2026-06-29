@@ -48,13 +48,20 @@ export default function TransactionsView({
             : Number(asset.market_price);
     };
 
-    const getPnlPct = (m) => {
-        const buyPrice = getUnitPrice(m);
-        const current = getCurrentPrice(m);
+    const getCurrentPrice = (m) => {
+        const ticker = normalizeTicker(m.ticker);
 
-        if (!buyPrice || !current) return null;
+        const asset = marketData?.find(
+            (x) => normalizeTicker(x.ticker) === ticker
+        );
 
-        return ((current - buyPrice) / buyPrice) * 100;
+        if (!asset) return null;
+
+        if (asset.is_cedear && asset.underlying_price_usd && asset.ratio_numerator) {
+            return Number(asset.underlying_price_usd) / Number(asset.ratio_numerator);
+        }
+
+        return asset.market_price == null ? null : Number(asset.market_price);
     };
     const selectedTicker =
         selectedAssetMovements?.ticker || null;
