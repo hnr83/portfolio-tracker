@@ -19,13 +19,35 @@ function toNumber(value) {
   return Number.isFinite(n) ? n : null;
 }
 
+function isCedearTicker(ticker = "") {
+  return ticker.trim().startsWith("BCBA:");
+}
+
+async function getFxRate(fecha) {
+  const query = `
+    SELECT CAST(rate AS FLOAT64) AS rate
+    FROM portfolio.fx_rates
+    WHERE base_currency = 'USD'
+      AND quote_currency = 'ARS'
+      AND DATE(as_of_ts) = @fecha
+    ORDER BY as_of_ts DESC
+    LIMIT 1
+  `;
+
+  const [rows] = await bigquery.query({
+    query,
+    params: { fecha },
+  });
+
+  if (!rows.length) {
+    throw new Error(`No existe cotización USD/ARS para ${fecha}`);
+  }
+
+  return Number(rows[0].rate);
+}
+
 function createBase(body = {}) {
-  const {
-    fecha,
-    broker,
-    owner,
-    description,
-  } = body;
+  const { fecha, broker, owner, description } = body;
 
   return {
     source_table: "manual",
@@ -59,13 +81,8 @@ function validateBody(body = {}) {
     to_quantity,
   } = body;
 
-  if (!family) {
-    throw new Error("family es obligatoria");
-  }
-
-  if (!fecha) {
-    throw new Error("fecha es obligatoria");
-  }
+  if (!family) throw new Error("family es obligatoria");
+  if (!fecha) throw new Error("fecha es obligatoria");
 
   if (family !== "SWAP" && !action) {
     throw new Error("action es obligatoria");
@@ -125,7 +142,7 @@ function validateBody(body = {}) {
   };
 }
 
-function buildRows(body = {}) {
+async function buildRows(body = {}) {
   const { family, action, ticker } = body;
   const validation = validateBody(body);
   const { parsedQuantity, parsedGross, parsedFromQuantity, parsedToQuantity } = validation;
@@ -211,7 +228,6 @@ function buildRows(body = {}) {
     case "SWAP": {
       const { from_ticker, to_ticker } = body;
 
-
       const fromRawTicker = SWAP_TICKER_MAP[from_ticker];
       const toRawTicker = SWAP_TICKER_MAP[to_ticker];
 
@@ -228,7 +244,6 @@ function buildRows(body = {}) {
           : parsedToQuantity
             ? parsedGross / parsedToQuantity
             : null;
-
 
       if (from_ticker === "USDT") {
         const sellUsdtRow = createRow(base, {
@@ -319,7 +334,17 @@ function buildRows(body = {}) {
       }
 
       const cleanTicker = ticker.trim();
-      const unitPrice = parsedQuantity ? parsedGross / parsedQuantity : null;
+      const isCedear = isCedearTicker(cleanTicker);
+
+      let fxRate = null;
+      let grossUsd = parsedGross;
+
+      if (isCedear) {
+        fxRate = await getFxRate(body.fecha);
+        grossUsd = parsedGross / fxRate;
+      }
+
+      const unitPrice = parsedQuantity ? grossUsd / parsedQuantity : null;
 
       const assetRow = createRow(base, {
         movement_type: action === "BUY" ? "BUY_ASSET" : "SELL_ASSET",
@@ -330,11 +355,15 @@ function buildRows(body = {}) {
         quantity: parsedQuantity,
         unit_price: unitPrice,
         price_currency: "USD",
-        gross_amount: parsedGross,
-        net_amount: parsedGross,
-        settlement_currency: "USD",
-        fx_rate: null,
+        gross_amount: grossUsd,
+        net_amount: grossUsd,
+        settlement_currency: isCedear ? "ARS" : "USD",
+        fx_rate: fxRate,
       });
+
+      if (isCedear && action === "BUY") {
+        return [assetRow];
+      }
 
       const cashRow = createRow(base, {
         movement_type: action === "BUY" ? "EXPENSE_USD" : "INCOME_USD",
@@ -345,8 +374,8 @@ function buildRows(body = {}) {
         quantity: null,
         unit_price: null,
         price_currency: "USD",
-        gross_amount: action === "BUY" ? -Math.abs(parsedGross) : Math.abs(parsedGross),
-        net_amount: action === "BUY" ? -Math.abs(parsedGross) : Math.abs(parsedGross),
+        gross_amount: action === "BUY" ? -Math.abs(grossUsd) : Math.abs(grossUsd),
+        net_amount: action === "BUY" ? -Math.abs(grossUsd) : Math.abs(grossUsd),
         settlement_currency: "USD",
         fx_rate: null,
         description: body.description
@@ -364,7 +393,7 @@ function buildRows(body = {}) {
 
 async function previewTransaction(req, res) {
   try {
-    const rows = buildRows(req.body);
+    const rows = await buildRows(req.body);
 
     return res.json({
       preview: rows,
@@ -378,7 +407,7 @@ async function previewTransaction(req, res) {
 
 async function createTransaction(req, res) {
   try {
-    const rows = buildRows(req.body);
+    const rows = await buildRows(req.body);
 
     await bigquery
       .dataset("portfolio")

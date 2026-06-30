@@ -172,6 +172,17 @@ export default function TransactionModal({ isOpen, onClose, onSaved }) {
   const actionOptions = ACTION_OPTIONS[form.family] || [];
   const previewCanRun = useMemo(() => isPreviewReady(form), [form]);
 
+  const isCedear =
+    form.family === "ASSET" &&
+    form.ticker.trim().startsWith("BCBA:");
+
+  const amountCurrency =
+    form.family === "FX_USD" ||
+      form.family === "USDT" ||
+      isCedear
+      ? "ARS"
+      : "USD";
+
   const previewRows = Array.isArray(preview) ? preview : preview ? [preview] : [];
   const primaryPreview = previewRows[0] || null;
 
@@ -333,9 +344,13 @@ export default function TransactionModal({ isOpen, onClose, onSaved }) {
     }
   }
 
-  const amountLabel =
-    form.family === "CASH_USD" || form.family === "ASSET" || form.family === "SWAP"
-      ? "Monto USD"
+const amountLabel =
+  form.family === "CASH_USD" || form.family === "SWAP"
+    ? "Monto USD"
+    : form.family === "ASSET"
+      ? isCedear
+        ? "Monto ARS"
+        : "Monto USD"
       : "Monto ARS";
 
   const quantityLabel =
@@ -560,9 +575,13 @@ export default function TransactionModal({ isOpen, onClose, onSaved }) {
                 />
                 {toNumber(form.gross_amount) !== null && (
                   <div className="mt-2 text-xs text-slate-500">
-                    {form.family === "FX_USD" || form.family === "USDT"
-                      ? formatMoney(form.gross_amount, "ARS")
-                      : formatMoney(form.gross_amount, "USD")}
+                    {formatMoney(form.gross_amount, amountCurrency)}
+                  </div>
+                )}
+
+                {isCedear && (
+                  <div className="mt-2 text-xs text-amber-300">
+                    El monto se ingresa en pesos. El sistema calculará automáticamente el costo en USD usando el tipo de cambio del día.
                   </div>
                 )}
               </div>
