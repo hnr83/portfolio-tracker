@@ -83,6 +83,21 @@ function toNumber(value) {
   return Number.isFinite(n) ? n : null;
 }
 
+function normalizeTicker(ticker = "") {
+  return ticker.trim().toUpperCase();
+}
+
+function getAssetKind(ticker = "") {
+  const normalizedTicker = normalizeTicker(ticker);
+
+  if (!normalizedTicker) return null;
+  if (normalizedTicker.startsWith("BCBA:")) return "CEDEAR";
+  if (normalizedTicker.startsWith("CURRENCY:")) return "CRYPTO";
+  if (normalizedTicker.startsWith("BATS:")) return "ETF";
+
+  return "USA";
+}
+
 function buildPayload(form) {
   if (form.family === "SWAP") {
     return {
@@ -172,9 +187,9 @@ export default function TransactionModal({ isOpen, onClose, onSaved }) {
   const actionOptions = ACTION_OPTIONS[form.family] || [];
   const previewCanRun = useMemo(() => isPreviewReady(form), [form]);
 
-  const isCedear =
-    form.family === "ASSET" &&
-    form.ticker.trim().startsWith("BCBA:");
+  const normalizedTicker = normalizeTicker(form.ticker);
+  const assetKind = form.family === "ASSET" ? getAssetKind(form.ticker) : null;
+  const isCedear = assetKind === "CEDEAR";
 
   const amountCurrency =
     form.family === "FX_USD" ||
@@ -344,14 +359,14 @@ export default function TransactionModal({ isOpen, onClose, onSaved }) {
     }
   }
 
-const amountLabel =
-  form.family === "CASH_USD" || form.family === "SWAP"
-    ? "Monto USD"
-    : form.family === "ASSET"
-      ? isCedear
-        ? "Monto ARS"
-        : "Monto USD"
-      : "Monto ARS";
+  const amountLabel =
+    form.family === "CASH_USD" || form.family === "SWAP"
+      ? "Monto USD"
+      : form.family === "ASSET"
+        ? isCedear
+          ? "Monto ARS"
+          : "Monto USD"
+        : "Monto ARS";
 
   const quantityLabel =
     form.family === "FX_USD"
@@ -416,6 +431,48 @@ const amountLabel =
                     </option>
                   ))}
                 </select>
+              </div>
+            )}
+
+            {form.family === "ASSET" && (
+              <div>
+                <label className="mb-2 block text-sm text-slate-400">Ticker</label>
+                <input
+                  type="text"
+                  name="ticker"
+                  list="ticker-options"
+                  value={form.ticker}
+                  onChange={handleChange}
+                  placeholder="Ej: BCBA:GOOGL, GOOGL, BATS:ARKK"
+                  className="w-full rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-white placeholder:text-slate-500 outline-none focus:border-slate-600"
+                  required
+                />
+                <datalist id="ticker-options">
+                  {TICKER_OPTIONS.map((option) => (
+                    <option key={option} value={option} />
+                  ))}
+                </datalist>
+
+                {assetKind && (
+                  <div
+                    className={`mt-2 inline-flex rounded-full border px-3 py-1 text-xs font-medium ${assetKind === "CEDEAR"
+                        ? "border-amber-800 bg-amber-950/40 text-amber-300"
+                        : assetKind === "CRYPTO"
+                          ? "border-violet-800 bg-violet-950/40 text-violet-300"
+                          : assetKind === "ETF"
+                            ? "border-sky-800 bg-sky-950/40 text-sky-300"
+                            : "border-emerald-800 bg-emerald-950/40 text-emerald-300"
+                      }`}
+                  >
+                    {assetKind === "CEDEAR"
+                      ? "CEDEAR · Se liquida en ARS"
+                      : assetKind === "CRYPTO"
+                        ? "Crypto asset"
+                        : assetKind === "ETF"
+                          ? "ETF · Se liquida en USD"
+                          : "Acción USA · Se liquida en USD"}
+                  </div>
+                )}
               </div>
             )}
 
@@ -586,26 +643,7 @@ const amountLabel =
                 )}
               </div>
 
-              {form.family === "ASSET" && (
-                <div className="md:col-span-2">
-                  <label className="mb-2 block text-sm text-slate-400">Ticker</label>
-                  <input
-                    type="text"
-                    name="ticker"
-                    list="ticker-options"
-                    value={form.ticker}
-                    onChange={handleChange}
-                    placeholder="Ej: BATS:ARKG, BCBA:TSLA, CURRENCY:ETHARS"
-                    className="w-full rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-white placeholder:text-slate-500 outline-none focus:border-slate-600"
-                    required
-                  />
-                  <datalist id="ticker-options">
-                    {TICKER_OPTIONS.map((option) => (
-                      <option key={option} value={option} />
-                    ))}
-                  </datalist>
-                </div>
-              )}
+
 
               {(form.family === "CASH_USD" || form.family === "SWAP") && (
                 <div className="md:col-span-2">
@@ -678,11 +716,10 @@ const amountLabel =
 
               <button
                 type="submit"
-                className={`rounded-xl px-4 py-2.5 text-sm font-medium text-white transition disabled:opacity-50 ${
-                  isConfirmStep
+                className={`rounded-xl px-4 py-2.5 text-sm font-medium text-white transition disabled:opacity-50 ${isConfirmStep
                     ? "bg-emerald-600 hover:bg-emerald-500"
                     : "bg-blue-600 hover:bg-blue-500"
-                }`}
+                  }`}
                 disabled={loading || previewLoading}
               >
                 {loading
