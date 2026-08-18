@@ -204,6 +204,15 @@ export default function Sidebar({
                         </div>
                     </div>
                     <div
+                        onClick={() => handleNavigate("planner")}
+                        className={navClass("planner")}
+                    >
+                        <div className="flex items-center gap-3">
+                            <span className={dotClass("planner")} />
+                            <span className="text-sm">Planner</span>
+                        </div>
+                    </div>                    
+                    <div
                         onClick={() => handleNavigate("decision-maker")}
                         className={navClass("decision-maker")}
                     >
@@ -346,6 +355,18 @@ export default function Sidebar({
                                 <span>Performance</span>
                                 <span>▥</span>
                             </button>
+
+                            <button
+                                type="button"
+                                onClick={async () => {
+                                    setShowMoreMenu(false);
+                                    await handleNavigate("planner");
+                                }}
+                                className="flex w-full items-center justify-between rounded-2xl border border-slate-700/70 bg-slate-900/60 px-4 py-3 text-left text-sm text-slate-200"
+                            >
+                                <span>Planner</span>
+                                <span>📈</span>
+                            </button>                            
 
                             <button
                                 type="button"

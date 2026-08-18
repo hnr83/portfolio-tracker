@@ -14,6 +14,7 @@ import SummaryCard from "./components/shared/SummaryCard";
 import Sidebar from "./components/layout/Sidebar";
 import KpiVisibilityRail from "./components/layout/KpiVisibilityRail";
 import PerformanceView from "./components/views/PerformanceView.jsx";
+import PlannerView from "./components/views/planner/PlannerView";
 import LoginView from "./components/auth/LoginView";
 import {
   PortfolioDataProvider,
@@ -603,6 +604,13 @@ const filteredAndSortedMovements = useMemo(() => {
           )}
 
           {activeView === "performance" && <PerformanceView />}
+
+          {activeView === "planner" && (
+            <PlannerView
+              summary={summary}
+              positions={positions}
+            />
+          )}
 
           {activeView === "market" && (
             <MarketView
