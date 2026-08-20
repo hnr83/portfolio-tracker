@@ -96,8 +96,11 @@ async function snapshotPortfolioJob() {
 
       trading AS (
         SELECT
-          CAST(retained_result_usd AS FLOAT64) AS trading_retained_result_usd
-        FROM ${table('vw_trading_summary')}
+         COALESCE(
+            SUM(CAST(market_value_usd AS FLOAT64)),
+            0
+        ) AS trading_retained_result_usd
+      FROM ${table('vw_trading_balances_valued')}
       )
 
       SELECT
