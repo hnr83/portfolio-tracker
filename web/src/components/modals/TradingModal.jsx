@@ -106,6 +106,7 @@ function parseBingxTradeText(text) {
     leverage,
     pnl_qty: parseAmount(realizedPnl),
     exchange: "Bingx",
+    contract_type: direction === "SHORT" ? "USD_MONEDA" : "M_MONEDA",
     is_capital_held: true,
     destination: direction === "SHORT" ? "HOLD_USDT" : "HOLD_COIN",
   };
@@ -223,13 +224,12 @@ export default function TradingModal({
   const [parseMessage, setParseMessage] = useState("");
 
   const derived = useMemo(() => {
-    const direction = String(form.direction || "LONG").toUpperCase();
     const instrument = String(form.instrument || "").toUpperCase();
-
-    const contract_type = direction === "SHORT" ? "USD_MONEDA" : "M_MONEDA";
-    const settlement_asset = direction === "SHORT" ? "USDT" : instrument || "-";
+    const contract_type = String(form.contract_type || "M_MONEDA").toUpperCase();
+    const settlement_asset =
+      contract_type === "USD_MONEDA" ? "USDT" : instrument || "-";
     const default_destination =
-      direction === "SHORT" ? "HOLD_USDT" : "HOLD_COIN";
+      contract_type === "USD_MONEDA" ? "HOLD_USDT" : "HOLD_COIN";
 
     const holding_days = daysBetween(form.opened_at, form.closed_at);
     const pnl_pct = calculatePnlPct(form);
@@ -277,6 +277,8 @@ export default function TradingModal({
       ...form,
       instrument: String(form.instrument || "").toUpperCase(),
       direction: String(form.direction || "LONG").toUpperCase(),
+      contract_type: derived.contract_type,
+      settlement_asset: derived.settlement_asset,
       holding_days: derived.holding_days,
       pnl_pct: derived.pnl_pct,
       destination: destinationValue,
@@ -392,6 +394,17 @@ USDT
                 >
                   <option value="LONG">LONG</option>
                   <option value="SHORT">SHORT</option>
+                </select>
+              </Field>
+
+              <Field label="Tipo de contrato">
+                <select
+                  value={form.contract_type || "M_MONEDA"}
+                  onChange={(e) => onChange("contract_type", e.target.value)}
+                  className={fieldClass()}
+                >
+                  <option value="M_MONEDA">M-MONEDA</option>
+                  <option value="USD_MONEDA">USDT-M</option>
                 </select>
               </Field>
 
@@ -554,8 +567,9 @@ USDT
               Preview de inserción
             </h3>
             <p className="mt-4 text-base leading-7 text-slate-400">
-              Esta preview usa la misma lógica que el alta real: los SHORT se
-              liquidan en USDT y los LONG M-moneda quedan en el subyacente.
+              Esta preview usa la misma lógica que el alta real: los contratos
+              USDT-M se liquidan en USDT y los M-moneda en el activo subyacente,
+              independientemente de que la posición sea LONG o SHORT.
             </p>
 
             <div className="mt-6 rounded-2xl bg-slate-950/80 p-5">

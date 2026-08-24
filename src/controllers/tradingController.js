@@ -195,6 +195,8 @@ async function createTradingTrade(req, res) {
     const {
       instrument,
       direction,
+      contract_type,
+      settlement_asset,
       capital_usd,
       opened_at,
       closed_at,
@@ -212,12 +214,31 @@ async function createTradingTrade(req, res) {
 
     const cleanInstrument = String(instrument || "").toUpperCase();
     const cleanDirection = String(direction || "").toUpperCase();
+    const requestedContractType = String(contract_type || "").toUpperCase();
 
-    const contractType = cleanDirection === "SHORT" ? "USD_MONEDA" : "M_MONEDA";
-    const settlementAsset = cleanDirection === "SHORT" ? "USDT" : cleanInstrument;
+    // contract_type y direction son conceptos independientes.
+    // Si llega un cliente viejo sin contract_type, mantenemos la lógica histórica
+    // para no romper altas anteriores: SHORT -> USD_MONEDA, LONG -> M_MONEDA.
+    const contractType = ["USD_MONEDA", "M_MONEDA"].includes(requestedContractType)
+      ? requestedContractType
+      : cleanDirection === "SHORT"
+        ? "USD_MONEDA"
+        : "M_MONEDA";
+
+    // El settlement depende del tipo de contrato, no de LONG/SHORT.
+    // settlement_asset se recibe en el payload para que frontend/backend hablen
+    // el mismo modelo, pero el servidor lo normaliza para evitar inconsistencias.
+    const requestedSettlementAsset = String(settlement_asset || "").toUpperCase();
+    const settlementAsset =
+      contractType === "USD_MONEDA"
+        ? "USDT"
+        : requestedSettlementAsset && requestedSettlementAsset !== "USDT"
+          ? requestedSettlementAsset
+          : cleanInstrument;
+
     const finalDestination =
       destination ||
-      (cleanDirection === "SHORT" ? "HOLD_USDT" : "HOLD_COIN");
+      (contractType === "USD_MONEDA" ? "HOLD_USDT" : "HOLD_COIN");
 
     const query = `
       INSERT INTO ${table('trading_trades_raw')}

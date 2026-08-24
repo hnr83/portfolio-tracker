@@ -34,6 +34,7 @@ function apiFetch(path, options = {}) {
 const EMPTY_FORM = {
     instrument: "",
     direction: "LONG",
+    contract_type: "M_MONEDA",
     capital_usd: "",
     opened_at: "",
     closed_at: "",
@@ -388,8 +389,8 @@ export default function TradingView() {
         setForm((prev) => {
             const next = { ...prev, [field]: value };
 
-            if (field === "direction") {
-                next.destination = value === "SHORT" ? "HOLD_USDT" : "HOLD_COIN";
+            if (field === "contract_type") {
+                next.destination = value === "USD_MONEDA" ? "HOLD_USDT" : "HOLD_COIN";
             }
 
             return next;
