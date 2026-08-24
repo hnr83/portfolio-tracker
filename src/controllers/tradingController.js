@@ -1183,9 +1183,23 @@ async function createTradingTransferToInvestment(req, res) {
       SOL: "CURRENCY:SOLARS",
     };
 
+    const isUsdt = cleanAsset === "USDT";
+
     const portfolioTicker = portfolioTickerMap[cleanAsset] || cleanAsset;
-    const portfolioInstrumentType =
-      portfolioTickerMap[cleanAsset] ? "ASSET" : cleanAsset;
+
+    const portfolioInstrumentType = isUsdt
+      ? "USDT"
+      : portfolioTickerMap[cleanAsset]
+        ? "ASSET"
+        : cleanAsset;
+
+    const portfolioMovementType = isUsdt
+      ? "BUY_USDT"
+      : "BUY_ASSET";
+
+    const portfolioCategory = isUsdt
+      ? "CRYPTO"
+      : "PORTFOLIO";
 
     if (!movement_date) {
       return res.status(400).json({
@@ -1236,6 +1250,10 @@ async function createTradingTransferToInvestment(req, res) {
     const finalNotes =
       notes || `Transfer ${cleanAsset} de trading a inversión`;
 
+    // ---------------------------------------
+    // 1. RESTAR DEL BALANCE DE TRADING
+    // ---------------------------------------
+
     const tradingMovementQuery = `
       INSERT INTO ${table("trading_account_movements")}
       (
@@ -1280,6 +1298,10 @@ async function createTradingTransferToInvestment(req, res) {
       notes: finalNotes,
     });
 
+    // ---------------------------------------
+    // 2. AGREGAR AL PORTFOLIO / INVESTMENTS
+    // ---------------------------------------
+
     const portfolioMovementQuery = `
       INSERT INTO ${table("movements")}
       (
@@ -1308,8 +1330,8 @@ async function createTradingTransferToInvestment(req, res) {
         GENERATE_UUID(),
         'trading_transfer',
         @movement_date,
-        'BUY_ASSET',
-        'PORTFOLIO',
+        @movement_type,
+        @category,
         'Horacio',
         @portfolio_ticker,
         @portfolio_instrument_type,
@@ -1320,7 +1342,7 @@ async function createTradingTransferToInvestment(req, res) {
         @amount_usd,
         @amount_usd,
         'USD',
-        1,
+        NULL,
         @exchange,
         @notes,
         TO_JSON_STRING(
@@ -1346,6 +1368,8 @@ async function createTradingTransferToInvestment(req, res) {
       asset: cleanAsset,
       portfolio_ticker: portfolioTicker,
       portfolio_instrument_type: portfolioInstrumentType,
+      movement_type: portfolioMovementType,
+      category: portfolioCategory,
       quantity: qty,
       amount_usd: amountUsd,
       fx_price_usd: fxPriceUsd,
@@ -1358,6 +1382,9 @@ async function createTradingTransferToInvestment(req, res) {
       transfer_group_id: transferGroupId,
       asset: cleanAsset,
       portfolio_ticker: portfolioTicker,
+      category: portfolioCategory,
+      movement_type: portfolioMovementType,
+      instrument_type: portfolioInstrumentType,
       quantity: qty,
       amount_usd: amountUsd,
       fx_price_usd: fxPriceUsd,
