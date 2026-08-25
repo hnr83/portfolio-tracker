@@ -17,9 +17,9 @@ const {
 } = require("../controllers/tradingController");
 
 const {
-  getBingxCombinedSyncPreview,
-  syncBingxCombinedTradesConfirm,
-} = require("../controllers/bingxCombinedSyncController");
+  getBingxFinalSyncPreview,
+  syncBingxFinalTradesConfirm,
+} = require("../controllers/bingxFinalSyncController");
 
 router.get("/", getTrading);
 router.get("/summary", getTradingSummary);
@@ -31,9 +31,9 @@ router.get("/bingx/orders", getBingxOrders);
 router.get("/bingx/fill-orders", getBingxFillOrders);
 router.get("/bingx/position-history-built", getBingxPositionHistoryBuilt);
 
-// Same public endpoints as before, now combining USDT-M + Coin-M.
-router.get("/bingx/sync-preview", getBingxCombinedSyncPreview);
-router.post("/bingx/sync-confirm", syncBingxCombinedTradesConfirm);
+// Same public endpoints: USDT-M + Coin-M, with Coin-M funding and Argentina dates corrected.
+router.get("/bingx/sync-preview", getBingxFinalSyncPreview);
+router.post("/bingx/sync-confirm", syncBingxFinalTradesConfirm);
 
 router.get("/balances", getTradingBalances);
 router.get("/balances-valued", getTradingBalancesValued);
