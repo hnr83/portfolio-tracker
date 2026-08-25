@@ -88,15 +88,6 @@ async function getBingxCoinMLeverage(symbol) {
   return bingxRequest("/openApi/cswap/v1/trade/leverage", { symbol });
 }
 
-async function getBingxCoinMIncome({ symbol, incomeType, startTime, endTime, limit = 1000 } = {}) {
-  const params = { limit };
-  if (symbol) params.symbol = symbol;
-  if (incomeType) params.incomeType = incomeType;
-  if (startTime) params.startTime = startTime;
-  if (endTime) params.endTime = endTime;
-  return bingxRequest("/openApi/cswap/v1/user/income", params);
-}
-
 async function getBingxSpotOpenOrders({ symbol, limit = 100 } = {}) {
   const params = { limit };
   if (symbol) params.symbol = symbol;
@@ -127,7 +118,6 @@ module.exports = {
   getBingxCoinMOrderHistory,
   getBingxCoinMFillOrders,
   getBingxCoinMLeverage,
-  getBingxCoinMIncome,
   getBingxSpotOpenOrders,
   getBingxSpotHistoryOrders,
   getBingxSpotMyTrades,
