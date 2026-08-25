@@ -760,7 +760,7 @@ export default function TradingView() {
                                                                         [row.trade_id]: e.target.value,
                                                                     }))
                                                                 }
-                                                                placeholder="-0.00008992"
+                                                                placeholder="Funding BTC"
                                                                 className="w-full rounded-lg border border-amber-500/30 bg-slate-950 px-2 py-1.5 text-right text-xs text-amber-200 outline-none focus:border-amber-400"
                                                             />
                                                             <div className="mt-1 text-[10px] text-slate-500">
