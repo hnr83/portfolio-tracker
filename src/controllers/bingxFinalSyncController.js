@@ -1,6 +1,5 @@
 const { runQuery } = require("../services/bigQueryService");
 const { table } = require("../utils/bigqueryHelper");
-const { getBingxCoinMIncome } = require("../services/providers/bingxService");
 const {
   getBingxCombinedSyncPreview,
 } = require("./bingxCombinedSyncController");
@@ -38,7 +37,7 @@ async function callBasePreview(query) {
   return payload || {};
 }
 
-async function fixCoinMRow(row) {
+function fixCoinMRow(row) {
   if (row.contract_type !== "M_MONEDA" || !String(row.trade_id).startsWith("BINGX-COINM|")) {
     return row;
   }
@@ -46,60 +45,26 @@ async function fixCoinMRow(row) {
   const times = extractCoinMTimes(row.trade_id);
   if (!times) return row;
 
-  const symbol = String(row.trade_id).split("|")[1];
-  const incomeResult = await getBingxCoinMIncome({
-    symbol,
-    incomeType: "FUNDING_FEE",
-    startTime: times.openTime,
-    endTime: times.closeTime,
-    limit: 1000,
-  });
-
-  const incomeRows = Array.isArray(incomeResult)
-    ? incomeResult
-    : Array.isArray(incomeResult?.list)
-      ? incomeResult.list
-      : Array.isArray(incomeResult?.income)
-        ? incomeResult.income
-        : [];
-
   const settlement = String(row.settlement_asset || row.instrument || "").toUpperCase();
-  const fundingCoin = incomeRows
-    .filter((i) => {
-      const type = String(i.incomeType || "").toUpperCase();
-      const asset = String(i.asset || i.currency || "").toUpperCase();
-      const time = Number(i.time || 0);
-      return type === "FUNDING_FEE" && (!asset || asset === settlement) && time >= times.openTime && time <= times.closeTime;
-    })
-    .reduce((sum, i) => sum + Number(i.income || 0), 0);
-
-  // Base Coin-M parser already has closed PnL + trading fees in pnl_qty.
-  // Funding is a separate account-income flow, so add it exactly once here.
-  const pnlQty = Number(row.pnl_qty || 0) + fundingCoin;
-  const pnlUsd = pnlQty * Number(row.exit_price || 0);
-  const capitalUsd = Number(row.capital_usd || 0);
   const holdingDays = Math.floor((times.closeTime - times.openTime) / 86400000);
 
+  // BingX's documented Coin-M API exposes closed PnL and commissions in fills,
+  // but does not expose a Coin-M account income/funding-history endpoint.
+  // Keep the API-derived PnL untouched instead of calling an unsupported endpoint.
   return {
     ...row,
     opened_at: argentinaDate(times.openTime),
     closed_at: argentinaDate(times.closeTime),
     holding_days: holdingDays,
-    pnl_qty: pnlQty,
-    pnl_usd_reported: pnlUsd,
-    pnl_pct: capitalUsd > 0 ? pnlUsd / capitalUsd : 0,
-    notes: `${row.notes || "coin_m"}; funding=${fundingCoin} ${settlement}`,
+    notes: `${row.notes || "coin_m"}; funding_not_available_via_coinm_api ${settlement}`,
   };
 }
 
 async function buildFixedPreview(query = {}) {
   const preview = await callBasePreview(query);
-  const rowsToInsert = [];
-  for (const row of preview.rowsToInsert || []) rowsToInsert.push(await fixCoinMRow(row));
-  const alreadyExistsRows = [];
-  for (const row of preview.alreadyExistsRows || []) alreadyExistsRows.push(await fixCoinMRow(row));
-  const skippedRows = [];
-  for (const row of preview.skippedRows || []) skippedRows.push(await fixCoinMRow(row));
+  const rowsToInsert = (preview.rowsToInsert || []).map(fixCoinMRow);
+  const alreadyExistsRows = (preview.alreadyExistsRows || []).map(fixCoinMRow);
+  const skippedRows = (preview.skippedRows || []).map(fixCoinMRow);
   return { ...preview, rowsToInsert, alreadyExistsRows, skippedRows };
 }
 
