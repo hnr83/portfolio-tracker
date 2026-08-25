@@ -74,6 +74,48 @@ async function getBingxSwapFillOrders({ symbol, startTime, endTime, limit = 100 
   return bingxRequest("/openApi/swap/v2/trade/allFillOrders", params);
 }
 
+// Coin-M perpetuals use the cswap API family and BASE-USD symbols (e.g. BTC-USD).
+async function getBingxCoinMOrderHistory({
+  symbol,
+  orderId,
+  startTime,
+  endTime,
+  limit = 100,
+} = {}) {
+  const params = { limit };
+
+  if (symbol) params.symbol = symbol;
+  if (orderId) params.orderId = orderId;
+  if (startTime) params.startTime = startTime;
+  if (endTime) params.endTime = endTime;
+
+  return bingxRequest("/openApi/cswap/v1/trade/orderHistory", params);
+}
+
+async function getBingxCoinMFillOrders({
+  orderId,
+  pageIndex = 1,
+  pageSize = 100,
+} = {}) {
+  if (!orderId) {
+    throw new Error("orderId es obligatorio para consultar fills Coin-M");
+  }
+
+  return bingxRequest("/openApi/cswap/v1/trade/allFillOrders", {
+    orderId,
+    pageIndex,
+    pageSize,
+  });
+}
+
+async function getBingxCoinMLeverage(symbol) {
+  if (!symbol) {
+    throw new Error("symbol es obligatorio para consultar leverage Coin-M");
+  }
+
+  return bingxRequest("/openApi/cswap/v1/trade/leverage", { symbol });
+}
+
 async function getBingxSpotOpenOrders({ symbol, limit = 100 } = {}) {
   const params = { limit };
 
@@ -117,6 +159,9 @@ module.exports = {
   getBingxSwapAllOrders,
   getBingxSwapFillOrders,
   getBingxIncome,
+  getBingxCoinMOrderHistory,
+  getBingxCoinMFillOrders,
+  getBingxCoinMLeverage,
   getBingxSpotOpenOrders,
   getBingxSpotHistoryOrders,
   getBingxSpotMyTrades,
