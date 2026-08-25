@@ -50,107 +50,72 @@ async function bingxRequest(path, params = {}) {
 
 async function getBingxSwapPositions(symbol) {
   const params = symbol ? { symbol } : {};
-
   return bingxRequest("/openApi/swap/v2/user/positions", params);
 }
 
 async function getBingxSwapAllOrders({ symbol, startTime, endTime, limit = 100 } = {}) {
   const params = { limit };
-
   if (symbol) params.symbol = symbol;
   if (startTime) params.startTime = startTime;
   if (endTime) params.endTime = endTime;
-
   return bingxRequest("/openApi/swap/v2/trade/allOrders", params);
 }
 
 async function getBingxSwapFillOrders({ symbol, startTime, endTime, limit = 100 } = {}) {
   const params = { limit };
-
   if (symbol) params.symbol = symbol;
   if (startTime) params.startTime = startTime;
   if (endTime) params.endTime = endTime;
-
   return bingxRequest("/openApi/swap/v2/trade/allFillOrders", params);
 }
 
-// Coin-M perpetuals use the cswap API family and BASE-USD symbols (e.g. BTC-USD).
-async function getBingxCoinMOrderHistory({
-  symbol,
-  orderId,
-  startTime,
-  endTime,
-  limit = 100,
-} = {}) {
+async function getBingxCoinMOrderHistory({ symbol, orderId, startTime, endTime, limit = 100 } = {}) {
   const params = { limit };
-
   if (symbol) params.symbol = symbol;
   if (orderId) params.orderId = orderId;
   if (startTime) params.startTime = startTime;
   if (endTime) params.endTime = endTime;
-
   return bingxRequest("/openApi/cswap/v1/trade/orderHistory", params);
 }
 
-async function getBingxCoinMFillOrders({
-  orderId,
-  pageIndex = 1,
-  pageSize = 100,
-} = {}) {
-  if (!orderId) {
-    throw new Error("orderId es obligatorio para consultar fills Coin-M");
-  }
-
-  return bingxRequest("/openApi/cswap/v1/trade/allFillOrders", {
-    orderId,
-    pageIndex,
-    pageSize,
-  });
+async function getBingxCoinMFillOrders({ orderId, pageIndex = 1, pageSize = 100 } = {}) {
+  if (!orderId) throw new Error("orderId es obligatorio para consultar fills Coin-M");
+  return bingxRequest("/openApi/cswap/v1/trade/allFillOrders", { orderId, pageIndex, pageSize });
 }
 
 async function getBingxCoinMLeverage(symbol) {
-  if (!symbol) {
-    throw new Error("symbol es obligatorio para consultar leverage Coin-M");
-  }
-
+  if (!symbol) throw new Error("symbol es obligatorio para consultar leverage Coin-M");
   return bingxRequest("/openApi/cswap/v1/trade/leverage", { symbol });
+}
+
+async function getBingxCoinMIncome({ symbol, incomeType, startTime, endTime, limit = 1000 } = {}) {
+  const params = { limit };
+  if (symbol) params.symbol = symbol;
+  if (incomeType) params.incomeType = incomeType;
+  if (startTime) params.startTime = startTime;
+  if (endTime) params.endTime = endTime;
+  return bingxRequest("/openApi/cswap/v1/user/income", params);
 }
 
 async function getBingxSpotOpenOrders({ symbol, limit = 100 } = {}) {
   const params = { limit };
-
   if (symbol) params.symbol = symbol;
-
   return bingxRequest("/openApi/spot/v1/trade/openOrders", params);
 }
 
-async function getBingxSpotHistoryOrders({
-  symbol,
-  startTime,
-  endTime,
-  limit = 100,
-} = {}) {
+async function getBingxSpotHistoryOrders({ symbol, startTime, endTime, limit = 100 } = {}) {
   const params = { limit };
-
   if (symbol) params.symbol = symbol;
   if (startTime) params.startTime = startTime;
   if (endTime) params.endTime = endTime;
-
   return bingxRequest("/openApi/spot/v1/trade/historyOrders", params);
 }
 
-async function getBingxSpotMyTrades({
-  symbol,
-  startTime,
-  endTime,
-  limit = 100,
-} = {}) {
+async function getBingxSpotMyTrades({ symbol, startTime, endTime, limit = 100 } = {}) {
   const params = { limit };
-
   if (symbol) params.symbol = symbol;
   if (startTime) params.startTime = startTime;
   if (endTime) params.endTime = endTime;
-
   return bingxRequest("/openApi/spot/v1/trade/myTrades", params);
 }
 
@@ -162,6 +127,7 @@ module.exports = {
   getBingxCoinMOrderHistory,
   getBingxCoinMFillOrders,
   getBingxCoinMLeverage,
+  getBingxCoinMIncome,
   getBingxSpotOpenOrders,
   getBingxSpotHistoryOrders,
   getBingxSpotMyTrades,
