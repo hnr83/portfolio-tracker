@@ -10,13 +10,16 @@ const {
   getBingxOrders,
   getBingxFillOrders,
   getBingxPositionHistoryBuilt,
-  getBingxSyncPreview,
-  syncBingxTradesConfirm,
   getTradingBalances,
   getTradingBalancesValued,
   createTradingRebalance,
   createTradingTransferToInvestment,
 } = require("../controllers/tradingController");
+
+const {
+  getBingxCombinedSyncPreview,
+  syncBingxCombinedTradesConfirm,
+} = require("../controllers/bingxCombinedSyncController");
 
 router.get("/", getTrading);
 router.get("/summary", getTradingSummary);
@@ -27,8 +30,11 @@ router.get("/bingx/positions", getBingxPositions);
 router.get("/bingx/orders", getBingxOrders);
 router.get("/bingx/fill-orders", getBingxFillOrders);
 router.get("/bingx/position-history-built", getBingxPositionHistoryBuilt);
-router.get("/bingx/sync-preview", getBingxSyncPreview);
-router.post("/bingx/sync-confirm", syncBingxTradesConfirm);
+
+// Same public endpoints as before, now combining USDT-M + Coin-M.
+router.get("/bingx/sync-preview", getBingxCombinedSyncPreview);
+router.post("/bingx/sync-confirm", syncBingxCombinedTradesConfirm);
+
 router.get("/balances", getTradingBalances);
 router.get("/balances-valued", getTradingBalancesValued);
 router.post("/rebalance", createTradingRebalance);
