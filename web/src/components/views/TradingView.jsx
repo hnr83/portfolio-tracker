@@ -155,8 +155,6 @@ function Badge({ children, compact = false }) {
     );
 }
 
-
-
 function EmptyState({ text }) {
     return (
         <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-6 text-center text-sm text-slate-500 md:rounded-3xl md:p-8">
@@ -253,6 +251,7 @@ export default function TradingView() {
     const [syncLoading, setSyncLoading] = useState(false);
     const [syncError, setSyncError] = useState("");
     const [syncResult, setSyncResult] = useState(null);
+    const [fundingOverrides, setFundingOverrides] = useState({});
 
     const loadTradingData = useCallback(async () => {
         try {
@@ -442,6 +441,7 @@ export default function TradingView() {
             setSyncLoading(true);
             setSyncError("");
             setSyncResult(null);
+            setFundingOverrides({});
 
             const res = await apiFetch(
                 "/api/trading/bingx/sync-preview?lookbackDays=60&limit=100"
@@ -469,14 +469,12 @@ export default function TradingView() {
             setSyncLoading(true);
             setSyncError("");
 
-            const rowsToInsert = syncPreview?.rowsToInsert || [];
-
             const res = await apiFetch("/api/trading/bingx/sync-confirm", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                 },
-                body: JSON.stringify({ rowsToInsert }),
+                body: JSON.stringify({ fundingOverrides }),
             });
 
             const data = await res.json().catch(() => ({}));
@@ -489,6 +487,7 @@ export default function TradingView() {
 
             setSyncResult(data);
             setSyncPreview(null);
+            setFundingOverrides({});
 
             await loadTradingData();
         } catch (err) {
@@ -503,6 +502,7 @@ export default function TradingView() {
         if (syncLoading) return;
         setSyncPreview(null);
         setSyncError("");
+        setFundingOverrides({});
     };
 
     const assets = useMemo(() => {
@@ -553,6 +553,12 @@ export default function TradingView() {
             trades: toNumber(row.trades),
         }));
     }, [byAsset]);
+
+    const missingManualFunding = (syncPreview?.rowsToInsert || []).some((row) => {
+        if (!row.funding_manual_required) return false;
+        const value = fundingOverrides[row.trade_id];
+        return value === undefined || value === null || value === "" || !Number.isFinite(Number(value));
+    });
 
     if (loading) {
         return <div className="p-4 text-sm text-slate-400 md:p-6">Cargando trading...</div>;
@@ -662,7 +668,7 @@ export default function TradingView() {
                         <div className="grid grid-cols-2 gap-2 lg:flex lg:flex-col">
                             <button
                                 onClick={handleSyncConfirm}
-                                disabled={syncLoading || !syncPreview.newTrades}
+                                disabled={syncLoading || !syncPreview.newTrades || missingManualFunding}
                                 className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 Confirmar
@@ -678,6 +684,12 @@ export default function TradingView() {
                         </div>
                     </div>
 
+                    {missingManualFunding ? (
+                        <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-200">
+                            Coin-M: cargá el Funding exacto de BingX antes de confirmar. Puede ser positivo o negativo.
+                        </div>
+                    ) : null}
+
                     {syncPreview.rowsToInsert?.length ? (
                         <div className="mt-5 overflow-hidden rounded-2xl border border-slate-800">
                             <table className="min-w-full divide-y divide-slate-800 text-sm">
@@ -687,50 +699,95 @@ export default function TradingView() {
                                         <th className="hidden px-4 py-3 md:table-cell">Tipo</th>
                                         <th className="px-3 py-3 md:px-4">Fechas</th>
                                         <th className="hidden px-4 py-3 text-right md:table-cell">Capital</th>
+                                        <th className="px-3 py-3 text-right md:px-4">Funding</th>
                                         <th className="px-3 py-3 text-right md:px-4">PnL</th>
                                     </tr>
                                 </thead>
 
                                 <tbody className="divide-y divide-slate-900">
-                                    {syncPreview.rowsToInsert.map((row) => (
-                                        <tr
-                                            key={row.trade_id}
-                                            className="bg-slate-950/40 text-slate-300"
-                                        >
-                                            <td className="px-3 py-3 md:px-4">
-                                                <div className="font-semibold text-slate-100">
-                                                    {row.instrument}
-                                                </div>
-                                                <div className="mt-1 text-xs text-slate-500">
-                                                    {row.exchange}
-                                                </div>
-                                            </td>
+                                    {syncPreview.rowsToInsert.map((row) => {
+                                        const fundingValue = fundingOverrides[row.trade_id];
+                                        const hasFunding = row.funding_manual_required && fundingValue !== undefined && fundingValue !== "" && Number.isFinite(Number(fundingValue));
+                                        const previewPnlQty = hasFunding
+                                            ? Number(row.pnl_qty_before_funding ?? row.pnl_qty ?? 0) + Number(fundingValue)
+                                            : Number(row.pnl_qty || 0);
+                                        const previewPnlUsd = hasFunding
+                                            ? previewPnlQty * Number(row.exit_price || 0)
+                                            : Number(row.pnl_usd_reported || 0);
+                                        const previewPnlPct = hasFunding && Number(row.capital_usd || 0) > 0
+                                            ? previewPnlUsd / Number(row.capital_usd)
+                                            : Number(row.pnl_pct || 0);
 
-                                            <td className="hidden px-4 py-3 md:table-cell">
-                                                <Badge>{row.direction}</Badge>
-                                            </td>
+                                        return (
+                                            <tr
+                                                key={row.trade_id}
+                                                className="bg-slate-950/40 text-slate-300"
+                                            >
+                                                <td className="px-3 py-3 md:px-4">
+                                                    <div className="font-semibold text-slate-100">
+                                                        {row.instrument}
+                                                    </div>
+                                                    <div className="mt-1 text-xs text-slate-500">
+                                                        {row.exchange}
+                                                    </div>
+                                                </td>
 
-                                            <td className="px-3 py-3 md:px-4">
-                                                <div>{formatDate(row.opened_at)}</div>
-                                                <div className="mt-1 text-xs text-slate-500">
-                                                    cierre {formatDate(row.closed_at)}
-                                                </div>
-                                            </td>
+                                                <td className="hidden px-4 py-3 md:table-cell">
+                                                    <Badge>{row.direction}</Badge>
+                                                </td>
 
-                                            <td className="hidden px-4 py-3 text-right md:table-cell">
-                                                {formatUsd(row.capital_usd)}
-                                            </td>
+                                                <td className="px-3 py-3 md:px-4">
+                                                    <div>{formatDate(row.opened_at)}</div>
+                                                    <div className="mt-1 text-xs text-slate-500">
+                                                        cierre {formatDate(row.closed_at)}
+                                                    </div>
+                                                </td>
 
-                                            <td className="px-3 py-3 text-right md:px-4">
-                                                <div className={`font-semibold ${pnlClass(row.pnl_usd_reported)}`}>
-                                                    {formatUsd(row.pnl_usd_reported)}
-                                                </div>
-                                                <div className="mt-1 text-xs text-slate-500">
-                                                    {formatPercent(row.pnl_pct)}
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
+                                                <td className="hidden px-4 py-3 text-right md:table-cell">
+                                                    {formatUsd(row.capital_usd)}
+                                                </td>
+
+                                                <td className="px-3 py-3 text-right md:px-4">
+                                                    {row.funding_manual_required ? (
+                                                        <div className="ml-auto w-32">
+                                                            <input
+                                                                type="number"
+                                                                step="0.00000001"
+                                                                value={fundingValue ?? ""}
+                                                                onChange={(e) =>
+                                                                    setFundingOverrides((prev) => ({
+                                                                        ...prev,
+                                                                        [row.trade_id]: e.target.value,
+                                                                    }))
+                                                                }
+                                                                placeholder="-0.00008992"
+                                                                className="w-full rounded-lg border border-amber-500/30 bg-slate-950 px-2 py-1.5 text-right text-xs text-amber-200 outline-none focus:border-amber-400"
+                                                            />
+                                                            <div className="mt-1 text-[10px] text-slate-500">
+                                                                {row.settlement_asset}
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-xs text-slate-500">API</span>
+                                                    )}
+                                                </td>
+
+                                                <td className="px-3 py-3 text-right md:px-4">
+                                                    <div className={`font-semibold ${pnlClass(previewPnlUsd)}`}>
+                                                        {formatUsd(previewPnlUsd)}
+                                                    </div>
+                                                    <div className="mt-1 text-xs text-slate-500">
+                                                        {formatPercent(previewPnlPct)}
+                                                    </div>
+                                                    {row.funding_manual_required ? (
+                                                        <div className="mt-1 text-[10px] text-slate-600">
+                                                            {formatNumber(previewPnlQty, 8)} {row.settlement_asset}
+                                                        </div>
+                                                    ) : null}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>
