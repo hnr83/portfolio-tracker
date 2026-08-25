@@ -37,7 +37,7 @@ async function callBasePreview(query) {
   return payload || {};
 }
 
-function fixCoinMRow(row) {
+function markCoinMForManualFunding(row) {
   if (row.contract_type !== "M_MONEDA" || !String(row.trade_id).startsWith("BINGX-COINM|")) {
     return row;
   }
@@ -45,27 +45,66 @@ function fixCoinMRow(row) {
   const times = extractCoinMTimes(row.trade_id);
   if (!times) return row;
 
-  const settlement = String(row.settlement_asset || row.instrument || "").toUpperCase();
-  const holdingDays = Math.floor((times.closeTime - times.openTime) / 86400000);
-
-  // BingX's documented Coin-M API exposes closed PnL and commissions in fills,
-  // but does not expose a Coin-M account income/funding-history endpoint.
-  // Keep the API-derived PnL untouched instead of calling an unsupported endpoint.
   return {
     ...row,
     opened_at: argentinaDate(times.openTime),
     closed_at: argentinaDate(times.closeTime),
-    holding_days: holdingDays,
-    notes: `${row.notes || "coin_m"}; funding_not_available_via_coinm_api ${settlement}`,
+    holding_days: Math.floor((times.closeTime - times.openTime) / 86400000),
+    funding_manual_required: true,
+    funding_qty: null,
+    pnl_qty_before_funding: Number(row.pnl_qty || 0),
+    pnl_usd_before_funding: Number(row.pnl_usd_reported || 0),
+    notes: `${String(row.notes || "coin_m").replace(/; funding_not_available_via_coinm_api[^;]*/g, "")}; funding_manual_required`,
+  };
+}
+
+function applyManualFunding(row, fundingOverrides = {}) {
+  if (!row.funding_manual_required) return row;
+
+  if (!Object.prototype.hasOwnProperty.call(fundingOverrides, row.trade_id)) {
+    const err = new Error(`Falta cargar funding manual para ${row.instrument} ${row.direction} ${row.closed_at}`);
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const rawFunding = fundingOverrides[row.trade_id];
+  if (rawFunding === "" || rawFunding === null || rawFunding === undefined) {
+    const err = new Error(`Funding manual vacío para ${row.instrument} ${row.direction} ${row.closed_at}`);
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const fundingQty = Number(rawFunding);
+  if (!Number.isFinite(fundingQty)) {
+    const err = new Error(`Funding manual inválido para ${row.instrument} ${row.direction} ${row.closed_at}`);
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const basePnlQty = Number(row.pnl_qty_before_funding ?? row.pnl_qty ?? 0);
+  const pnlQty = basePnlQty + fundingQty;
+  const exitPrice = Number(row.exit_price || 0);
+  const capitalUsd = Number(row.capital_usd || 0);
+  const pnlUsd = pnlQty * exitPrice;
+
+  return {
+    ...row,
+    funding_qty: fundingQty,
+    pnl_qty: pnlQty,
+    pnl_usd_reported: pnlUsd,
+    pnl_pct: capitalUsd > 0 ? pnlUsd / capitalUsd : 0,
+    notes: `${String(row.notes || "coin_m").replace(/; funding_manual_required/g, "")}; funding=${fundingQty} ${row.settlement_asset || row.instrument}`,
   };
 }
 
 async function buildFixedPreview(query = {}) {
   const preview = await callBasePreview(query);
-  const rowsToInsert = (preview.rowsToInsert || []).map(fixCoinMRow);
-  const alreadyExistsRows = (preview.alreadyExistsRows || []).map(fixCoinMRow);
-  const skippedRows = (preview.skippedRows || []).map(fixCoinMRow);
-  return { ...preview, rowsToInsert, alreadyExistsRows, skippedRows };
+  return {
+    ...preview,
+    rowsToInsert: (preview.rowsToInsert || []).map(markCoinMForManualFunding),
+    alreadyExistsRows: (preview.alreadyExistsRows || []).map(markCoinMForManualFunding),
+    skippedRows: (preview.skippedRows || []).map(markCoinMForManualFunding),
+  };
 }
 
 async function getBingxFinalSyncPreview(req, res) {
@@ -80,7 +119,11 @@ async function getBingxFinalSyncPreview(req, res) {
 async function syncBingxFinalTradesConfirm(req, res) {
   try {
     const preview = await buildFixedPreview(req.query || {});
-    const rowsToInsert = preview.rowsToInsert || [];
+    const fundingOverrides = req.body?.fundingOverrides || {};
+    const rowsToInsert = (preview.rowsToInsert || []).map((row) =>
+      applyManualFunding(row, fundingOverrides)
+    );
+
     if (!rowsToInsert.length) {
       return res.json({ ok: true, inserted: 0, message: "No hay trades nuevos para insertar", preview });
     }
@@ -123,10 +166,10 @@ async function syncBingxFinalTradesConfirm(req, res) {
     `;
 
     await runQuery(insertQuery, { rows: cleanRows });
-    res.json({ ok: true, inserted: cleanRows.length, insertedRows: cleanRows, preview });
+    res.json({ ok: true, inserted: cleanRows.length, insertedRows: cleanRows, preview: { ...preview, rowsToInsert } });
   } catch (err) {
     console.error("syncBingxFinalTradesConfirm error:", err);
-    res.status(500).json({ error: "Error confirmando sync BingX", detail: err.message });
+    res.status(err.statusCode || 500).json({ error: "Error confirmando sync BingX", detail: err.message });
   }
 }
 
