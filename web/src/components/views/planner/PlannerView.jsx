@@ -227,6 +227,7 @@ export default function PlannerView({ summary, positions = [] }) {
     return projected[1].rows.map((row, index) => ({
       year: row.year,
       contributions: row.contributions,
+      baseGain: projected[1].rows[index].gain,
       conservative: projected[0].rows[index].value,
       base: projected[1].rows[index].value,
       aggressive: projected[2].rows[index].value,
@@ -614,7 +615,7 @@ export default function PlannerView({ summary, positions = [] }) {
                   Evolución proyectada
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  Comparación entre aportes acumulados y escenarios de crecimiento.
+                  Aportes acumulados vs rendimiento acumulado del escenario base.
                 </p>
               </div>
 
@@ -652,34 +653,20 @@ export default function PlannerView({ summary, positions = [] }) {
                   <Area
                     type="monotone"
                     dataKey="contributions"
-                    name="Aportes"
+                    name="Aportes acumulados"
+                    stackId="baseComposition"
                     stroke="#64748b"
                     fill="#64748b"
-                    fillOpacity={0.08}
+                    fillOpacity={0.35}
                   />
                   <Area
                     type="monotone"
-                    dataKey="conservative"
-                    name="Conservador"
-                    stroke="#94a3b8"
-                    fill="#94a3b8"
-                    fillOpacity={0.06}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="base"
-                    name="Base"
-                    stroke="#6366f1"
-                    fill="#6366f1"
-                    fillOpacity={0.12}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="aggressive"
-                    name="Agresivo"
+                    dataKey="baseGain"
+                    name="Rendimiento acumulado"
+                    stackId="baseComposition"
                     stroke="#22c55e"
                     fill="#22c55e"
-                    fillOpacity={0.10}
+                    fillOpacity={0.22}
                   />
                 </AreaChart>
               </ResponsiveContainer>
