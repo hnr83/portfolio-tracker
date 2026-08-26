@@ -7,11 +7,19 @@ export async function apiFetch(path, options = {}) {
 
   const token = window.localStorage.getItem("portfolio-auth-token");
 
-  return fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers: {
       ...(options.headers || {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
   });
+
+  if (response.status === 401) {
+    window.localStorage.removeItem("portfolio-auth-token");
+    window.localStorage.removeItem("portfolio-auth-user");
+    window.location.reload();
+  }
+
+  return response;
 }
