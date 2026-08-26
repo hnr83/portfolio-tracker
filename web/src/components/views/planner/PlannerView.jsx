@@ -157,8 +157,25 @@ function ProjectionTooltip({ active, payload, label }) {
 export default function PlannerView({ summary, positions = [] }) {
 
   const [activeTab, setActiveTab] = useState("projections");
-  const realInitialCapital = Number(summary?.total_with_trading_usd || 167000);
-  const realInitialContributions = Number(summary?.total_cost_usd ?? realInitialCapital);
+
+  const investedSnapshot = useMemo(() => {
+    const investable = (positions || []).filter((p) =>
+      ["PORTFOLIO", "CRYPTO"].includes(p.category)
+    );
+
+    return investable.reduce(
+      (acc, p) => ({
+        marketValue: acc.marketValue + Number(p.market_value_usd || 0),
+        costValue: acc.costValue + Number(p.cost_value_usd || 0),
+      }),
+      { marketValue: 0, costValue: 0 }
+    );
+  }, [positions]);
+
+  const realInitialCapital = Number(investedSnapshot.marketValue || 167000);
+  const realInitialContributions = Number(
+    investedSnapshot.costValue || realInitialCapital
+  );
 
   const realAssets = useMemo(() => {
     const investable = (positions || []).filter((p) =>
