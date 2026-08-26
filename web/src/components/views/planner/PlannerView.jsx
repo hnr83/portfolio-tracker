@@ -95,13 +95,14 @@ function calculateWeightedReturn(assets) {
 
 function projectSeries({
   initialCapital,
+  initialContributions,
   monthlyContribution,
   years,
   annualReturn,
 }) {
   const rows = [];
   let value = Number(initialCapital || 0);
-  let contributions = Number(initialCapital || 0);
+  let contributions = Number(initialContributions ?? initialCapital ?? 0);
   const annualContribution = Number(monthlyContribution || 0) * 12;
 
   rows.push({
@@ -126,10 +127,38 @@ function projectSeries({
   return rows;
 }
 
+function ProjectionTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
+
+  const row = payload[0]?.payload;
+  if (!row) return null;
+
+  return (
+    <div className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 shadow-xl">
+      <div className="mb-3 font-semibold text-white">{label}</div>
+      <div className="space-y-2 text-sm">
+        <div className="flex items-center justify-between gap-6 text-slate-400">
+          <span>Aportes acumulados</span>
+          <span>{formatUsd(row.contributions)}</span>
+        </div>
+        <div className="flex items-center justify-between gap-6 text-emerald-400">
+          <span>Rendimiento acumulado</span>
+          <span>{formatUsd(row.baseGain)}</span>
+        </div>
+        <div className="mt-2 flex items-center justify-between gap-6 border-t border-slate-800 pt-2 font-semibold text-white">
+          <span>Total proyectado</span>
+          <span>{formatUsd(row.base)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function PlannerView({ summary, positions = [] }) {
 
   const [activeTab, setActiveTab] = useState("projections");
   const realInitialCapital = Number(summary?.total_with_trading_usd || 167000);
+  const realInitialContributions = Number(summary?.total_cost_usd ?? realInitialCapital);
 
   const realAssets = useMemo(() => {
     const investable = (positions || []).filter((p) =>
@@ -170,6 +199,7 @@ export default function PlannerView({ summary, positions = [] }) {
   }, [positions]);
 
   const [initialCapital, setInitialCapital] = useState(realInitialCapital);
+  const [initialContributions, setInitialContributions] = useState(realInitialContributions);
   const [assets, setAssets] = useState(realAssets);
   const [monthlyContribution, setMonthlyContribution] = useState(2000);
   const [years, setYears] = useState(10);
@@ -181,6 +211,12 @@ export default function PlannerView({ summary, positions = [] }) {
       setInitialCapital(realInitialCapital);
     }
   }, [realInitialCapital]);
+
+  useEffect(() => {
+    if (Number.isFinite(realInitialContributions) && realInitialContributions >= 0) {
+      setInitialContributions(realInitialContributions);
+    }
+  }, [realInitialContributions]);
 
   useEffect(() => {
     if (realAssets?.length) {
@@ -218,6 +254,7 @@ export default function PlannerView({ summary, positions = [] }) {
       scenario,
       rows: projectSeries({
         initialCapital,
+        initialContributions,
         monthlyContribution,
         years,
         annualReturn: scenario.returnPct,
@@ -232,7 +269,7 @@ export default function PlannerView({ summary, positions = [] }) {
       base: projected[1].rows[index].value,
       aggressive: projected[2].rows[index].value,
     }));
-  }, [scenarios, initialCapital, monthlyContribution, years]);
+  }, [scenarios, initialCapital, initialContributions, monthlyContribution, years]);
 
   const baseFinal = chartData[chartData.length - 1]?.base || 0;
   const baseContributions = chartData[chartData.length - 1]?.contributions || 0;
@@ -630,15 +667,7 @@ export default function PlannerView({ summary, positions = [] }) {
                   <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.35} />
                   <XAxis dataKey="year" tick={{ fill: "#94a3b8", fontSize: 12 }} />
                   <YAxis tick={{ fill: "#94a3b8", fontSize: 12 }} />
-                  <Tooltip
-                    formatter={(value) => formatUsd(value)}
-                    contentStyle={{
-                      background: "#020617",
-                      border: "1px solid #334155",
-                      borderRadius: "16px",
-                      color: "#fff",
-                    }}
-                  />
+                  <Tooltip content={<ProjectionTooltip />} />
                   <Legend />
                   <ReferenceLine
                     y={fireGoal}
