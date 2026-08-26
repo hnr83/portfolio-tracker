@@ -159,9 +159,7 @@ export default function PlannerView({ summary, positions = [] }) {
   const [activeTab, setActiveTab] = useState("projections");
 
   const investedSnapshot = useMemo(() => {
-    const investable = (positions || []).filter((p) =>
-      ["PORTFOLIO", "CRYPTO"].includes(p.category)
-    );
+    const investable = (positions || []).filter((p) => p.category === "PORTFOLIO");
 
     return investable.reduce(
       (acc, p) => ({
@@ -178,9 +176,7 @@ export default function PlannerView({ summary, positions = [] }) {
   );
 
   const realAssets = useMemo(() => {
-    const investable = (positions || []).filter((p) =>
-      ["PORTFOLIO", "CRYPTO"].includes(p.category)
-    );
+    const investable = (positions || []).filter((p) => p.category === "PORTFOLIO");
 
     const total = investable.reduce(
       (acc, p) => acc + Number(p.market_value_usd || 0),
