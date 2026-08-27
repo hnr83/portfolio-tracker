@@ -402,6 +402,61 @@ export default function HistoryView() {
     const investmentsPeriodPositive = investmentsPeriodChangeUsd >= 0;
     const investmentsCostPeriodPositive = investmentsCostPeriodChangeUsd >= 0;
 
+    const investmentsCagr = useMemo(() => {
+        if (!["1A", "MAX"].includes(range)) return null;
+
+        const monthlyReturns = historicalPerformance
+            .flatMap((yearRow) =>
+                (yearRow.months || []).map((month) => ({
+                    startDate: month.start_date?.value ?? month.start_date,
+                    endDate: month.end_date?.value ?? month.end_date,
+                    performance: Number(month.adjusted_performance_pct),
+                }))
+            )
+            .filter(
+                (month) =>
+                    month.startDate &&
+                    month.endDate &&
+                    Number.isFinite(month.performance)
+            )
+            .sort((a, b) => a.endDate.localeCompare(b.endDate));
+
+        if (!monthlyReturns.length) return null;
+
+        const lastDate = new Date(
+            `${monthlyReturns[monthlyReturns.length - 1].endDate}T00:00:00`
+        );
+
+        const selectedMonths =
+            range === "MAX"
+                ? monthlyReturns
+                : monthlyReturns.filter((month) => {
+                    const cutoff = new Date(lastDate);
+                    cutoff.setFullYear(cutoff.getFullYear() - 1);
+                    return new Date(`${month.endDate}T00:00:00`) > cutoff;
+                });
+
+        if (!selectedMonths.length) return null;
+
+        const growthFactor = selectedMonths.reduce(
+            (factor, month) => factor * (1 + month.performance),
+            1
+        );
+
+        if (growthFactor <= 0) return null;
+
+        const firstDate = new Date(`${selectedMonths[0].startDate}T00:00:00`);
+        const finalDate = new Date(
+            `${selectedMonths[selectedMonths.length - 1].endDate}T00:00:00`
+        );
+        const days = Math.max(
+            1,
+            (finalDate - firstDate) / (1000 * 60 * 60 * 24)
+        );
+
+        return Math.pow(growthFactor, 365 / days) - 1;
+    }, [historicalPerformance, range]);
+
     function toggleYear(year) {
         setExpandedYears((prev) => ({
             ...prev,
@@ -476,12 +531,37 @@ export default function HistoryView() {
                     positive={metric === "INVESTMENTS" ? undefined : periodPositive}
                 />
 
-                <HistoryKpiCard
-                    label="PnL actual"
-                    value={formatCurrency(lastRow?.total_pnl_usd, "USD")}
-                    subvalue={formatPercentFromDecimal(lastRow?.total_pnl_pct)}
-                    positive={pnlPositive}
-                />
+                {metric === "INVESTMENTS" ? (
+                    <HistoryKpiCard
+                        label="CAGR anualizado"
+                        value={
+                            investmentsCagr == null
+                                ? "—"
+                                : `${investmentsCagr >= 0 ? "+" : ""}${formatPercentFromDecimal(
+                                    investmentsCagr
+                                )}`
+                        }
+                        subvalue={
+                            investmentsCagr == null
+                                ? "Disponible para 1A y MAX"
+                                : range === "MAX"
+                                    ? "Desde inicio · ajustado por aportes"
+                                    : "Último año · ajustado por aportes"
+                        }
+                        positive={
+                            investmentsCagr == null
+                                ? undefined
+                                : investmentsCagr >= 0
+                        }
+                    />
+                ) : (
+                    <HistoryKpiCard
+                        label="PnL actual"
+                        value={formatCurrency(lastRow?.total_pnl_usd, "USD")}
+                        subvalue={formatPercentFromDecimal(lastRow?.total_pnl_pct)}
+                        positive={pnlPositive}
+                    />
+                )}
             </div>
 
             <div className="rounded-2xl border border-slate-800/80 p-4 md:rounded-[24px] md:p-6">
