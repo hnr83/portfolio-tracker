@@ -80,6 +80,107 @@ function formatLongDate(value) {
     }).format(date);
 }
 
+function getDateYear(value) {
+    if (!value) return null;
+    return new Date(`${value}T00:00:00`).getFullYear();
+}
+
+function getNiceStep(span, targetIntervals = 5) {
+    if (!Number.isFinite(span) || span <= 0) return 1;
+
+    const roughStep = span / targetIntervals;
+    const exponent = Math.floor(Math.log10(roughStep));
+    const magnitude = 10 ** exponent;
+    const fraction = roughStep / magnitude;
+
+    let niceFraction;
+    if (fraction <= 1) niceFraction = 1;
+    else if (fraction <= 2) niceFraction = 2;
+    else if (fraction <= 2.5) niceFraction = 2.5;
+    else if (fraction <= 5) niceFraction = 5;
+    else niceFraction = 10;
+
+    return niceFraction * magnitude;
+}
+
+function buildNiceAxis(values, includeZero = true) {
+    const finiteValues = values.filter((value) => Number.isFinite(value));
+
+    if (!finiteValues.length) {
+        return { domain: [0, 1], ticks: [0, 1] };
+    }
+
+    let minValue = Math.min(...finiteValues);
+    let maxValue = Math.max(...finiteValues);
+
+    if (includeZero) {
+        minValue = Math.min(0, minValue);
+        maxValue = Math.max(0, maxValue);
+    }
+
+    if (minValue === maxValue) {
+        const padding = Math.max(Math.abs(maxValue) * 0.1, 1);
+        minValue -= padding;
+        maxValue += padding;
+    }
+
+    const step = getNiceStep(maxValue - minValue);
+    const domainMin = Math.floor(minValue / step) * step;
+    const domainMax = Math.ceil(maxValue / step) * step;
+    const ticks = [];
+
+    for (let value = domainMin; value <= domainMax + step * 0.001; value += step) {
+        ticks.push(Number(value.toFixed(10)));
+    }
+
+    return {
+        domain: [domainMin, domainMax],
+        ticks,
+    };
+}
+
+function buildTimeTicks(rows, dataKey, range) {
+    const dates = rows.map((row) => row[dataKey]).filter(Boolean);
+    if (!dates.length) return [];
+
+    const maxTicks = range === "MAX" ? 14 : range === "1A" || range === "YTD" ? 10 : 8;
+    if (dates.length <= maxTicks) return dates;
+
+    const ticks = [];
+    for (let i = 0; i < maxTicks; i += 1) {
+        const index = Math.round((i * (dates.length - 1)) / (maxTicks - 1));
+        const value = dates[index];
+        if (value && ticks[ticks.length - 1] !== value) ticks.push(value);
+    }
+
+    return ticks;
+}
+
+function HistoryXAxisTick({ x, y, payload, ticks }) {
+    const value = payload?.value;
+    if (!value) return null;
+
+    const tickIndex = ticks.indexOf(value);
+    const year = getDateYear(value);
+    const previousYear = tickIndex > 0 ? getDateYear(ticks[tickIndex - 1]) : null;
+    const showYear = tickIndex === 0 || year !== previousYear;
+
+    return (
+        <g transform={`translate(${x},${y})`}>
+            <text textAnchor="middle" fill="#94a3b8" fontSize={11}>
+                <tspan x="0" dy="14">
+                    {formatShortDate(value)}
+                </tspan>
+                {showYear ? (
+                    <tspan x="0" dy="15" fill="#64748b" fontSize={10} fontWeight={600}>
+                        {year}
+                    </tspan>
+                ) : null}
+            </text>
+        </g>
+    );
+}
+
 function HistoryKpiCard({ label, value, subvalue, positive }) {
     return (
         <div className="rounded-2xl border border-slate-800/80 bg-[linear-gradient(180deg,rgba(12,18,40,0.96)_0%,rgba(6,10,28,0.98)_100%)] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.28)] backdrop-blur-sm md:rounded-[22px] md:p-5">
@@ -378,6 +479,28 @@ export default function HistoryView() {
     const dataKey = activeMetric.key;
     const strokeColor = activeMetric.color;
 
+    const chartXTicks = useMemo(
+        () => buildTimeTicks(chartData, "snapshot_date", range),
+        [chartData, range]
+    );
+
+    const benchmarkXTicks = useMemo(
+        () => buildTimeTicks(benchmarkSeries, "date", range),
+        [benchmarkSeries, range]
+    );
+
+    const chartYAxis = useMemo(() => {
+        const values = chartData.flatMap((row) => {
+            const rowValues = [Number(row[dataKey])];
+            if (metric === "INVESTMENTS") {
+                rowValues.push(Number(row[activeMetric.secondaryKey]));
+            }
+            return rowValues;
+        });
+
+        return buildNiceAxis(values, true);
+    }, [chartData, dataKey, metric, activeMetric.secondaryKey]);
+
     const firstRow = chartData[0] || null;
     const lastRow = chartData[chartData.length - 1] || null;
 
@@ -658,21 +781,23 @@ export default function HistoryView() {
                         <ResponsiveContainer>
                             <LineChart
                                 data={chartData}
-                                margin={{ top: 8, right: 8, left: -18, bottom: 0 }}
+                                margin={{ top: 8, right: 8, left: -18, bottom: 18 }}
                             >
                                 <CartesianGrid stroke="rgba(255,255,255,0.05)" />
 
                                 <XAxis
                                     dataKey="snapshot_date"
-                                    tickFormatter={formatShortDate}
-                                    tick={{ fill: "#94a3b8", fontSize: 11 }}
+                                    ticks={chartXTicks}
+                                    tick={<HistoryXAxisTick ticks={chartXTicks} />}
                                     axisLine={false}
                                     tickLine={false}
-                                    minTickGap={24}
+                                    interval={0}
+                                    height={42}
                                 />
 
                                 <YAxis
-                                    domain={["dataMin - 2000", "dataMax + 2000"]}
+                                    domain={chartYAxis.domain}
+                                    ticks={chartYAxis.ticks}
                                     tickFormatter={(value) =>
                                         Number(value).toLocaleString("es-AR", {
                                             maximumFractionDigits: 0,
@@ -728,7 +853,7 @@ export default function HistoryView() {
                         <ResponsiveContainer width="100%" height="100%">
                             <LineChart
                                 data={benchmarkSeries}
-                                margin={{ top: 8, right: 8, left: -18, bottom: 0 }}
+                                margin={{ top: 8, right: 8, left: -18, bottom: 18 }}
                             >
                                 <CartesianGrid
                                     strokeDasharray="3 3"
@@ -737,11 +862,12 @@ export default function HistoryView() {
 
                                 <XAxis
                                     dataKey="date"
-                                    tickFormatter={formatShortDate}
-                                    tick={{ fill: "#93c5fd", fontSize: 11 }}
+                                    ticks={benchmarkXTicks}
+                                    tick={<HistoryXAxisTick ticks={benchmarkXTicks} />}
                                     tickLine={false}
                                     axisLine={false}
-                                    minTickGap={24}
+                                    interval={0}
+                                    height={42}
                                 />
 
                                 <YAxis
