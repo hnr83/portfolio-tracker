@@ -98,6 +98,23 @@ function getAssetKind(ticker = "") {
   return "USA";
 }
 
+function isFxFamily(family) {
+  return family === "FX_USD" || family === "USDT";
+}
+
+function getCalculatedArsAmount(form) {
+  if (!isFxFamily(form.family)) return null;
+
+  const quantity = toNumber(form.quantity);
+  const fxRate = toNumber(form.fx_rate);
+
+  if (quantity === null || quantity <= 0 || fxRate === null || fxRate <= 0) {
+    return null;
+  }
+
+  return quantity * fxRate;
+}
+
 function buildPayload(form) {
   if (form.family === "SWAP") {
     return {
@@ -114,13 +131,17 @@ function buildPayload(form) {
     };
   }
 
+  const grossAmount = isFxFamily(form.family)
+    ? getCalculatedArsAmount(form)
+    : toNumber(form.gross_amount);
+
   return {
     family: form.family,
     action: form.action,
     fecha: form.fecha,
     ticker: form.ticker.trim(),
     quantity: form.quantity === "" ? null : toNumber(form.quantity),
-    gross_amount: toNumber(form.gross_amount),
+    gross_amount: grossAmount,
     broker: form.broker.trim() || null,
     owner: form.owner.trim() || null,
     description: form.description.trim() || null,
@@ -142,16 +163,26 @@ function isPreviewReady(form) {
     );
   }
 
-  if (toNumber(form.gross_amount) === null) return false;
-
-  if (["FX_USD", "USDT", "ASSET"].includes(form.family)) {
+  if (isFxFamily(form.family)) {
     if (toNumber(form.quantity) === null || toNumber(form.quantity) <= 0) {
       return false;
     }
+
+    if (toNumber(form.fx_rate) === null || toNumber(form.fx_rate) <= 0) {
+      return false;
+    }
+  } else if (toNumber(form.gross_amount) === null) {
+    return false;
   }
 
-  if (form.family === "ASSET" && !form.ticker.trim()) {
-    return false;
+  if (form.family === "ASSET") {
+    if (toNumber(form.quantity) === null || toNumber(form.quantity) <= 0) {
+      return false;
+    }
+
+    if (!form.ticker.trim()) {
+      return false;
+    }
   }
 
   return true;
@@ -165,6 +196,7 @@ export default function TransactionModal({ isOpen, onClose, onSaved }) {
 
     ticker: "",
     quantity: "",
+    fx_rate: "",
     gross_amount: "",
 
     from_ticker: "USDT",
@@ -190,13 +222,9 @@ export default function TransactionModal({ isOpen, onClose, onSaved }) {
   const normalizedTicker = normalizeTicker(form.ticker);
   const assetKind = form.family === "ASSET" ? getAssetKind(form.ticker) : null;
   const isCedear = assetKind === "CEDEAR";
+  const calculatedArsAmount = getCalculatedArsAmount(form);
 
-  const amountCurrency =
-    form.family === "FX_USD" ||
-      form.family === "USDT" ||
-      isCedear
-      ? "ARS"
-      : "USD";
+  const amountCurrency = isCedear ? "ARS" : "USD";
 
   const previewRows = Array.isArray(preview) ? preview : preview ? [preview] : [];
   const primaryPreview = previewRows[0] || null;
@@ -217,6 +245,7 @@ export default function TransactionModal({ isOpen, onClose, onSaved }) {
         action: value === "SWAP" ? "" : nextAction,
         ticker: value === "ASSET" ? prev.ticker : "",
         quantity: value === "SWAP" ? "" : prev.quantity,
+        fx_rate: isFxFamily(value) ? prev.fx_rate : "",
         description: value === "CASH_USD" || value === "SWAP" ? prev.description : "",
       }));
       return;
@@ -235,6 +264,7 @@ export default function TransactionModal({ isOpen, onClose, onSaved }) {
       fecha: new Date().toISOString().slice(0, 10),
       ticker: "",
       quantity: "",
+      fx_rate: "",
       gross_amount: "",
       from_ticker: "USDT",
       to_ticker: "BTC",
@@ -618,32 +648,75 @@ export default function TransactionModal({ isOpen, onClose, onSaved }) {
                 </>
               )}
 
-              <div className={form.family === "SWAP" ? "md:col-span-2" : ""}>
-                <label className="mb-2 block text-sm text-slate-400">{amountLabel}</label>
-                <input
-                  type="number"
-                  step="any"
-                  name="gross_amount"
-                  value={form.gross_amount}
-                  onChange={handleChange}
-                  placeholder={form.family === "SWAP" ? "Monto USD referencia" : "Ej: 500 / 1500000"}
-                  className="w-full rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-white placeholder:text-slate-500 outline-none focus:border-slate-600"
-                  required
-                />
-                {toNumber(form.gross_amount) !== null && (
-                  <div className="mt-2 text-xs text-slate-500">
-                    {formatMoney(form.gross_amount, amountCurrency)}
+              {isFxFamily(form.family) ? (
+                <>
+                  <div>
+                    <label className="mb-2 block text-sm text-slate-400">
+                      Tipo de cambio
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      name="fx_rate"
+                      value={form.fx_rate}
+                      onChange={handleChange}
+                      placeholder="Ej: 1530"
+                      className="w-full rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-white placeholder:text-slate-500 outline-none focus:border-slate-600"
+                      required
+                    />
+                    {toNumber(form.fx_rate) !== null && (
+                      <div className="mt-2 text-xs text-slate-500">
+                        {formatMoney(form.fx_rate, "ARS")} por {form.family === "FX_USD" ? "USD" : "USDT"}
+                      </div>
+                    )}
                   </div>
-                )}
 
-                {isCedear && (
-                  <div className="mt-2 text-xs text-amber-300">
-                    El monto se ingresa en pesos. El sistema calculará automáticamente el costo en USD usando el tipo de cambio del día.
+                  <div>
+                    <label className="mb-2 block text-sm text-slate-400">
+                      Monto ARS
+                    </label>
+                    <input
+                      type="text"
+                      value={
+                        calculatedArsAmount == null
+                          ? ""
+                          : formatMoney(calculatedArsAmount, "ARS")
+                      }
+                      placeholder="Se calcula automáticamente"
+                      readOnly
+                      className="w-full cursor-default rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-slate-300 placeholder:text-slate-600 outline-none"
+                    />
+                    <div className="mt-2 text-xs text-slate-500">
+                      Cantidad × tipo de cambio
+                    </div>
                   </div>
-                )}
-              </div>
+                </>
+              ) : (
+                <div className={form.family === "SWAP" ? "md:col-span-2" : ""}>
+                  <label className="mb-2 block text-sm text-slate-400">{amountLabel}</label>
+                  <input
+                    type="number"
+                    step="any"
+                    name="gross_amount"
+                    value={form.gross_amount}
+                    onChange={handleChange}
+                    placeholder={form.family === "SWAP" ? "Monto USD referencia" : "Ej: 500 / 1500000"}
+                    className="w-full rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-white placeholder:text-slate-500 outline-none focus:border-slate-600"
+                    required
+                  />
+                  {toNumber(form.gross_amount) !== null && (
+                    <div className="mt-2 text-xs text-slate-500">
+                      {formatMoney(form.gross_amount, amountCurrency)}
+                    </div>
+                  )}
 
-
+                  {isCedear && (
+                    <div className="mt-2 text-xs text-amber-300">
+                      El monto se ingresa en pesos. El sistema calculará automáticamente el costo en USD usando el tipo de cambio del día.
+                    </div>
+                  )}
+                </div>
+              )}
 
               {(form.family === "CASH_USD" || form.family === "SWAP") && (
                 <div className="md:col-span-2">
