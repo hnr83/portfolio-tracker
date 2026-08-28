@@ -263,7 +263,7 @@ export default function TransactionsView({
                                         ? "-"
                                         : formatCurrency(
                                             m.gross_amount,
-                                            m.settlement_currency || m.price_currency || "USD"
+                                            m.price_currency || m.settlement_currency || "USD"
                                         )}
                                 </td>
 
@@ -272,7 +272,7 @@ export default function TransactionsView({
                                         ? "-"
                                         : formatCurrency(
                                             m.net_amount,
-                                            m.settlement_currency || m.price_currency || "USD"
+                                            m.price_currency || m.settlement_currency || "USD"
                                         )}
                                 </td>
 
