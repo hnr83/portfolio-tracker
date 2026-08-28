@@ -491,14 +491,24 @@ export default function HistoryView() {
 
     const chartYAxis = useMemo(() => {
         const values = chartData.flatMap((row) => {
-            const rowValues = [Number(row[dataKey])];
-            if (metric === "INVESTMENTS") {
-                rowValues.push(Number(row[activeMetric.secondaryKey]));
+            const rowValues = [];
+            const primaryValue = row[dataKey];
+
+            if (primaryValue != null && Number.isFinite(Number(primaryValue))) {
+                rowValues.push(Number(primaryValue));
             }
+
+            if (metric === "INVESTMENTS") {
+                const secondaryValue = row[activeMetric.secondaryKey];
+                if (secondaryValue != null && Number.isFinite(Number(secondaryValue))) {
+                    rowValues.push(Number(secondaryValue));
+                }
+            }
+
             return rowValues;
         });
 
-        return buildNiceAxis(values, true);
+        return buildNiceAxis(values, metric === "PNL");
     }, [chartData, dataKey, metric, activeMetric.secondaryKey]);
 
     const firstRow = chartData[0] || null;
