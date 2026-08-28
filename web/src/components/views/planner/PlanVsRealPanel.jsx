@@ -89,43 +89,26 @@ function ComparisonTooltip({ active, payload, label, metric }) {
   );
 }
 
-export default function PlanVsRealPanel() {
-  const [scenarios, setScenarios] = useState([]);
-  const [scenarioId, setScenarioId] = useState("");
+export default function PlanVsRealPanel({ scenarioId }) {
   const [comparison, setComparison] = useState(null);
   const [metric, setMetric] = useState("value");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        const response = await apiFetch("/api/planner/scenarios");
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const rows = await response.json();
-        if (cancelled) return;
-        const list = Array.isArray(rows) ? rows : [];
-        setScenarios(list);
-        if (list.length) setScenarioId((current) => current || list[0].id);
-      } catch {
-        if (!cancelled) setError("No se pudieron cargar los escenarios para comparar.");
-      }
-    }
-    load();
-    return () => { cancelled = true; };
-  }, []);
-
-  useEffect(() => {
     if (!scenarioId) {
       setComparison(null);
+      setError("");
+      setLoading(false);
       return;
     }
+
     let cancelled = false;
     async function loadComparison() {
       try {
         setLoading(true);
         setError("");
+        setComparison(null);
         const response = await apiFetch(`/api/planner/scenarios/${scenarioId}/comparison`);
         const body = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(body.error || `HTTP ${response.status}`);
@@ -136,6 +119,7 @@ export default function PlanVsRealPanel() {
         if (!cancelled) setLoading(false);
       }
     }
+
     loadComparison();
     return () => { cancelled = true; };
   }, [scenarioId]);
@@ -146,10 +130,9 @@ export default function PlanVsRealPanel() {
     [comparison]
   );
   const summary = comparison?.summary;
-  const selectedScenario = scenarios.find((scenario) => scenario.id === scenarioId);
   const hasHistory = visibleSeries.length >= 2;
 
-  if (!scenarios.length && !error) return null;
+  if (!scenarioId) return null;
 
   return (
     <section className="rounded-[30px] border border-indigo-500/20 bg-[linear-gradient(135deg,rgba(15,23,42,0.96),rgba(2,6,23,0.98))] p-5 shadow-[0_20px_70px_rgba(0,0,0,0.35)] md:p-6">
@@ -159,9 +142,9 @@ export default function PlanVsRealPanel() {
         <p className="mt-1 text-sm text-slate-400">
           Separá cuánto del resultado viene de performance, cuánto de aportes y cuánto se refleja en patrimonio.
         </p>
-        {selectedScenario && (
+        {comparison?.scenario && (
           <div className="mt-3 inline-flex rounded-full border border-indigo-500/20 bg-indigo-500/10 px-3 py-1.5 text-xs text-indigo-200">
-            {selectedScenario.name} · desde {formatDate(selectedScenario.scenario_date)}
+            {comparison.scenario.name} · desde {formatDate(comparison.scenario.scenario_date)}
           </div>
         )}
       </div>
