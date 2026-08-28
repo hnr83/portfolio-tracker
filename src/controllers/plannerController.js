@@ -13,6 +13,16 @@ function buenosAiresDate(value = new Date()) {
   const get = (type) => parts.find((p) => p.type === type)?.value;
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
+function utcDate(value) { return new Date(`${value}T00:00:00Z`); }
+function addUtcDays(date, days) { const next = new Date(date); next.setUTCDate(next.getUTCDate() + days); return next; }
+function dateDiffDays(from, to) { return Math.round((utcDate(to) - utcDate(from)) / 86400000); }
+function isMonthlyAnniversary(date, scenarioDate) {
+  const start = utcDate(scenarioDate); const current = utcDate(date);
+  if (current <= start) return false;
+  const targetDay = start.getUTCDate();
+  const lastDay = new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() + 1, 0)).getUTCDate();
+  return current.getUTCDate() === Math.min(targetDay, lastDay);
+}
 
 function buildMonthlyProjection({ scenarioDate, initialCapital, initialContributions, monthlyContribution, years, annualReturn }) {
   const points = []; const start = new Date(`${scenarioDate}T00:00:00Z`);
@@ -47,26 +57,129 @@ async function getScenarioComparison(req, res) {
     await ensurePlannerTables();
     const scenarios = await runQuery(`SELECT * FROM ${table("planner_scenarios")} WHERE id = @id LIMIT 1`, { id: req.params.id });
     if (!scenarios.length) return res.status(404).json({ error: "Scenario not found" });
-    const scenario = scenarios[0]; const scenarioDate = unwrapDate(scenario.scenario_date); const initialContributions = Number(scenario.initial_contributions_usd || 0);
-    const createdAt = scenario.created_at?.value || scenario.created_at; const createdLocalDate = createdAt ? buenosAiresDate(new Date(createdAt)) : null;
+
+    const scenario = scenarios[0];
+    const scenarioDate = unwrapDate(scenario.scenario_date);
+    const createdAt = scenario.created_at?.value || scenario.created_at;
+    const createdLocalDate = createdAt ? buenosAiresDate(new Date(createdAt)) : null;
     const isCapturedLive = createdLocalDate === scenarioDate;
     const frozenBaseline = isCapturedLive ? Number(scenario.initial_capital_usd || 0) : Number(scenario.baseline_real_value_usd ?? scenario.initial_capital_usd ?? 0);
+    const annualReturn = Number(scenario.annual_return_pct || 0);
+    const monthlyContribution = Number(scenario.monthly_contribution_usd || 0);
+    const dailyRate = Math.pow(1 + annualReturn / 100, 1 / 365) - 1;
+    const monthlyRate = Math.pow(1 + annualReturn / 100, 1 / 12) - 1;
 
-    const [planPoints, realSnapshots, monthlyPerformance] = await Promise.all([
-      runQuery(`SELECT point_date,month_index,CAST(projected_value_usd AS FLOAT64) AS projected_value_usd,CAST(projected_contributions_usd AS FLOAT64) AS projected_contributions_usd,CAST(projected_performance_pct AS FLOAT64) AS projected_performance_pct FROM ${table("planner_scenario_points")} WHERE scenario_id = @id ORDER BY month_index ASC`, { id: req.params.id }),
+    const [realSnapshots, monthlyPerformance] = await Promise.all([
       runQuery(`SELECT snapshot_date,CAST(investments_usd AS FLOAT64) AS real_value_usd FROM ${table("portfolio_snapshots")} WHERE snapshot_date >= @scenarioDate ORDER BY snapshot_date ASC`, { scenarioDate }),
       runQuery(`SELECT month_date,start_date,end_date,CAST(net_asset_flow_usd AS FLOAT64) AS net_asset_flow_usd,CAST(adjusted_performance_pct AS FLOAT64) AS adjusted_performance_pct FROM ${table("vw_portfolio_calendar_month_performance_adjusted")} WHERE end_date >= @scenarioDate ORDER BY month_date ASC`, { scenarioDate }),
     ]);
-    const snapshots = realSnapshots.map((r) => ({ date: unwrapDate(r.snapshot_date), value: Number(r.real_value_usd || 0) }));
-    const completePeriods = monthlyPerformance.map((r) => ({ startDate: unwrapDate(r.start_date), endDate: unwrapDate(r.end_date), netFlow: Number(r.net_asset_flow_usd || 0), performancePct: Number(r.adjusted_performance_pct || 0) })).filter((r) => r.startDate && r.startDate >= scenarioDate);
-    function latestSnapshotOnOrBefore(date) { let match = null; for (const row of snapshots) { if (row.date <= date) match = row; else break; } return match; }
-    function actualsThrough(date) { let contributions = 0, twrFactor = 1, has = false; for (const row of completePeriods) { if (row.endDate && row.endDate <= date) { contributions += row.netFlow; twrFactor *= 1 + row.performancePct / 100; has = true; } } return { real_contributions_usd: contributions, real_performance_pct: has ? (twrFactor - 1) * 100 : 0 }; }
+
+    const snapshots = realSnapshots
+      .map((r) => ({ date: unwrapDate(r.snapshot_date), value: Number(r.real_value_usd || 0) }))
+      .filter((r) => r.date && r.date >= scenarioDate);
+
+    const completePeriods = monthlyPerformance
+      .map((r) => ({ startDate: unwrapDate(r.start_date), endDate: unwrapDate(r.end_date), netFlow: Number(r.net_asset_flow_usd || 0), performancePct: Number(r.adjusted_performance_pct || 0) }))
+      .filter((r) => r.startDate && r.startDate >= scenarioDate);
+
+    function monthlyActualsThrough(date) {
+      let contributions = 0, twrFactor = 1, count = 0;
+      for (const row of completePeriods) {
+        if (row.endDate && row.endDate <= date) {
+          contributions += row.netFlow;
+          twrFactor *= 1 + row.performancePct / 100;
+          count += 1;
+        }
+      }
+      return {
+        completePeriods: count,
+        real_contributions_usd: contributions,
+        real_performance_pct: count ? (twrFactor - 1) * 100 : 0,
+        plan_contributions_usd: count * monthlyContribution,
+        plan_performance_pct: count ? (Math.pow(1 + monthlyRate, count) - 1) * 100 : 0,
+      };
+    }
+
     const today = buenosAiresDate();
-    const series = planPoints.map((point) => { const date = unwrapDate(point.point_date); const snapshot = date <= today ? latestSnapshotOnOrBefore(date) : null; const actual = date <= today ? actualsThrough(date) : null; return { date, month_index: Number(point.month_index || 0), plan_value_usd: Number(point.projected_value_usd || 0), real_value_usd: snapshot?.value ?? null, plan_performance_pct: Number(point.projected_performance_pct || 0), real_performance_pct: actual?.real_performance_pct ?? null, plan_contributions_usd: Number(point.projected_contributions_usd || 0) - initialContributions, real_contributions_usd: actual?.real_contributions_usd ?? null }; });
-    if (series.length) series[0] = { ...series[0], plan_value_usd: frozenBaseline, real_value_usd: frozenBaseline, real_performance_pct: 0, real_contributions_usd: 0 };
-    const comparableRows = series.filter((row) => row.real_value_usd != null); const latest = comparableRows[comparableRows.length - 1] || series[0] || null;
-    const summary = latest ? { as_of: latest.date, plan_value_usd: latest.plan_value_usd, real_value_usd: latest.real_value_usd, value_delta_usd: latest.real_value_usd == null ? null : latest.real_value_usd - latest.plan_value_usd, value_delta_pct: latest.real_value_usd == null || !latest.plan_value_usd ? null : ((latest.real_value_usd - latest.plan_value_usd) / latest.plan_value_usd) * 100, plan_performance_pct: latest.plan_performance_pct, real_performance_pct: latest.real_performance_pct, performance_delta_pp: latest.real_performance_pct == null ? null : latest.real_performance_pct - latest.plan_performance_pct, plan_contributions_usd: latest.plan_contributions_usd, real_contributions_usd: latest.real_contributions_usd, contributions_delta_usd: latest.real_contributions_usd == null ? null : latest.real_contributions_usd - latest.plan_contributions_usd, contributions_fulfillment_pct: latest.real_contributions_usd == null || !latest.plan_contributions_usd ? null : (latest.real_contributions_usd / latest.plan_contributions_usd) * 100 } : null;
-    res.json({ scenario: { id: scenario.id, name: scenario.name, scenario_date: scenarioDate, created_at: createdAt, baseline_snapshot_date: unwrapDate(scenario.baseline_snapshot_date), baseline_value_usd: frozenBaseline, baseline_source: isCapturedLive ? "captured_at_save" : "historical_snapshot" }, methodology: { portfolio_value: "portfolio_snapshots.investments_usd", performance: "Compounded adjusted monthly performance (TWR-style), rebased to 0% at scenario date", contributions: "Accumulated net_asset_flow_usd from complete adjusted monthly periods after scenario date", partial_first_month_included: false }, summary, series });
+    const snapshotByDate = new Map(snapshots.map((row) => [row.date, row.value]));
+    const actualDates = snapshots.map((row) => row.date).filter((date) => date > scenarioDate && date <= today);
+    const endDate = actualDates[actualDates.length - 1] || scenarioDate;
+    const planByDate = new Map([[scenarioDate, frozenBaseline]]);
+    let planValue = frozenBaseline;
+    let cursor = utcDate(scenarioDate);
+    const totalDays = Math.max(0, dateDiffDays(scenarioDate, endDate));
+
+    for (let i = 1; i <= totalDays; i += 1) {
+      cursor = addUtcDays(cursor, 1);
+      const date = cursor.toISOString().slice(0, 10);
+      planValue *= 1 + dailyRate;
+      if (isMonthlyAnniversary(date, scenarioDate)) planValue += monthlyContribution;
+      planByDate.set(date, planValue);
+    }
+
+    const series = [{
+      date: scenarioDate,
+      month_index: 0,
+      plan_value_usd: frozenBaseline,
+      real_value_usd: frozenBaseline,
+      plan_performance_pct: 0,
+      real_performance_pct: 0,
+      plan_contributions_usd: 0,
+      real_contributions_usd: 0,
+    }];
+
+    for (const date of actualDates) {
+      const monthly = monthlyActualsThrough(date);
+      series.push({
+        date,
+        month_index: monthly.completePeriods,
+        plan_value_usd: planByDate.get(date) ?? frozenBaseline,
+        real_value_usd: snapshotByDate.get(date) ?? null,
+        plan_performance_pct: monthly.plan_performance_pct,
+        real_performance_pct: monthly.real_performance_pct,
+        plan_contributions_usd: monthly.plan_contributions_usd,
+        real_contributions_usd: monthly.real_contributions_usd,
+      });
+    }
+
+    const latest = series[series.length - 1] || null;
+    const summary = latest ? {
+      as_of: latest.date,
+      plan_value_usd: latest.plan_value_usd,
+      real_value_usd: latest.real_value_usd,
+      value_delta_usd: latest.real_value_usd == null ? null : latest.real_value_usd - latest.plan_value_usd,
+      value_delta_pct: latest.real_value_usd == null || !latest.plan_value_usd ? null : ((latest.real_value_usd - latest.plan_value_usd) / latest.plan_value_usd) * 100,
+      plan_performance_pct: latest.plan_performance_pct,
+      real_performance_pct: latest.real_performance_pct,
+      performance_delta_pp: latest.real_performance_pct == null ? null : latest.real_performance_pct - latest.plan_performance_pct,
+      plan_contributions_usd: latest.plan_contributions_usd,
+      real_contributions_usd: latest.real_contributions_usd,
+      contributions_delta_usd: latest.real_contributions_usd == null ? null : latest.real_contributions_usd - latest.plan_contributions_usd,
+      contributions_fulfillment_pct: latest.real_contributions_usd == null || !latest.plan_contributions_usd ? null : (latest.real_contributions_usd / latest.plan_contributions_usd) * 100,
+    } : null;
+
+    res.json({
+      scenario: {
+        id: scenario.id,
+        name: scenario.name,
+        scenario_date: scenarioDate,
+        created_at: createdAt,
+        baseline_snapshot_date: unwrapDate(scenario.baseline_snapshot_date),
+        baseline_value_usd: frozenBaseline,
+        baseline_source: isCapturedLive ? "captured_at_save" : "historical_snapshot",
+      },
+      methodology: {
+        portfolio_value: "Daily portfolio_snapshots.investments_usd compared with a daily plan grown from the frozen baseline using the saved annual return; monthly contributions are applied on each scenario-date anniversary",
+        performance: "Compounded adjusted monthly performance (TWR-style), shown only through complete periods",
+        contributions: "Accumulated net_asset_flow_usd from complete adjusted monthly periods after scenario date",
+        portfolio_frequency: "daily",
+        performance_frequency: "monthly_complete_periods",
+        contributions_frequency: "monthly_complete_periods",
+        partial_first_month_included: false,
+      },
+      summary,
+      series,
+    });
   } catch (error) { console.error("Error comparing planner scenario:", error); res.status(500).json({ error: "Error comparing planner scenario" }); }
 }
 
