@@ -335,11 +335,33 @@ function BenchmarkTooltip({ active, payload, label }) {
     );
 }
 
+function AccountingMetric({ label, value, helper, positive }) {
+    return (
+        <div className="rounded-2xl border border-slate-800/70 bg-slate-950/35 px-4 py-4">
+            <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">
+                {label}
+            </div>
+            <div
+                className={`mt-2 text-lg font-semibold tabular-nums md:text-xl ${positive === undefined
+                        ? "text-white"
+                        : positive
+                            ? "text-emerald-400"
+                            : "text-red-400"
+                    }`}
+            >
+                {formatCurrency(value, "USD")}
+            </div>
+            {helper ? <div className="mt-1 text-xs text-slate-500">{helper}</div> : null}
+        </div>
+    );
+}
+
 export default function HistoryView() {
     const [range, setRange] = useState("YTD");
     const [metric, setMetric] = useState("INVESTMENTS");
     const [history, setHistory] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [currentSummary, setCurrentSummary] = useState(null);
 
     const [historyMode, setHistoryMode] = useState("evolution");
     const [benchmarkCode, setBenchmarkCode] = useState("SPY");
@@ -368,6 +390,21 @@ export default function HistoryView() {
 
         loadHistory();
     }, [range]);
+
+    useEffect(() => {
+        async function loadCurrentSummary() {
+            try {
+                const res = await apiFetch("/api/portfolio/summary");
+                const data = await res.json();
+                setCurrentSummary(res.ok && data && typeof data === "object" ? data : null);
+            } catch (error) {
+                console.error("Error loading accounting summary:", error);
+                setCurrentSummary(null);
+            }
+        }
+
+        loadCurrentSummary();
+    }, []);
 
     useEffect(() => {
         async function loadBenchmark() {
@@ -455,6 +492,19 @@ export default function HistoryView() {
                 row.total_pnl_pct == null || row.total_pnl_pct === ""
                     ? null
                     : Number(row.total_pnl_pct),
+            liquidity_usd:
+                row.liquidity_usd == null || row.liquidity_usd === ""
+                    ? null
+                    : Number(row.liquidity_usd),
+            crypto_usd:
+                row.crypto_usd == null || row.crypto_usd === ""
+                    ? null
+                    : Number(row.crypto_usd),
+            trading_retained_result_usd:
+                row.trading_retained_result_usd == null ||
+                row.trading_retained_result_usd === ""
+                    ? null
+                    : Number(row.trading_retained_result_usd),
             cumulative_net_contributions_usd:
                 row.cumulative_net_contributions_usd == null ||
                 row.cumulative_net_contributions_usd === ""
@@ -547,6 +597,36 @@ export default function HistoryView() {
 
     const investmentsPeriodPositive = investmentsPeriodChangeUsd >= 0;
     const investmentsCostPeriodPositive = investmentsCostPeriodChangeUsd >= 0;
+
+    const accounting = useMemo(() => {
+        const contributions = Number(lastRow?.cumulative_net_contributions_usd || 0);
+        const costBasis = Number(lastRow?.investments_cost_usd || 0);
+        const investmentsValue = Number(lastRow?.investments_usd || 0);
+        const unrealizedPnl = investmentsValue - costBasis;
+        const usd = Number(lastRow?.liquidity_usd || 0);
+        const usdt = Number(lastRow?.crypto_usd || 0);
+        const trading = Number(lastRow?.trading_retained_result_usd || 0);
+        const patrimony = Number(lastRow?.market_value_usd || 0);
+        const realizedPnl = Number(currentSummary?.realized_pnl_usd || 0);
+        const generatedAboveContributions = patrimony - contributions;
+        const reconstructedPatrimony = costBasis + unrealizedPnl + usd + usdt + trading;
+        const reconciliationDifference = patrimony - reconstructedPatrimony;
+
+        return {
+            contributions,
+            costBasis,
+            unrealizedPnl,
+            realizedPnl,
+            usd,
+            usdt,
+            trading,
+            patrimony,
+            generatedAboveContributions,
+            reconstructedPatrimony,
+            reconciliationDifference,
+            closes: Math.abs(reconciliationDifference) <= 1,
+        };
+    }, [lastRow, currentSummary]);
 
     const investmentsCagr = useMemo(() => {
         if (!["1A", "MAX"].includes(range)) return null;
@@ -953,6 +1033,112 @@ export default function HistoryView() {
                     )}
                 </div>
             </div>
+
+            {lastRow && (
+                <div className="rounded-2xl border border-slate-800/80 bg-[linear-gradient(180deg,rgba(12,18,40,0.82)_0%,rgba(6,10,28,0.9)_100%)] p-4 md:rounded-[24px] md:p-6">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div>
+                            <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500 md:text-xs">
+                                Foto contable actual
+                            </div>
+                            <div className="mt-1 text-lg font-semibold text-white md:text-xl">
+                                Cómo cierra el patrimonio de hoy
+                            </div>
+                            <p className="mt-2 max-w-3xl text-sm text-slate-400">
+                                Aportes netos miden capital externo. Cost basis, PnL no realizado, USD, USDT y Trading explican dónde está hoy ese capital y el resultado generado.
+                            </p>
+                        </div>
+
+                        <div
+                            className={`w-fit rounded-full border px-3 py-1.5 text-xs font-semibold ${accounting.closes
+                                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                                    : "border-amber-500/30 bg-amber-500/10 text-amber-300"
+                                }`}
+                        >
+                            {accounting.closes
+                                ? "Conciliación OK"
+                                : `Diferencia ${formatCurrency(accounting.reconciliationDifference, "USD")}`}
+                        </div>
+                    </div>
+
+                    <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                        <AccountingMetric
+                            label="Aportes netos"
+                            value={accounting.contributions}
+                            helper="Entradas externas − salidas externas"
+                        />
+                        <AccountingMetric
+                            label="Cost basis Investments"
+                            value={accounting.costBasis}
+                            helper="Costo de posiciones abiertas"
+                        />
+                        <AccountingMetric
+                            label="PnL no realizado"
+                            value={accounting.unrealizedPnl}
+                            helper="Valor Investments − cost basis"
+                            positive={accounting.unrealizedPnl >= 0}
+                        />
+                        <AccountingMetric
+                            label="PnL realizado"
+                            value={accounting.realizedPnl}
+                            helper="Histórico FIFO · no se suma otra vez al patrimonio"
+                            positive={accounting.realizedPnl >= 0}
+                        />
+                        <AccountingMetric
+                            label="USD"
+                            value={accounting.usd}
+                            helper="Liquidez USD actual"
+                        />
+                        <AccountingMetric
+                            label="USDT"
+                            value={accounting.usdt}
+                            helper="Liquidez crypto actual"
+                        />
+                        <AccountingMetric
+                            label="Trading"
+                            value={accounting.trading}
+                            helper="Saldo / resultado retenido"
+                            positive={accounting.trading >= 0}
+                        />
+                        <AccountingMetric
+                            label="Patrimonio actual"
+                            value={accounting.patrimony}
+                            helper="Investments + USD + USDT + Trading"
+                        />
+                    </div>
+
+                    <div className="mt-5 grid gap-3 lg:grid-cols-2">
+                        <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/[0.06] p-4">
+                            <div className="text-[10px] uppercase tracking-[0.18em] text-indigo-300/70">
+                                Exceso sobre aportes
+                            </div>
+                            <div className="mt-2 text-2xl font-semibold text-white tabular-nums">
+                                {formatCurrency(accounting.generatedAboveContributions, "USD")}
+                            </div>
+                            <div className="mt-1 text-xs text-slate-400">
+                                Patrimonio actual − aportes netos acumulados
+                            </div>
+                        </div>
+
+                        <div className="rounded-2xl border border-slate-800/80 bg-slate-950/40 p-4">
+                            <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">
+                                Prueba patrimonial
+                            </div>
+                            <div className="mt-2 text-sm text-slate-300">
+                                Cost basis + PnL no realizado + USD + USDT + Trading
+                            </div>
+                            <div className="mt-1 flex flex-wrap items-baseline gap-2">
+                                <span className="text-xl font-semibold text-white tabular-nums">
+                                    {formatCurrency(accounting.reconstructedPatrimony, "USD")}
+                                </span>
+                                <span className="text-xs text-slate-500">
+                                    vs {formatCurrency(accounting.patrimony, "USD")}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <div className="rounded-2xl border border-slate-800/80 p-4 md:rounded-[24px] md:p-6">
                 <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
