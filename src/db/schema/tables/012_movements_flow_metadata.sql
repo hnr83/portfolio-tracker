@@ -1,0 +1,5 @@
+ALTER TABLE `{{PROJECT_ID}}.{{DATASET_ID}}.movements`
+ADD COLUMN IF NOT EXISTS flow_type STRING;
+
+ALTER TABLE `{{PROJECT_ID}}.{{DATASET_ID}}.movements`
+ADD COLUMN IF NOT EXISTS transaction_group_id STRING;
