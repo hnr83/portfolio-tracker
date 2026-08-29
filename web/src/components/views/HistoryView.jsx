@@ -256,26 +256,32 @@ function CustomTooltip({ active, payload, label, metric }) {
                         </span>
                     </div>
                 </div>
+            ) : metric === "TOTAL" ? (
+                <div className="mt-2 space-y-1.5 text-sm">
+                    <div className="flex items-center justify-between gap-6">
+                        <span className="text-slate-400">Valor total</span>
+                        <span className="font-semibold text-white">
+                            {formatCurrency(row.market_value_usd, "USD")}
+                        </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-6">
+                        <span className="text-slate-400">Aportes netos</span>
+                        <span className="font-semibold text-white">
+                            {formatCurrency(row.cumulative_net_contributions_usd, "USD")}
+                        </span>
+                    </div>
+                </div>
             ) : (
                 <>
-                    <div className="mt-3 text-sm text-slate-300">
-                        {metric === "TOTAL" ? "Valor total" : "PnL"}
-                    </div>
+                    <div className="mt-3 text-sm text-slate-300">PnL</div>
 
                     <div className="text-lg font-semibold text-white">
-                        {metric === "TOTAL"
-                            ? formatCurrency(
-                                row.total_with_trading_usd ?? row.market_value_usd,
-                                "USD"
-                            )
-                            : formatCurrency(row.total_pnl_usd, "USD")}
+                        {formatCurrency(row.total_pnl_usd, "USD")}
                     </div>
 
-                    {metric === "PNL" && (
-                        <div className="mt-1 text-sm text-slate-400">
-                            {formatPercentFromDecimal(row.total_pnl_pct)}
-                        </div>
-                    )}
+                    <div className="mt-1 text-sm text-slate-400">
+                        {formatPercentFromDecimal(row.total_pnl_pct)}
+                    </div>
                 </>
             )}
         </div>
@@ -449,6 +455,11 @@ export default function HistoryView() {
                 row.total_pnl_pct == null || row.total_pnl_pct === ""
                     ? null
                     : Number(row.total_pnl_pct),
+            cumulative_net_contributions_usd:
+                row.cumulative_net_contributions_usd == null ||
+                row.cumulative_net_contributions_usd === ""
+                    ? null
+                    : Number(row.cumulative_net_contributions_usd),
         }));
     }, [history]);
 
@@ -456,7 +467,9 @@ export default function HistoryView() {
         TOTAL: {
             key: "market_value_usd",
             color: "#7c83ff",
-            label: "Valor total USD",
+            secondaryKey: "cumulative_net_contributions_usd",
+            secondaryColor: "#f59e0b",
+            label: "Patrimonio vs aportes netos",
             kpiLabel: "Valor actual",
         },
         INVESTMENTS: {
@@ -498,7 +511,7 @@ export default function HistoryView() {
                 rowValues.push(Number(primaryValue));
             }
 
-            if (metric === "INVESTMENTS") {
+            if (metric === "INVESTMENTS" || metric === "TOTAL") {
                 const secondaryValue = row[activeMetric.secondaryKey];
                 if (secondaryValue != null && Number.isFinite(Number(secondaryValue))) {
                     rowValues.push(Number(secondaryValue));
@@ -821,7 +834,7 @@ export default function HistoryView() {
 
                                 <Tooltip content={<CustomTooltip metric={metric} />} />
 
-                                {metric === "INVESTMENTS" && (
+                                {(metric === "INVESTMENTS" || metric === "TOTAL") && (
                                     <Legend
                                         wrapperStyle={{
                                             color: "#cbd5e1",
@@ -841,7 +854,9 @@ export default function HistoryView() {
                                     name={
                                         metric === "INVESTMENTS"
                                             ? "Valor actual"
-                                            : activeMetric.label
+                                            : metric === "TOTAL"
+                                                ? "Valor portfolio"
+                                                : activeMetric.label
                                     }
                                 />
 
@@ -855,6 +870,20 @@ export default function HistoryView() {
                                         activeDot={{ r: 4 }}
                                         isAnimationActive={false}
                                         name="Costo"
+                                    />
+                                )}
+
+                                {metric === "TOTAL" && (
+                                    <Line
+                                        type="monotone"
+                                        dataKey={activeMetric.secondaryKey}
+                                        stroke={activeMetric.secondaryColor}
+                                        strokeWidth={2}
+                                        strokeDasharray="6 4"
+                                        dot={false}
+                                        activeDot={{ r: 4 }}
+                                        isAnimationActive={false}
+                                        name="Aportes netos"
                                     />
                                 )}
                             </LineChart>
