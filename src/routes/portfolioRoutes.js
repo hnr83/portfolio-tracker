@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { getSummary } = require('../controllers/summaryController');
+const { getNetContributionsHistory } = require('../controllers/netContributionsController');
 const {
   getPositions,
   getInvestments,
@@ -26,6 +27,7 @@ router.get("/holdings", getHoldings);
 router.get("/movements", getMovements);
 router.get("/market", getMarket);
 router.get("/history", getHistory);
+router.get("/net-contributions-history", getNetContributionsHistory);
 router.get("/platform-allocation", getPlatformAllocation);
 router.get("/benchmark", getBenchmarkComparison);
 router.get("/performance",getAssetPerformance);
