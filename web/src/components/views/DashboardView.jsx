@@ -231,15 +231,15 @@ export default function DashboardView({
                             subtitle={
                                 hideValues
                                     ? "••••••"
-                                    : `${summary?.total_pnl_usd >= 0 ? "+" : ""}${formatCurrency(
-                                        summary?.total_pnl_usd || 0,
+                                    : `${summary?.unrealized_pnl_usd >= 0 ? "+" : ""}${formatCurrency(
+                                        summary?.unrealized_pnl_usd || 0,
                                         "USD"
                                     )} · ${formatPortfolioPercent(
-                                        (summary?.total_pnl_pct || 0) * 100
+                                        (summary?.unrealized_pnl_pct || 0) * 100
                                     )}`
                             }
                             subtitleClassName={
-                                summary?.total_pnl_usd >= 0
+                                summary?.unrealized_pnl_usd >= 0
                                     ? "text-emerald-400"
                                     : "text-red-400"
                             }
