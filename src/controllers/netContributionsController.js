@@ -100,29 +100,115 @@ async function getHistoryWithNetContributions(req, res) {
     const query = `
       WITH
       ${capitalMovementsCte()},
+      latest_snapshot AS (
+        SELECT MAX(snapshot_date) AS snapshot_date
+        FROM ${table('portfolio_snapshots')}
+        WHERE ${buildRangeFilter(req.query.range, 'snapshot_date')}
+      ),
+      live_portfolio AS (
+        SELECT
+          COALESCE(SUM(CAST(market_value_usd AS FLOAT64)), 0) AS portfolio_market_usd,
+          COALESCE(SUM(CAST(market_value_ars AS FLOAT64)), 0) AS portfolio_market_ars,
+          COALESCE(SUM(CAST(cost_value_usd AS FLOAT64)), 0) AS portfolio_cost_usd,
+          COALESCE(SUM(CAST(cost_value_ars AS FLOAT64)), 0) AS portfolio_cost_ars,
+          COALESCE(SUM(CASE WHEN category = 'PORTFOLIO' THEN CAST(market_value_usd AS FLOAT64) ELSE 0 END), 0) AS investments_usd,
+          COALESCE(SUM(CASE WHEN category = 'PORTFOLIO' THEN CAST(cost_value_usd AS FLOAT64) ELSE 0 END), 0) AS investments_cost_usd,
+          COALESCE(SUM(CASE WHEN category = 'PORTFOLIO' THEN CAST(cost_value_ars AS FLOAT64) ELSE 0 END), 0) AS investments_cost_ars,
+          COALESCE(SUM(CASE WHEN category IN ('CASH', 'FX') THEN CAST(market_value_usd AS FLOAT64) ELSE 0 END), 0) AS liquidity_usd,
+          COALESCE(SUM(CASE WHEN category = 'CRYPTO' THEN CAST(market_value_usd AS FLOAT64) ELSE 0 END), 0) AS crypto_usd,
+          COALESCE(SUM(CASE WHEN category = 'PORTFOLIO' THEN CAST(pnl_usd AS FLOAT64) ELSE 0 END), 0) AS unrealized_pnl_usd,
+          COALESCE(SUM(CASE WHEN category = 'PORTFOLIO' THEN CAST(pnl_ars AS FLOAT64) ELSE 0 END), 0) AS unrealized_pnl_ars,
+          SAFE_DIVIDE(
+            SUM(CASE WHEN category = 'PORTFOLIO' THEN CAST(pnl_usd AS FLOAT64) ELSE 0 END),
+            NULLIF(SUM(CASE WHEN category = 'PORTFOLIO' THEN CAST(cost_value_usd AS FLOAT64) ELSE 0 END), 0)
+          ) AS unrealized_pnl_pct,
+          ANY_VALUE(CAST(usdars AS FLOAT64)) AS usdars
+        FROM ${table('vw_portfolio_valued')}
+      ),
+      live_trading AS (
+        SELECT
+          COALESCE(SUM(CAST(market_value_usd AS FLOAT64)), 0) AS trading_retained_result_usd
+        FROM ${table('vw_trading_balances_valued')}
+      ),
+      live AS (
+        SELECT
+          p.*,
+          t.trading_retained_result_usd,
+          p.portfolio_market_usd + t.trading_retained_result_usd AS total_with_trading_usd,
+          p.portfolio_market_ars + t.trading_retained_result_usd * COALESCE(p.usdars, 0) AS total_with_trading_ars
+        FROM live_portfolio p
+        CROSS JOIN live_trading t
+      ),
       history AS (
         SELECT
           s.snapshot_date,
-          COALESCE(s.total_with_trading_usd, s.market_value_usd) AS market_value_usd,
-          s.market_value_ars,
-          s.cost_value_usd,
-          s.cost_value_ars,
-          s.total_pnl_usd,
-          s.total_pnl_ars,
-          s.total_pnl_pct,
-          s.investments_usd,
-          s.investments_cost_usd,
-          s.investments_cost_ars,
-          s.liquidity_usd,
-          s.crypto_usd,
-          COALESCE(s.trading_retained_result_usd, 0) AS trading_retained_result_usd,
-          COALESCE(s.total_with_trading_usd, s.market_value_usd) AS total_with_trading_usd,
+          CASE
+            WHEN s.snapshot_date = ls.snapshot_date THEN l.total_with_trading_usd
+            ELSE COALESCE(s.total_with_trading_usd, s.market_value_usd)
+          END AS market_value_usd,
+          CASE
+            WHEN s.snapshot_date = ls.snapshot_date THEN l.total_with_trading_ars
+            ELSE s.market_value_ars
+          END AS market_value_ars,
+          CASE
+            WHEN s.snapshot_date = ls.snapshot_date THEN l.portfolio_cost_usd
+            ELSE s.cost_value_usd
+          END AS cost_value_usd,
+          CASE
+            WHEN s.snapshot_date = ls.snapshot_date THEN l.portfolio_cost_ars
+            ELSE s.cost_value_ars
+          END AS cost_value_ars,
+          CASE
+            WHEN s.snapshot_date = ls.snapshot_date THEN l.unrealized_pnl_usd
+            ELSE s.total_pnl_usd
+          END AS total_pnl_usd,
+          CASE
+            WHEN s.snapshot_date = ls.snapshot_date THEN l.unrealized_pnl_ars
+            ELSE s.total_pnl_ars
+          END AS total_pnl_ars,
+          CASE
+            WHEN s.snapshot_date = ls.snapshot_date THEN l.unrealized_pnl_pct
+            ELSE s.total_pnl_pct
+          END AS total_pnl_pct,
+          CASE
+            WHEN s.snapshot_date = ls.snapshot_date THEN l.investments_usd
+            ELSE s.investments_usd
+          END AS investments_usd,
+          CASE
+            WHEN s.snapshot_date = ls.snapshot_date THEN l.investments_cost_usd
+            ELSE s.investments_cost_usd
+          END AS investments_cost_usd,
+          CASE
+            WHEN s.snapshot_date = ls.snapshot_date THEN l.investments_cost_ars
+            ELSE s.investments_cost_ars
+          END AS investments_cost_ars,
+          CASE
+            WHEN s.snapshot_date = ls.snapshot_date THEN l.liquidity_usd
+            ELSE s.liquidity_usd
+          END AS liquidity_usd,
+          CASE
+            WHEN s.snapshot_date = ls.snapshot_date THEN l.crypto_usd
+            ELSE s.crypto_usd
+          END AS crypto_usd,
+          CASE
+            WHEN s.snapshot_date = ls.snapshot_date THEN l.trading_retained_result_usd
+            ELSE COALESCE(s.trading_retained_result_usd, 0)
+          END AS trading_retained_result_usd,
+          CASE
+            WHEN s.snapshot_date = ls.snapshot_date THEN l.total_with_trading_usd
+            ELSE COALESCE(s.total_with_trading_usd, s.market_value_usd)
+          END AS total_with_trading_usd,
           COALESCE((
             SELECT SUM(d.net_flow_usd)
             FROM daily_capital d
-            WHERE d.fecha <= s.snapshot_date
+            WHERE d.fecha <= CASE
+              WHEN s.snapshot_date = ls.snapshot_date THEN CURRENT_DATE()
+              ELSE s.snapshot_date
+            END
           ), 0) AS cumulative_net_contributions_usd
         FROM ${table('portfolio_snapshots')} s
+        CROSS JOIN latest_snapshot ls
+        CROSS JOIN live l
         WHERE ${dateFilter}
       )
       SELECT *
