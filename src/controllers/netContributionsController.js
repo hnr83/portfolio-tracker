@@ -68,7 +68,7 @@ async function getNetContributionsHistory(req, res) {
 
     const query = `
       WITH
-      ${capitalMovementsCte()}
+      ${capitalMovementsCte()},
       snapshots AS (
         SELECT snapshot_date
         FROM ${table('portfolio_snapshots')}
@@ -99,7 +99,7 @@ async function getHistoryWithNetContributions(req, res) {
 
     const query = `
       WITH
-      ${capitalMovementsCte()}
+      ${capitalMovementsCte()},
       history AS (
         SELECT
           s.snapshot_date,
