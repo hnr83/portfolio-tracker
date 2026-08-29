@@ -46,7 +46,7 @@ async function getFxRate(fecha) {
   return Number(rows[0].rate);
 }
 
-function createBase(body = {}) {
+function createBase(body = {}, transactionGroupId = null) {
   const { fecha, broker, owner, description } = body;
 
   return {
@@ -56,6 +56,8 @@ function createBase(body = {}) {
     broker: broker || null,
     description: description || null,
     raw_payload: JSON.stringify(body),
+    flow_type: null,
+    transaction_group_id: transactionGroupId,
   };
 }
 
@@ -146,7 +148,8 @@ async function buildRows(body = {}) {
   const { family, action, ticker } = body;
   const validation = validateBody(body);
   const { parsedQuantity, parsedGross, parsedFromQuantity, parsedToQuantity } = validation;
-  const base = createBase(body);
+  const transactionGroupId = crypto.randomUUID();
+  const base = createBase(body, transactionGroupId);
 
   switch (family) {
     case "CASH_USD": {
@@ -160,6 +163,7 @@ async function buildRows(body = {}) {
       return [
         createRow(base, {
           movement_type: action === "IN" ? "INCOME_USD" : "EXPENSE_USD",
+          flow_type: "EXTERNAL",
           category: "CASH",
           ticker: "USD",
           instrument_type: "USD",
@@ -185,6 +189,7 @@ async function buildRows(body = {}) {
       return [
         createRow(base, {
           movement_type: action === "BUY" ? "BUY_USD" : "SELL_USD",
+          flow_type: "EXTERNAL",
           category: "FX",
           ticker: "USD",
           instrument_type: "USD",
@@ -210,6 +215,7 @@ async function buildRows(body = {}) {
       return [
         createRow(base, {
           movement_type: action === "BUY" ? "BUY_USDT" : "SELL_USDT",
+          flow_type: "EXTERNAL",
           category: "CRYPTO",
           ticker: "USDT",
           instrument_type: "USDT",
@@ -248,6 +254,7 @@ async function buildRows(body = {}) {
       if (from_ticker === "USDT") {
         const sellUsdtRow = createRow(base, {
           movement_type: "SELL_USDT",
+          flow_type: "SETTLEMENT",
           category: "CRYPTO",
           ticker: fromRawTicker,
           instrument_type: "USDT",
@@ -266,6 +273,7 @@ async function buildRows(body = {}) {
 
         const buyAssetRow = createRow(base, {
           movement_type: "BUY_ASSET",
+          flow_type: "SETTLEMENT",
           category: "PORTFOLIO",
           ticker: toRawTicker,
           instrument_type: "ASSET",
@@ -288,6 +296,7 @@ async function buildRows(body = {}) {
       if (to_ticker === "USDT") {
         const sellAssetRow = createRow(base, {
           movement_type: "SELL_ASSET",
+          flow_type: "SETTLEMENT",
           category: "PORTFOLIO",
           ticker: fromRawTicker,
           instrument_type: "ASSET",
@@ -306,6 +315,7 @@ async function buildRows(body = {}) {
 
         const buyUsdtRow = createRow(base, {
           movement_type: "BUY_USDT",
+          flow_type: "SETTLEMENT",
           category: "CRYPTO",
           ticker: toRawTicker,
           instrument_type: "USDT",
@@ -348,6 +358,7 @@ async function buildRows(body = {}) {
 
       const assetRow = createRow(base, {
         movement_type: action === "BUY" ? "BUY_ASSET" : "SELL_ASSET",
+        flow_type: "SETTLEMENT",
         category: "PORTFOLIO",
         ticker: cleanTicker,
         instrument_type: "ASSET",
@@ -367,6 +378,7 @@ async function buildRows(body = {}) {
 
       const cashRow = createRow(base, {
         movement_type: action === "BUY" ? "EXPENSE_USD" : "INCOME_USD",
+        flow_type: "SETTLEMENT",
         category: "CASH",
         ticker: "USD",
         instrument_type: "USD",
