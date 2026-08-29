@@ -37,8 +37,8 @@ export default function Sidebar({
     const totalArs = Number(summary?.total_with_trading_ars || 0);
     const investmentsUsd = Number(summary?.investments_market_usd || 0);
 
-    const pnlUsd = Number(summary?.total_pnl_usd || 0);
-    const pnlPct = Number(summary?.total_pnl_pct || 0);
+    const pnlUsd = Number(summary?.unrealized_pnl_usd || 0);
+    const pnlPct = Number(summary?.unrealized_pnl_pct || 0);
     const pnlPositive = pnlUsd >= 0;
 
     const [showMoreMenu, setShowMoreMenu] = useState(false);
