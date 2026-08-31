@@ -75,6 +75,8 @@ export default function CapitalView({ summary, positions }) {
     const contributions = Number(netContributions || 0);
     const reconstructed = costBasis + unrealized + usd + usdt + trading;
     const difference = patrimony - reconstructed;
+    const generated = patrimony - contributions;
+    const generatedPct = contributions !== 0 ? generated / contributions : 0;
 
     return {
       contributions,
@@ -89,7 +91,8 @@ export default function CapitalView({ summary, positions }) {
       usdt,
       reconstructed,
       difference,
-      generated: patrimony - contributions,
+      generated,
+      generatedPct,
       closes: Math.abs(difference) <= 1,
     };
   }, [summary, positions, netContributions, historicalTradingPnl]);
@@ -137,7 +140,10 @@ export default function CapitalView({ summary, positions }) {
           <div>
             <div className="text-[10px] uppercase tracking-[0.2em] text-indigo-300/70">Patrimonio sobre aportes</div>
             <div className="mt-2 text-3xl font-semibold text-white tabular-nums">{formatCurrency(data.generated, "USD")}</div>
-            <div className="mt-1 text-xs text-slate-400">Patrimonio actual − aportes netos · no equivale directamente a PnL</div>
+            <div className={`mt-1 text-sm font-semibold tabular-nums ${data.generatedPct >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+              {data.generatedPct >= 0 ? "+" : ""}{new Intl.NumberFormat("es-AR", { style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(data.generatedPct)} sobre capital neto aportado
+            </div>
+            <div className="mt-1 text-xs text-slate-400">Patrimonio actual − aportes netos · no equivale directamente a rentabilidad</div>
           </div>
           <div>
             <div className="text-[10px] uppercase tracking-[0.2em] text-indigo-300/70">Prueba patrimonial</div>
