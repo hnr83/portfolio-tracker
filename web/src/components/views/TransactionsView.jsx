@@ -36,29 +36,86 @@ export default function TransactionsView({
         return gross / qty;
     };
 
-    const getCurrentPrice = (m) => {
+    const getMarketAsset = (m) => {
         const ticker = normalizeTicker(m.ticker);
 
-        const asset = marketData?.find(
+        return marketData?.find(
             (x) => normalizeTicker(x.ticker) === ticker
-        );
+        ) || null;
+    };
 
+    const getCurrentPrice = (m) => {
+        const asset = getMarketAsset(m);
         if (!asset) return null;
 
-        if (asset.is_cedear && asset.underlying_price_usd && asset.ratio_numerator) {
-            return (
-                Number(asset.underlying_price_usd) *
-                Number(asset.ratio_denominator || 1) /
-                Number(asset.ratio_numerator)
-            );
+        // CEDEARs in marketData are now valued in ARS using CCL.
+        // Return the ARS market price so PnL can be compared against
+        // the actual ARS purchase price, avoiding an artificial FX loss.
+        if (asset.is_cedear) {
+            return asset.market_price == null ? null : Number(asset.market_price);
         }
 
         return asset.market_price == null ? null : Number(asset.market_price);
     };
 
-    const getPnlPct = (m) => {
+    const getComparableBuyPrice = (m) => {
         const buyPrice = getUnitPrice(m);
-        const current = getCurrentPrice(m);
+        if (buyPrice == null) return null;
+
+        const asset = getMarketAsset(m);
+        if (!asset?.is_cedear) return buyPrice;
+
+        // CEDEAR market price is ARS. Historical/manual CEDEAR purchases
+        // may store unit_price in USD while settlement happened in ARS.
+        // Rebuild the actual ARS entry price with the FX recorded on the
+        // transaction, without changing the ledger or its USD cost basis.
+        if (String(m.price_currency || "").toUpperCase() === "ARS") {
+            return buyPrice;
+        }
+
+        const fxRate = Number(m.fx_rate);
+        if (Number.isFinite(fxRate) && fxRate > 0) {
+            return buyPrice * fxRate;
+        }
+
+        // If an old CEDEAR row has no historical FX, keep the previous
+        // USD-comparable fallback instead of inventing an ARS entry price.
+        if (asset.underlying_price_usd && asset.ratio_numerator) {
+            return buyPrice;
+        }
+
+        return null;
+    };
+
+    const getComparableCurrentPrice = (m) => {
+        const asset = getMarketAsset(m);
+        if (!asset) return null;
+
+        if (asset.is_cedear) {
+            const fxRate = Number(m.fx_rate);
+            const priceCurrency = String(m.price_currency || "").toUpperCase();
+
+            if (priceCurrency === "ARS" || (Number.isFinite(fxRate) && fxRate > 0)) {
+                return asset.market_price == null ? null : Number(asset.market_price);
+            }
+
+            // Legacy CEDEAR without purchase FX: compare in USD against
+            // underlying/ratio, matching the old behavior.
+            if (asset.underlying_price_usd && asset.ratio_numerator) {
+                return (
+                    Number(asset.underlying_price_usd) *
+                    Number(asset.ratio_denominator || 1) /
+                    Number(asset.ratio_numerator)
+                );
+            }
+        }
+
+        return getCurrentPrice(m);
+    };
+
+    const getPnlPct = (m) => {
+        const buyPrice = getComparableBuyPrice(m);
+        const current = getComparableCurrentPrice(m);
 
         if (!buyPrice || !current) return null;
 
@@ -71,8 +128,6 @@ export default function TransactionsView({
         selectedAssetMovements?.normalized_ticker || null;
 
     const movementsToShow = filteredAndSortedMovements;
-    console.log("marketData en TransactionsView:", marketData);
-    console.log("primer marketData:", marketData?.[0]);
 
     return (
         <SectionShell className="mt-8">
@@ -126,85 +181,18 @@ export default function TransactionsView({
                 <table className="w-full text-sm">
                     <thead className="bg-slate-950/95 text-slate-400">
                         <tr>
-                            <SortableHeader
-                                label="Fecha"
-                                sortKey="fecha"
-                                sortState={movementSort}
-                                onSort={setMovementSort}
-                            />
-                            <SortableHeader
-                                label="Tipo"
-                                sortKey="movement_type"
-                                sortState={movementSort}
-                                onSort={setMovementSort}
-                            />
-                            <SortableHeader
-                                label="Categoría"
-                                sortKey="category"
-                                sortState={movementSort}
-                                onSort={setMovementSort}
-                            />
-                            <SortableHeader
-                                label="Ticker"
-                                sortKey="ticker"
-                                sortState={movementSort}
-                                onSort={setMovementSort}
-                            />
-                            <SortableHeader
-                                label="Instrumento"
-                                sortKey="instrument_type"
-                                sortState={movementSort}
-                                onSort={setMovementSort}
-                            />
-                            <SortableHeader
-                                label="Cantidad"
-                                sortKey="quantity"
-                                sortState={movementSort}
-                                onSort={setMovementSort}
-                                align="right"
-                            />
-                            <SortableHeader
-                                label="Precio Unit."
-                                sortKey="calculated_unit_price"
-                                sortState={movementSort}
-                                onSort={setMovementSort}
-                                align="right"
-                            />
-
-                            <SortableHeader
-                                label="PnL %"
-                                sortKey="calculated_pnl_pct"
-                                sortState={movementSort}
-                                onSort={setMovementSort}
-                                align="right"
-                            />
-
-                            <SortableHeader
-                                label="Monto Bruto"
-                                sortKey="gross_amount"
-                                sortState={movementSort}
-                                onSort={setMovementSort}
-                                align="right"
-                            />
-                            <SortableHeader
-                                label="Monto Neto"
-                                sortKey="net_amount"
-                                sortState={movementSort}
-                                onSort={setMovementSort}
-                                align="right"
-                            />
-                            <SortableHeader
-                                label="Broker"
-                                sortKey="broker"
-                                sortState={movementSort}
-                                onSort={setMovementSort}
-                            />
-                            <SortableHeader
-                                label="Owner"
-                                sortKey="owner"
-                                sortState={movementSort}
-                                onSort={setMovementSort}
-                            />
+                            <SortableHeader label="Fecha" sortKey="fecha" sortState={movementSort} onSort={setMovementSort} />
+                            <SortableHeader label="Tipo" sortKey="movement_type" sortState={movementSort} onSort={setMovementSort} />
+                            <SortableHeader label="Categoría" sortKey="category" sortState={movementSort} onSort={setMovementSort} />
+                            <SortableHeader label="Ticker" sortKey="ticker" sortState={movementSort} onSort={setMovementSort} />
+                            <SortableHeader label="Instrumento" sortKey="instrument_type" sortState={movementSort} onSort={setMovementSort} />
+                            <SortableHeader label="Cantidad" sortKey="quantity" sortState={movementSort} onSort={setMovementSort} align="right" />
+                            <SortableHeader label="Precio Unit." sortKey="calculated_unit_price" sortState={movementSort} onSort={setMovementSort} align="right" />
+                            <SortableHeader label="PnL %" sortKey="calculated_pnl_pct" sortState={movementSort} onSort={setMovementSort} align="right" />
+                            <SortableHeader label="Monto Bruto" sortKey="gross_amount" sortState={movementSort} onSort={setMovementSort} align="right" />
+                            <SortableHeader label="Monto Neto" sortKey="net_amount" sortState={movementSort} onSort={setMovementSort} align="right" />
+                            <SortableHeader label="Broker" sortKey="broker" sortState={movementSort} onSort={setMovementSort} />
+                            <SortableHeader label="Owner" sortKey="owner" sortState={movementSort} onSort={setMovementSort} />
                         </tr>
                     </thead>
 
@@ -219,70 +207,28 @@ export default function TransactionsView({
                                     : ""
                                     }`}
                             >
-                                <td className="px-4 py-4 text-slate-300">
-                                    {formatDate(m.fecha)}
-                                </td>
-
-                                <td className="px-4 py-4 text-slate-200">
-                                    {m.movement_type}
-                                </td>
-
-                                <td className="px-4 py-4 text-slate-300">
-                                    {m.category}
-                                </td>
-
-                                <td className="px-4 py-4 font-semibold text-white">
-                                    {m.ticker}
-                                </td>
-
-                                <td className="px-4 py-4 text-slate-300">
-                                    {m.instrument_type || "-"}
-                                </td>
-
+                                <td className="px-4 py-4 text-slate-300">{formatDate(m.fecha)}</td>
+                                <td className="px-4 py-4 text-slate-200">{m.movement_type}</td>
+                                <td className="px-4 py-4 text-slate-300">{m.category}</td>
+                                <td className="px-4 py-4 font-semibold text-white">{m.ticker}</td>
+                                <td className="px-4 py-4 text-slate-300">{m.instrument_type || "-"}</td>
                                 <td className="px-4 py-4 text-right tabular-nums text-slate-200">
                                     {m.quantity == null ? "-" : formatNumber(m.quantity, 4)}
                                 </td>
-
                                 <td className="px-4 py-4 text-right tabular-nums text-slate-200">
-                                    {getUnitPrice(m) == null
-                                        ? "-"
-                                        : formatCurrency(getUnitPrice(m), m.price_currency || "USD")}
+                                    {getUnitPrice(m) == null ? "-" : formatCurrency(getUnitPrice(m), m.price_currency || "USD")}
                                 </td>
-
-                                <td
-                                    className={`px-4 py-4 text-right font-semibold ${getPnlPct(m) >= 0 ? "text-emerald-400" : "text-red-400"
-                                        }`}
-                                >
-                                    {getPnlPct(m) == null
-                                        ? "-"
-                                        : `${getPnlPct(m).toFixed(2)}%`}
-                                </td>                                
-
+                                <td className={`px-4 py-4 text-right font-semibold ${getPnlPct(m) >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                                    {getPnlPct(m) == null ? "-" : `${getPnlPct(m).toFixed(2)}%`}
+                                </td>
                                 <td className="px-4 py-4 text-right tabular-nums text-slate-200">
-                                    {m.gross_amount == null
-                                        ? "-"
-                                        : formatCurrency(
-                                            m.gross_amount,
-                                            m.price_currency || m.settlement_currency || "USD"
-                                        )}
+                                    {m.gross_amount == null ? "-" : formatCurrency(m.gross_amount, m.price_currency || m.settlement_currency || "USD")}
                                 </td>
-
                                 <td className="px-4 py-4 text-right tabular-nums text-slate-200">
-                                    {m.net_amount == null
-                                        ? "-"
-                                        : formatCurrency(
-                                            m.net_amount,
-                                            m.price_currency || m.settlement_currency || "USD"
-                                        )}
+                                    {m.net_amount == null ? "-" : formatCurrency(m.net_amount, m.price_currency || m.settlement_currency || "USD")}
                                 </td>
-
-                                <td className="px-4 py-4 text-slate-300">
-                                    {m.broker || "-"}
-                                </td>
-
-                                <td className="px-4 py-4 text-slate-300">
-                                    {m.owner || "-"}
-                                </td>
+                                <td className="px-4 py-4 text-slate-300">{m.broker || "-"}</td>
+                                <td className="px-4 py-4 text-slate-300">{m.owner || "-"}</td>
                             </tr>
                         ))}
                     </tbody>
