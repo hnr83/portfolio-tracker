@@ -5,8 +5,10 @@ WITH monthly AS (
 ),
 
 first_snapshot_year AS (
-  SELECT EXTRACT(YEAR FROM MIN(snapshot_date)) AS year
+  SELECT
+    EXTRACT(YEAR FROM MIN(snapshot_date)) AS year
   FROM `{{PROJECT_ID}}.{{DATASET_ID}}.portfolio_snapshots`
+  WHERE investments_usd IS NOT NULL
 ),
 
 yearly AS (
