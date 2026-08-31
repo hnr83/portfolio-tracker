@@ -21,7 +21,7 @@ function buildRangeFilter(range, field = 'snapshot_date') {
 
 function capitalMovementsCte() {
   return `
-    capital_movements AS (
+    classified_capital_movements AS (
       SELECT
         fecha,
         CASE
@@ -39,8 +39,8 @@ function capitalMovementsCte() {
           ELSE 0
         END AS sign
       FROM ${table('movements')}
-      WHERE fecha IS NOT NULL
-        AND (
+      WHERE
+        (
           source_table = 'transactions_raw'
           OR (
             transaction_group_id IS NULL
@@ -56,6 +56,20 @@ function capitalMovementsCte() {
             AND source_table NOT IN ('bingx_spot', 'trading_transfer')
           )
         )
+    ),
+    capital_movements AS (
+      SELECT
+        fecha,
+        amount_usd,
+        sign
+      FROM classified_capital_movements
+      WHERE fecha IS NOT NULL
+    ),
+    undated_capital AS (
+      SELECT
+        COALESCE(SUM(sign * amount_usd), 0) AS net_flow_usd
+      FROM classified_capital_movements
+      WHERE fecha IS NULL
     ),
     daily_capital AS (
       SELECT
@@ -74,6 +88,10 @@ async function getNetContributionsHistory(req, res) {
     const query = `
       WITH
       ${capitalMovementsCte()},
+      latest_snapshot AS (
+        SELECT MAX(snapshot_date) AS snapshot_date
+        FROM ${table('portfolio_snapshots')}
+      ),
       snapshots AS (
         SELECT snapshot_date
         FROM ${table('portfolio_snapshots')}
@@ -85,8 +103,14 @@ async function getNetContributionsHistory(req, res) {
           SELECT SUM(d.net_flow_usd)
           FROM daily_capital d
           WHERE d.fecha <= s.snapshot_date
-        ), 0) AS cumulative_net_contributions_usd
+        ), 0)
+        + CASE
+            WHEN s.snapshot_date = ls.snapshot_date THEN u.net_flow_usd
+            ELSE 0
+          END AS cumulative_net_contributions_usd
       FROM snapshots s
+      CROSS JOIN latest_snapshot ls
+      CROSS JOIN undated_capital u
       ORDER BY s.snapshot_date ASC
     `;
 
@@ -210,10 +234,15 @@ async function getHistoryWithNetContributions(req, res) {
               WHEN s.snapshot_date = ls.snapshot_date THEN CURRENT_DATE()
               ELSE s.snapshot_date
             END
-          ), 0) AS cumulative_net_contributions_usd
+          ), 0)
+          + CASE
+              WHEN s.snapshot_date = ls.snapshot_date THEN u.net_flow_usd
+              ELSE 0
+            END AS cumulative_net_contributions_usd
         FROM ${table('portfolio_snapshots')} s
         CROSS JOIN latest_snapshot ls
         CROSS JOIN live l
+        CROSS JOIN undated_capital u
         WHERE ${dateFilter}
       )
       SELECT *
