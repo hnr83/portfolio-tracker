@@ -50,7 +50,7 @@ function capitalMovementsCte() {
               AND NOT (
                 source_table = 'cv_usdt_raw'
                 AND movement_type = 'BUY_USDT'
-                AND description IN ('Venta BTC', 'Venta ETH')
+                AND description = 'Venta BTC'
               )
             )
             AND source_table NOT IN ('bingx_spot', 'trading_transfer')
