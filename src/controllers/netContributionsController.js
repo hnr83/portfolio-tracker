@@ -47,6 +47,11 @@ function capitalMovementsCte() {
             AND NOT (
               movement_type IN ('BUY_USDT', 'SELL_USDT')
               AND flow_type = 'SETTLEMENT'
+              AND NOT (
+                source_table = 'cv_usdt_raw'
+                AND movement_type = 'BUY_USDT'
+                AND description IN ('Venta BTC', 'Venta ETH')
+              )
             )
             AND source_table NOT IN ('bingx_spot', 'trading_transfer')
           )
