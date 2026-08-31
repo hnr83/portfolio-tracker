@@ -73,7 +73,7 @@ export default function CapitalView({ summary, positions }) {
       <section className="rounded-[24px] border border-slate-800/80 p-5 md:p-6">
         <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Origen y resultados</div>
         <div className="mt-4 grid gap-3 md:grid-cols-3">
-          <MetricCard label="Aportes netos" value={data.contributions} helper="Entradas externas − salidas externas" />
+          <MetricCard label="Aportes netos" value={data.contributions} helper="Capital externo neto aportado · incluye lo invertido y lo que hoy permanece en USD/USDT" />
           <MetricCard label="PnL realizado" value={data.realized} helper="Ganancia realizada FIFO acumulada" positive={data.realized >= 0} />
           <MetricCard label="Resultado Trading" value={data.trading} helper="Resultado retenido en Trading" positive={data.trading >= 0} />
         </div>
