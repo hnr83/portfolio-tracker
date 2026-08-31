@@ -3,61 +3,48 @@ WITH snapshots AS (
   SELECT
     snapshot_date,
     LAG(snapshot_date) OVER (ORDER BY snapshot_date) AS previous_snapshot_date,
-    LAG(
-      CAST(COALESCE(total_with_trading_usd, market_value_usd) AS FLOAT64)
-    ) OVER (ORDER BY snapshot_date) AS start_value_usd,
-    CAST(COALESCE(total_with_trading_usd, market_value_usd) AS FLOAT64) AS end_value_usd
+    LAG(CAST(investments_usd AS FLOAT64)) OVER (ORDER BY snapshot_date) AS start_value_usd,
+    CAST(investments_usd AS FLOAT64) AS end_value_usd
   FROM `{{PROJECT_ID}}.{{DATASET_ID}}.portfolio_snapshots`
-  WHERE COALESCE(total_with_trading_usd, market_value_usd) IS NOT NULL
-),
-
-capital_movements AS (
-  SELECT
-    id,
-    fecha,
-    CASE
-      WHEN movement_type IN ('BUY_ASSET', 'SELL_ASSET')
-        THEN ABS(SAFE_CAST(net_amount AS FLOAT64))
-      WHEN movement_type IN ('BUY_USD', 'SELL_USD', 'BUY_USDT', 'SELL_USDT')
-        THEN ABS(SAFE_CAST(quantity AS FLOAT64))
-      WHEN movement_type IN ('INCOME_USD', 'EXPENSE_USD')
-        THEN ABS(SAFE_CAST(net_amount AS FLOAT64))
-      ELSE 0
-    END AS amount_usd,
-    CASE
-      WHEN movement_type IN ('BUY_ASSET', 'BUY_USD', 'BUY_USDT', 'INCOME_USD') THEN 1
-      WHEN movement_type IN ('SELL_ASSET', 'SELL_USD', 'SELL_USDT', 'EXPENSE_USD') THEN -1
-      ELSE 0
-    END AS sign
-  FROM `{{PROJECT_ID}}.{{DATASET_ID}}.movements`
-  WHERE fecha IS NOT NULL
-    AND (
-      source_table = 'transactions_raw'
-      OR (
-        transaction_group_id IS NULL
-        AND NOT (
-          movement_type IN ('BUY_USDT', 'SELL_USDT')
-          AND flow_type = 'SETTLEMENT'
-        )
-        AND source_table NOT IN ('bingx_spot', 'trading_transfer')
-      )
-    )
+  WHERE investments_usd IS NOT NULL
 ),
 
 interval_flows AS (
   SELECT
     s.snapshot_date,
-    SUM(CASE WHEN m.sign = 1 THEN m.amount_usd ELSE 0 END) AS buys_usd,
-    SUM(CASE WHEN m.sign = -1 THEN m.amount_usd ELSE 0 END) AS sells_usd,
-    SUM(m.sign * m.amount_usd) AS net_asset_flow_usd,
+    SUM(
+      CASE
+        WHEN m.movement_type = 'BUY_ASSET'
+          THEN ABS(SAFE_CAST(m.net_amount AS FLOAT64))
+        ELSE 0
+      END
+    ) AS buys_usd,
+    SUM(
+      CASE
+        WHEN m.movement_type = 'SELL_ASSET'
+          THEN ABS(SAFE_CAST(m.net_amount AS FLOAT64))
+        ELSE 0
+      END
+    ) AS sells_usd,
+    SUM(
+      CASE
+        WHEN m.movement_type = 'BUY_ASSET'
+          THEN ABS(SAFE_CAST(m.net_amount AS FLOAT64))
+        WHEN m.movement_type = 'SELL_ASSET'
+          THEN -ABS(SAFE_CAST(m.net_amount AS FLOAT64))
+        ELSE 0
+      END
+    ) AS net_asset_flow_usd,
     COUNT(m.id) AS movements_count
   FROM snapshots s
-  LEFT JOIN capital_movements m
+  LEFT JOIN `{{PROJECT_ID}}.{{DATASET_ID}}.movements` m
     ON m.fecha <= s.snapshot_date
    AND (
      s.previous_snapshot_date IS NULL
      OR m.fecha > s.previous_snapshot_date
    )
+   AND m.category = 'PORTFOLIO'
+   AND m.movement_type IN ('BUY_ASSET', 'SELL_ASSET')
   GROUP BY s.snapshot_date
 ),
 
