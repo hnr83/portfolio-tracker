@@ -41,7 +41,25 @@ function capitalMovementsCte() {
       FROM ${table('movements')}
       WHERE
         (
+          -- Legacy direct asset purchases are external capital even though
+          -- their historical flow metadata may say SETTLEMENT.
           source_table = 'transactions_raw'
+
+          -- New transactions explicitly marked EXTERNAL must count even when
+          -- they carry a transaction_group_id.
+          OR flow_type = 'EXTERNAL'
+
+          -- Direct CEDEAR/manual asset purchases against ARS are external
+          -- contributions. They may now carry a group id even though there is
+          -- no USD settlement leg.
+          OR (
+            source_table = 'manual'
+            AND movement_type = 'BUY_ASSET'
+            AND settlement_currency = 'ARS'
+          )
+
+          -- Preserve the legacy null-group classification for historical rows
+          -- whose economics predate the new grouped transaction model.
           OR (
             transaction_group_id IS NULL
             AND NOT (
