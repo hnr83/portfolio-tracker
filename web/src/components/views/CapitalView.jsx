@@ -16,20 +16,46 @@ function MetricCard({ label, value, helper, positive }) {
 
 export default function CapitalView({ summary, positions }) {
   const [netContributions, setNetContributions] = useState(null);
+  const [historicalTradingPnl, setHistoricalTradingPnl] = useState(null);
 
   useEffect(() => {
-    async function loadContributions() {
+    async function loadHistoricalData() {
       try {
-        const res = await apiFetch("/api/portfolio/net-contributions-history?range=MAX");
-        const rows = await res.json();
-        const last = Array.isArray(rows) && rows.length ? rows[rows.length - 1] : null;
-        setNetContributions(last ? Number(last.cumulative_net_contributions_usd || 0) : null);
+        const [contributionsRes, tradingRes] = await Promise.all([
+          apiFetch("/api/portfolio/net-contributions-history?range=MAX"),
+          apiFetch("/api/trading/by-asset"),
+        ]);
+
+        if (!contributionsRes.ok || !tradingRes.ok) {
+          throw new Error("No se pudo cargar el histórico de capital");
+        }
+
+        const [contributionRows, tradingRows] = await Promise.all([
+          contributionsRes.json(),
+          tradingRes.json(),
+        ]);
+
+        const last = Array.isArray(contributionRows) && contributionRows.length
+          ? contributionRows[contributionRows.length - 1]
+          : null;
+
+        setNetContributions(
+          last ? Number(last.cumulative_net_contributions_usd || 0) : null
+        );
+
+        const tradingPnl = Array.isArray(tradingRows)
+          ? tradingRows.reduce((acc, row) => acc + Number(row.pnl_usd || 0), 0)
+          : null;
+
+        setHistoricalTradingPnl(tradingPnl);
       } catch (error) {
-        console.error("Error loading net contributions:", error);
+        console.error("Error loading capital history:", error);
         setNetContributions(null);
+        setHistoricalTradingPnl(null);
       }
     }
-    loadContributions();
+
+    loadHistoricalData();
   }, []);
 
   const data = useMemo(() => {
@@ -38,6 +64,7 @@ export default function CapitalView({ summary, positions }) {
     const unrealized = Number(summary?.unrealized_pnl_usd || 0);
     const realized = Number(summary?.realized_pnl_usd || 0);
     const trading = Number(summary?.trading_retained_result_usd || 0);
+    const tradingPnl = Number(historicalTradingPnl || 0);
     const patrimony = Number(summary?.total_with_trading_usd || 0);
     const usd = (positions || [])
       .filter((p) => ["CASH", "FX"].includes(p.category))
@@ -50,12 +77,22 @@ export default function CapitalView({ summary, positions }) {
     const difference = patrimony - reconstructed;
 
     return {
-      contributions, costBasis, investments, unrealized, realized, trading,
-      patrimony, usd, usdt, reconstructed, difference,
+      contributions,
+      costBasis,
+      investments,
+      unrealized,
+      realized,
+      trading,
+      tradingPnl,
+      patrimony,
+      usd,
+      usdt,
+      reconstructed,
+      difference,
       generated: patrimony - contributions,
       closes: Math.abs(difference) <= 1,
     };
-  }, [summary, positions, netContributions]);
+  }, [summary, positions, netContributions, historicalTradingPnl]);
 
   return (
     <div className="space-y-6 md:space-y-8">
@@ -72,9 +109,10 @@ export default function CapitalView({ summary, positions }) {
 
       <section className="rounded-[24px] border border-slate-800/80 p-5 md:p-6">
         <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Origen y resultados históricos</div>
-        <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
           <MetricCard label="Aportes netos" value={data.contributions} helper="Capital externo neto aportado · incluye lo invertido y lo que hoy permanece en USD/USDT" />
           <MetricCard label="PnL realizado Investments" value={data.realized} helper="Ganancia realizada FIFO acumulada · no se suma otra vez al patrimonio actual" positive={data.realized >= 0} />
+          <MetricCard label="PnL histórico Trading" value={data.tradingPnl} helper="Resultado acumulado de trades cerrados · distinto del saldo que hoy permanece en Trading" positive={data.tradingPnl >= 0} />
         </div>
       </section>
 
