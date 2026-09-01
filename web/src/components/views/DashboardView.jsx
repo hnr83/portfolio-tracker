@@ -50,7 +50,8 @@ export default function DashboardView({
     openAssetTransactions,
     investmentsUsd,
     liquidityUsd,
-    cryptoUsd,
+    dailyPnlUsd,
+    dailyPnlPct,
     compositionMetric,
     setCompositionMetric,
     chartTotalValue,
@@ -222,6 +223,14 @@ export default function DashboardView({
                         />
 
                         <SummaryCard
+                            title="Resultado de hoy"
+                            value={hideValues ? "US$ ••••••" : `${dailyPnlUsd >= 0 ? "+" : ""}${formatCurrency(dailyPnlUsd || 0, "USD")}`}
+                            subtitle={hideValues || dailyPnlPct == null ? "••••••" : `${dailyPnlPct >= 0 ? "+" : ""}${formatPortfolioPercent(dailyPnlPct)}`}
+                            subtitleClassName={dailyPnlUsd >= 0 ? "text-emerald-400" : "text-red-400"}
+                            icon="↕"
+                        />
+
+                        <SummaryCard
                             title="Investments USD"
                             value={
                                 hideValues
@@ -247,7 +256,7 @@ export default function DashboardView({
                         />
 
                         <SummaryCard
-                            title="Liquidez USD"
+                            title="Liquidez USD + USDT"
                             value={
                                 hideValues
                                     ? "US$ ••••••"
@@ -256,15 +265,6 @@ export default function DashboardView({
                             icon="◉"
                         />
 
-                        <SummaryCard
-                            title="Crypto USD"
-                            value={
-                                hideValues
-                                    ? "US$ ••••••"
-                                    : formatCurrency(cryptoUsd, "USD")
-                            }
-                            icon="₿"
-                        />
                     </div>
                 )}
             </div>

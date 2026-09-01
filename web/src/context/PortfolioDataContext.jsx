@@ -33,7 +33,7 @@ export function PortfolioDataProvider({ children }) {
     setHoldings([]);
   }, []);
 
-  const refreshAll = useCallback(async () => {
+  const refreshAll = useCallback(async ({ silent = false } = {}) => {
     const token = window.localStorage.getItem("portfolio-auth-token");
 
     if (!token) {
@@ -43,8 +43,10 @@ export function PortfolioDataProvider({ children }) {
       return;
     }
 
-    setLoading(true);
-    setError("");
+    if (!silent) {
+      setLoading(true);
+      setError("");
+    }
 
     try {
       const [
@@ -112,9 +114,9 @@ export function PortfolioDataProvider({ children }) {
       setLastUpdated(new Date());
     } catch (err) {
       console.error("Error loading portfolio data:", err);
-      setError(err?.message || "Error cargando datos del portfolio");
+      if (!silent) setError(err?.message || "Error cargando datos del portfolio");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [clearData]);
 

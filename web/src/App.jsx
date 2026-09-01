@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import TransactionModal from "./TransactionModal";
 import HistoryView from "./components/views/HistoryView";
 import CapitalView from "./components/views/CapitalView";
@@ -61,6 +61,7 @@ function AppContent() {
   const [marketSearch, setMarketSearch] = useState("");
   const [marketTypeFilter, setMarketTypeFilter] = useState("ALL");
   const [marketSort, setMarketSort] = useState({ key: "change_pct_1d", direction: "desc" });
+  const lastAutomaticRefreshRef = useRef(Date.now());
 
   async function loadAssetMovements(asset) {
     if (!asset) { setAssetMovements([]); return; }
@@ -69,7 +70,7 @@ function AppContent() {
     finally { setAssetMovementsLoading(false); }
   }
 
-  async function loadDashboardExtraData() {
+  const loadDashboardExtraData = useCallback(async function loadDashboardExtraData() {
     try {
       const [investmentsRes, platformAllocationRes] = await Promise.all([apiFetch("/api/portfolio/investments"), apiFetch("/api/portfolio/platform-allocation")]);
       if (!investmentsRes.ok) throw new Error(`Investments HTTP ${investmentsRes.status}`);
@@ -78,9 +79,41 @@ function AppContent() {
       setInvestments(Array.isArray(investmentsData) ? investmentsData : []);
       setPlatformAllocation(Array.isArray(platformAllocationData) ? platformAllocationData : []);
     } catch (err) { console.error("Error loading dashboard extra data:", err); }
-  }
+  }, []);
 
-  useEffect(() => { if (!authToken) return; refreshAll(); loadDashboardExtraData(); }, [authToken, refreshAll]);
+  useEffect(() => { if (!authToken) return; refreshAll(); loadDashboardExtraData(); }, [authToken, refreshAll, loadDashboardExtraData]);
+
+  useEffect(() => {
+    if (!authToken) return undefined;
+
+    let intervalId;
+    const now = new Date();
+    const nextRefresh = new Date(now);
+    nextRefresh.setMinutes(10, 0, 0);
+    if (nextRefresh <= now) nextRefresh.setHours(nextRefresh.getHours() + 1);
+
+    async function refreshSilently() {
+      lastAutomaticRefreshRef.current = Date.now();
+      await Promise.all([refreshAll({ silent: true }), loadDashboardExtraData()]);
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      refreshSilently();
+      intervalId = window.setInterval(refreshSilently, 60 * 60 * 1000);
+    }, nextRefresh.getTime() - now.getTime());
+
+    function refreshWhenReturning() {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastAutomaticRefreshRef.current >= 60 * 60 * 1000) refreshSilently();
+    }
+
+    document.addEventListener("visibilitychange", refreshWhenReturning);
+    return () => {
+      window.clearTimeout(timeoutId);
+      if (intervalId) window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", refreshWhenReturning);
+    };
+  }, [authToken, refreshAll, loadDashboardExtraData]);
 
   async function refreshMarketData() {
     try {
@@ -110,6 +143,29 @@ function AppContent() {
   const liquidityUsd = (positions || []).filter((p) => ["CASH", "FX"].includes(p.category)).reduce((acc, p) => acc + Number(p.market_value_usd || 0), 0);
   const cryptoUsd = (positions || []).filter((p) => p.category === "CRYPTO").reduce((acc, p) => acc + Number(p.market_value_usd || 0), 0);
   const investmentsUsd = (positions || []).filter((p) => p.category === "PORTFOLIO").reduce((acc, p) => acc + Number(p.market_value_usd || 0), 0);
+  const usdtUsd = (positions || []).filter((p) => String(p.normalized_ticker || p.ticker || "").toUpperCase() === "USDT").reduce((acc, p) => acc + Number(p.market_value_usd || 0), 0);
+  const liquidityWithUsdtUsd = liquidityUsd + usdtUsd;
+  const dailyPerformance = useMemo(() => {
+    const normalizeMarketKey = (value) => String(value || "").toUpperCase().replace("CURRENCY:", "").replace(/ARS$/, "").trim();
+    const marketByKey = new Map();
+    (marketData || []).forEach((row) => {
+      const keys = [row.ticker, row.normalized_ticker, row.underlying_ticker].map(normalizeMarketKey).filter(Boolean);
+      keys.forEach((key) => marketByKey.set(key, row));
+    });
+
+    const result = (positions || []).reduce((acc, position) => {
+      if (["CASH", "FX"].includes(position.category)) return acc;
+      const key = normalizeMarketKey(position.underlying_ticker || position.normalized_ticker || position.ticker);
+      const changePct = Number(marketByKey.get(key)?.change_pct_1d);
+      const currentValue = Number(position.market_value_usd || 0);
+      if (!Number.isFinite(changePct) || !Number.isFinite(currentValue) || currentValue <= 0 || changePct <= -1) return acc;
+      const previousValue = currentValue / (1 + changePct);
+      acc.pnlUsd += currentValue - previousValue;
+      acc.previousValueUsd += previousValue;
+      return acc;
+    }, { pnlUsd: 0, previousValueUsd: 0 });
+    return { ...result, pnlPct: result.previousValueUsd > 0 ? (result.pnlUsd / result.previousValueUsd) * 100 : null };
+  }, [positions, marketData]);
   const totalPortfolioUsd = liquidityUsd + cryptoUsd + investmentsUsd;
   const metricConfig = { market_value_usd: { label: "Valor actual", type: "asset" }, cost_value_usd: { label: "Costo", type: "asset" }, platform: { label: "Plataforma", type: "platform" } };
   const chartData = compositionMetric === "platform" ? platformAllocation.filter((row) => Number(row.invested_usd || 0) > 0).map((row) => ({ name: row.broker, value: Number(row.invested_usd || 0) })) : filteredAndSortedInvestments.filter((inv) => Number(inv[compositionMetric] || 0) > 0).map((inv) => ({ name: inv.normalized_ticker || inv.ticker, value: Number(inv[compositionMetric] || 0) }));
@@ -135,7 +191,7 @@ function AppContent() {
       <Sidebar summary={summary} activeView={activeView} setActiveView={setActiveView} setSelectedAssetMovements={setSelectedAssetMovements} authUser={authUser} onLogout={handleLogout} />
       <main className="min-h-screen min-w-0 bg-[radial-gradient(circle_at_top_left,rgba(78,99,255,0.16),transparent_22%),radial-gradient(circle_at_top_right,rgba(23,183,229,0.10),transparent_20%),linear-gradient(180deg,#030817_0%,#020617_100%)] xl:pl-72 2xl:pl-80">
         <div className="mx-auto w-full max-w-[1500px] px-3 pb-28 pt-3 text-[13px] sm:px-4 sm:py-4 lg:px-5 xl:px-6 xl:pb-5 xl:pt-4 2xl:max-w-[1720px] 2xl:px-8 2xl:text-[15px]">
-          {activeView === "dashboard" && <DashboardView summary={summary} showKpis={showKpis} refreshError={refreshError} isRefreshing={isRefreshing} refreshMarketData={refreshMarketData} setIsTransactionModalOpen={setIsTransactionModalOpen} handleToggleKpis={handleToggleKpis} handlePinKpisToggle={handlePinKpisToggle} pinKpis={pinKpis} selectedAssetMovements={selectedAssetMovements} activeView={activeView} KpiVisibilityRail={KpiVisibilityRail} SectionShell={SectionShell} SummaryCard={SummaryCard} FilterToolbar={FilterToolbar} SortableHeader={SortableHeader} formatCurrency={formatCurrency} formatPercent={formatPercent} formatPortfolioPercent={formatPortfolioPercent} formatNumber={formatNumber} chartData={chartData} compositionData={compositionData} activeIndex={activeIndex} setActiveIndex={setActiveIndex} selectedTicker={selectedTicker} setSelectedTicker={setSelectedTicker} filteredAndSortedInvestments={filteredAndSortedInvestments} filteredInvestments={filteredInvestments} investmentSearch={investmentSearch} setInvestmentSearch={setInvestmentSearch} investmentCategoryFilter={investmentCategoryFilter} setInvestmentCategoryFilter={setInvestmentCategoryFilter} investmentSort={investmentSort} setInvestmentSort={setInvestmentSort} openAssetTransactions={(holding) => openAssetDetail(holding, "dashboard")} summaryTotalMarketUsd={summary?.total_market_usd} totalPortfolioUsd={totalPortfolioUsd} investmentsUsd={investmentsUsd} liquidityUsd={liquidityUsd} cryptoUsd={cryptoUsd} compositionTopCount={compositionTopCount} compositionMetric={compositionMetric} setCompositionMetric={setCompositionMetric} chartTotalValue={chartTotalValue} />}
+          {activeView === "dashboard" && <DashboardView summary={summary} showKpis={showKpis} refreshError={refreshError} isRefreshing={isRefreshing} refreshMarketData={refreshMarketData} setIsTransactionModalOpen={setIsTransactionModalOpen} handleToggleKpis={handleToggleKpis} handlePinKpisToggle={handlePinKpisToggle} pinKpis={pinKpis} selectedAssetMovements={selectedAssetMovements} activeView={activeView} KpiVisibilityRail={KpiVisibilityRail} SectionShell={SectionShell} SummaryCard={SummaryCard} FilterToolbar={FilterToolbar} SortableHeader={SortableHeader} formatCurrency={formatCurrency} formatPercent={formatPercent} formatPortfolioPercent={formatPortfolioPercent} formatNumber={formatNumber} chartData={chartData} compositionData={compositionData} activeIndex={activeIndex} setActiveIndex={setActiveIndex} selectedTicker={selectedTicker} setSelectedTicker={setSelectedTicker} filteredAndSortedInvestments={filteredAndSortedInvestments} filteredInvestments={filteredInvestments} investmentSearch={investmentSearch} setInvestmentSearch={setInvestmentSearch} investmentCategoryFilter={investmentCategoryFilter} setInvestmentCategoryFilter={setInvestmentCategoryFilter} investmentSort={investmentSort} setInvestmentSort={setInvestmentSort} openAssetTransactions={(holding) => openAssetDetail(holding, "dashboard")} summaryTotalMarketUsd={summary?.total_market_usd} totalPortfolioUsd={totalPortfolioUsd} investmentsUsd={investmentsUsd} liquidityUsd={liquidityWithUsdtUsd} dailyPnlUsd={dailyPerformance.pnlUsd} dailyPnlPct={dailyPerformance.pnlPct} compositionTopCount={compositionTopCount} compositionMetric={compositionMetric} setCompositionMetric={setCompositionMetric} chartTotalValue={chartTotalValue} />}
           {activeView === "holdings" && <HoldingsView formatNumber={formatNumber} formatCurrency={formatCurrency} SectionShell={SectionShell} onSelectHolding={(holding) => openAssetDetail(holding, "holdings")} />}
           {activeView === "asset-detail" && <AssetDetailView selectedAsset={selectedAssetDetail} onBack={() => setActiveView(assetDetailOrigin)} onTransactions={(holding) => { setSelectedAssetMovements({ ticker: holding.ticker, normalized_ticker: holding.normalized_ticker }); setActiveView("transactions"); }} />}
           {activeView === "transactions" && <TransactionsView selectedAssetMovements={selectedAssetMovements} setSelectedAssetMovements={setSelectedAssetMovements} filteredAndSortedMovements={filteredAndSortedMovements} movementSearch={movementSearch} setMovementSearch={setMovementSearch} movementCategoryFilter={movementCategoryFilter} setMovementCategoryFilter={setMovementCategoryFilter} movementSort={movementSort} setMovementSort={setMovementSort} formatNumber={formatNumber} formatCurrency={formatCurrency} SortableHeader={SortableHeader} FilterToolbar={FilterToolbar} SectionShell={SectionShell} marketData={marketData} />}
