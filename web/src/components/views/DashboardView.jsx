@@ -225,6 +225,7 @@ export default function DashboardView({
                         <SummaryCard
                             title="Resultado de hoy"
                             value={hideValues ? "US$ ••••••" : `${dailyPnlUsd >= 0 ? "+" : ""}${formatCurrency(dailyPnlUsd || 0, "USD")}`}
+                            valueClassName={hideValues ? "text-white" : dailyPnlUsd >= 0 ? "text-emerald-400" : "text-red-400"}
                             subtitle={hideValues || dailyPnlPct == null ? "••••••" : `${dailyPnlPct >= 0 ? "+" : ""}${formatPortfolioPercent(dailyPnlPct)}`}
                             subtitleClassName={dailyPnlUsd >= 0 ? "text-emerald-400" : "text-red-400"}
                             icon="↕"

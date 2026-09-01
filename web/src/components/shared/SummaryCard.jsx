@@ -3,6 +3,7 @@ import React from "react";
 export default function SummaryCard({
   title,
   value,
+  valueClassName = "text-white",
   subtitle,
   subtitleClassName = "text-slate-400",
   icon,
@@ -22,7 +23,7 @@ export default function SummaryCard({
       </div>
 
       <div className="mt-3 min-w-0">
-        <p className="whitespace-nowrap text-[18px] font-semibold leading-none tracking-tight text-white tabular-nums sm:text-[22px] xl:text-[23px] 2xl:text-[26px]">
+        <p className={`whitespace-nowrap text-[18px] font-semibold leading-none tracking-tight tabular-nums sm:text-[22px] xl:text-[23px] 2xl:text-[26px] ${valueClassName}`}>
           {value}
         </p>
 
