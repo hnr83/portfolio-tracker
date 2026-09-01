@@ -72,7 +72,7 @@ export default function AssetDetailView({ selectedAsset, onBack, onTransactions 
       <div>
         <button onClick={onBack} className="mb-3 text-sm text-slate-400 transition hover:text-white">← Volver</button>
         <div className="flex items-center gap-3">
-          <AssetAvatar ticker={asset.ticker} normalizedTicker={asset.normalized_ticker} size={46} />
+          <AssetAvatar ticker={asset.ticker} normalizedTicker={asset.normalized_ticker} size={46} showText={false} />
           <div><h1 className="text-2xl font-semibold text-white">{displayTicker}</h1><div className="text-sm text-slate-400">Tu posición · {asset.category}</div></div>
         </div>
       </div>
