@@ -11,6 +11,7 @@ import {
 } from "recharts";
 import { apiFetch } from "../../../utils/api";
 import { formatCurrency } from "../../../utils/formatters";
+import { usePortfolioData } from "../../../context/PortfolioDataContext";
 
 function dateValue(value) {
   return value?.value || value || "";
@@ -90,6 +91,7 @@ function ComparisonTooltip({ active, payload, label, metric }) {
 }
 
 export default function PlanVsRealPanel({ scenarioId }) {
+  const { fetchCached } = usePortfolioData();
   const [comparison, setComparison] = useState(null);
   const [metric, setMetric] = useState("value");
   const [loading, setLoading] = useState(false);
@@ -109,9 +111,12 @@ export default function PlanVsRealPanel({ scenarioId }) {
         setLoading(true);
         setError("");
         setComparison(null);
-        const response = await apiFetch(`/api/planner/scenarios/${scenarioId}/comparison`);
-        const body = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(body.error || `HTTP ${response.status}`);
+        const body = await fetchCached(`planner:comparison:${scenarioId}`, async () => {
+          const response = await apiFetch(`/api/planner/scenarios/${scenarioId}/comparison`);
+          const result = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+          return result;
+        }, { ttlMs: 5 * 60 * 1000 });
         if (!cancelled) setComparison(body);
       } catch (e) {
         if (!cancelled) setError(e.message || "No se pudo cargar Plan vs Real.");
@@ -122,7 +127,7 @@ export default function PlanVsRealPanel({ scenarioId }) {
 
     loadComparison();
     return () => { cancelled = true; };
-  }, [scenarioId]);
+  }, [scenarioId, fetchCached]);
 
   const config = metricConfig(metric);
   const visibleSeries = useMemo(

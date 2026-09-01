@@ -13,6 +13,7 @@ import {
 import AssetAvatar from "../../shared/AssetAvatar";
 import { formatCurrency } from "../../../utils/formatters";
 import { apiFetch } from "../../../utils/api";
+import { usePortfolioData } from "../../../context/PortfolioDataContext";
 
 function getAssetDisplayName(ticker = "", rawTicker = "") {
   const t = String(ticker || rawTicker || "").toUpperCase();
@@ -153,6 +154,7 @@ function ProjectionTooltip({ active, payload, label }) {
 }
 
 export default function PlannerView({ summary, positions = [] }) {
+  const { fetchCached } = usePortfolioData();
   const [activeTab, setActiveTab] = useState("projections");
   const [savedScenarios, setSavedScenarios] = useState([]);
   const [selectedScenario, setSelectedScenario] = useState(null);
@@ -227,13 +229,15 @@ export default function PlannerView({ summary, positions = [] }) {
     if (!isSavedScenario && realAssets?.length) setAssets(realAssets);
   }, [realAssets, isSavedScenario]);
 
-  async function loadScenarios() {
+  async function loadScenarios(force = false) {
     try {
       setLoadingScenarios(true);
       setScenarioError("");
-      const response = await apiFetch("/api/planner/scenarios");
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const rows = await response.json();
+      const rows = await fetchCached("planner:scenarios", async () => {
+        const response = await apiFetch("/api/planner/scenarios");
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json();
+      }, { ttlMs: 5 * 60 * 1000, force });
       setSavedScenarios(Array.isArray(rows) ? rows : []);
     } catch (error) {
       console.error("Error loading planner scenarios:", error);
@@ -334,7 +338,7 @@ export default function PlannerView({ summary, positions = [] }) {
       setScenarioDate(todayLocal());
       setScenarioNotice("Escenario guardado correctamente.");
       applySavedScenario(result);
-      await loadScenarios();
+      await loadScenarios(true);
     } catch (error) {
       console.error("Error saving planner scenario:", error);
       setScenarioError(error.message || "No se pudo guardar el escenario.");
@@ -355,7 +359,7 @@ export default function PlannerView({ summary, positions = [] }) {
       if (!response.ok && response.status !== 204) throw new Error(`HTTP ${response.status}`);
       restoreCurrentScenario();
       setScenarioNotice("Escenario eliminado.");
-      await loadScenarios();
+      await loadScenarios(true);
     } catch (error) {
       console.error("Error deleting planner scenario:", error);
       setScenarioError("No se pudo eliminar el escenario.");

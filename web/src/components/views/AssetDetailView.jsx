@@ -3,6 +3,7 @@ import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YA
 import AssetAvatar from "../shared/AssetAvatar";
 import { apiFetch } from "../../utils/api";
 import { formatCurrency, formatDate, formatNumber, formatPortfolioPercent } from "../../utils/formatters";
+import { usePortfolioData } from "../../context/PortfolioDataContext";
 
 const RANGES = ["30D", "YTD", "1Y", "MAX"];
 
@@ -25,6 +26,7 @@ function Metric({ label, value, detail, positive }) {
 }
 
 export default function AssetDetailView({ selectedAsset, onBack, onTransactions }) {
+  const { fetchCached } = usePortfolioData();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -37,16 +39,18 @@ export default function AssetDetailView({ selectedAsset, onBack, onTransactions 
       try {
         setLoading(true); setError("");
         const ticker = selectedAsset?.ticker || selectedAsset?.normalized_ticker;
-        const response = await apiFetch(`/api/portfolio/assets/${encodeURIComponent(ticker)}/detail`);
-        if (!response.ok) throw new Error(`No se pudo cargar el activo (${response.status})`);
-        const payload = await response.json();
+        const payload = await fetchCached(`asset-detail:${ticker}`, async () => {
+          const response = await apiFetch(`/api/portfolio/assets/${encodeURIComponent(ticker)}/detail`);
+          if (!response.ok) throw new Error(`No se pudo cargar el activo (${response.status})`);
+          return response.json();
+        }, { ttlMs: 60 * 60 * 1000 });
         if (!cancelled) setData(payload);
       } catch (err) { if (!cancelled) setError(err.message || "No se pudo cargar el activo"); }
       finally { if (!cancelled) setLoading(false); }
     }
     if (selectedAsset) load();
     return () => { cancelled = true; };
-  }, [selectedAsset]);
+  }, [selectedAsset, fetchCached]);
 
   const chartRows = useMemo(() => {
     const start = dateForRange(range);

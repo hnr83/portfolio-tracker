@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { RangeBar } from "../shared/charts/RangeBar";
 import { Sparkline } from "../shared/charts/Sparkline";
 import AssetAvatar from "../shared/AssetAvatar";
+import { usePortfolioData } from "../../context/PortfolioDataContext";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
@@ -138,13 +139,17 @@ function Metric({ label, value, className = "text-slate-100" }) {
 
 export default function PerformanceView() {
   const [data, setData] = useState([]);
+  const { fetchCached } = usePortfolioData();
 
   useEffect(() => {
-    apiFetch("/api/portfolio/performance")
-      .then((res) => res.json())
+    fetchCached("performance", async () => {
+      const res = await apiFetch("/api/portfolio/performance");
+      if (!res.ok) throw new Error(`Performance HTTP ${res.status}`);
+      return res.json();
+    }, { ttlMs: 60 * 60 * 1000 })
       .then((json) => setData(json.data || []))
       .catch(() => setData([]));
-  }, []);
+  }, [fetchCached]);
 
   const rows = useMemo(() => {
     return data.filter((row) => {

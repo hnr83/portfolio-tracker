@@ -12,6 +12,7 @@ import {
 import TradingModal from "../modals/TradingModal";
 import TradingRebalanceModal from "../modals/TradingRebalanceModal";
 import TradingTransferToInvestmentModal from "../modals/TradingTransferToInvestmentModal";
+import { usePortfolioData } from "../../context/PortfolioDataContext";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
@@ -220,6 +221,7 @@ function MobileTradeCard({ row }) {
 }
 
 export default function TradingView() {
+    const { fetchCached } = usePortfolioData();
 
     const [balances, setBalances] = useState([]);
     const [rebalanceOpen, setRebalanceOpen] = useState(false);
@@ -253,29 +255,19 @@ export default function TradingView() {
     const [syncResult, setSyncResult] = useState(null);
     const [fundingOverrides, setFundingOverrides] = useState({});
 
-    const loadTradingData = useCallback(async () => {
+    const loadTradingData = useCallback(async (force = false) => {
         try {
             setLoading(true);
             setError("");
 
-            const [summaryRes, byAssetRes, tradesRes, balancesRes] = await Promise.all([
-                apiFetch(`/api/trading/summary`),
-                apiFetch(`/api/trading/by-asset`),
-                apiFetch(`/api/trading`),
-                apiFetch(`/api/trading/balances-valued`)
-            ]);
-
-            if (!summaryRes.ok || !byAssetRes.ok || !tradesRes.ok) {
-                throw new Error("No se pudo cargar la información de trading.");
-            }
-
-            const [summaryData, byAssetData, tradesData, balancesData] =
-                await Promise.all([
-                    summaryRes.json(),
-                    byAssetRes.json(),
-                    tradesRes.json(),
-                    balancesRes.json(),
+            const [summaryData, byAssetData, tradesData, balancesData] = await fetchCached("trading:all", async () => {
+                const responses = await Promise.all([
+                    apiFetch(`/api/trading/summary`), apiFetch(`/api/trading/by-asset`),
+                    apiFetch(`/api/trading`), apiFetch(`/api/trading/balances-valued`),
                 ]);
+                if (!responses.every((response) => response.ok)) throw new Error("No se pudo cargar la información de trading.");
+                return Promise.all(responses.map((response) => response.json()));
+            }, { ttlMs: 15 * 60 * 1000, force });
 
             setSummary(summaryData || {});
             setByAsset(Array.isArray(byAssetData) ? byAssetData : []);
@@ -288,7 +280,7 @@ export default function TradingView() {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [fetchCached]);
 
     async function handleSubmitRebalance(payload) {
         try {
@@ -313,7 +305,7 @@ export default function TradingView() {
 
             setRebalanceOpen(false);
 
-            await loadTradingData();
+            await loadTradingData(true);
         } catch (err) {
             console.error(err);
 
@@ -356,7 +348,7 @@ export default function TradingView() {
 
             setTransferOpen(false);
 
-            await loadTradingData();
+            await loadTradingData(true);
         } catch (err) {
             console.error(err);
 
@@ -424,7 +416,7 @@ export default function TradingView() {
                 );
             }
 
-            await loadTradingData();
+            await loadTradingData(true);
 
             setOpenModal(false);
             setForm(EMPTY_FORM);
@@ -489,7 +481,7 @@ export default function TradingView() {
             setSyncPreview(null);
             setFundingOverrides({});
 
-            await loadTradingData();
+            await loadTradingData(true);
         } catch (err) {
             console.error(err);
             setSyncError(err.message || "Error confirmando sync de BingX.");

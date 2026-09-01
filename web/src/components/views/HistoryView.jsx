@@ -9,6 +9,7 @@ import {
     CartesianGrid,
     Legend,
 } from "recharts";
+import { usePortfolioData } from "../../context/PortfolioDataContext";
 
 const RANGE_OPTIONS = ["1M", "3M", "6M", "YTD", "1A", "MAX"];
 const METRIC_OPTIONS = ["TOTAL", "INVESTMENTS", "PNL"];
@@ -336,6 +337,7 @@ function BenchmarkTooltip({ active, payload, label }) {
 }
 
 export default function HistoryView() {
+    const { fetchCached } = usePortfolioData();
     const [range, setRange] = useState("YTD");
     const [metric, setMetric] = useState("INVESTMENTS");
     const [history, setHistory] = useState([]);
@@ -355,8 +357,11 @@ export default function HistoryView() {
         async function loadHistory() {
             try {
                 setLoading(true);
-                const res = await apiFetch(`/api/portfolio/history?range=${range}`);
-                const data = await res.json();
+                const data = await fetchCached(`history:${range}`, async () => {
+                    const res = await apiFetch(`/api/portfolio/history?range=${range}`);
+                    if (!res.ok) throw new Error(`History HTTP ${res.status}`);
+                    return res.json();
+                }, { ttlMs: 60 * 60 * 1000 });
                 setHistory(Array.isArray(data) ? data : []);
             } catch (error) {
                 console.error("Error loading history:", error);
@@ -367,17 +372,18 @@ export default function HistoryView() {
         }
 
         loadHistory();
-    }, [range]);
+    }, [range, fetchCached]);
 
     useEffect(() => {
         async function loadBenchmark() {
             try {
                 setBenchmarkLoading(true);
 
-                const res = await apiFetch(
-                    `/api/portfolio/benchmark?code=${benchmarkCode}&range=${range}`
-                );
-                const data = await res.json();
+                const data = await fetchCached(`benchmark:${benchmarkCode}:${range}`, async () => {
+                    const res = await apiFetch(`/api/portfolio/benchmark?code=${benchmarkCode}&range=${range}`);
+                    if (!res.ok) throw new Error(`Benchmark HTTP ${res.status}`);
+                    return res.json();
+                }, { ttlMs: 60 * 60 * 1000 });
 
                 const normalized = (data.rows || []).map((row) => ({
                     date: row.snapshot_date?.value ?? row.snapshot_date,
@@ -401,18 +407,19 @@ export default function HistoryView() {
         if (historyMode === "benchmark") {
             loadBenchmark();
         }
-    }, [historyMode, benchmarkCode, range]);
+    }, [historyMode, benchmarkCode, range, fetchCached]);
 
     useEffect(() => {
         async function loadPerformanceTables() {
             try {
-                const [calendarRes, vintageRes] = await Promise.all([
-                    apiFetch("/api/portfolio/historical-performance"),
-                    apiFetch("/api/portfolio/vintage-returns"),
-                ]);
-
-                const calendarData = await calendarRes.json();
-                const vintageData = await vintageRes.json();
+                const [calendarData, vintageData] = await fetchCached("history:performance-tables", async () => {
+                    const [calendarRes, vintageRes] = await Promise.all([
+                        apiFetch("/api/portfolio/historical-performance"),
+                        apiFetch("/api/portfolio/vintage-returns"),
+                    ]);
+                    if (!calendarRes.ok || !vintageRes.ok) throw new Error("Performance history HTTP error");
+                    return Promise.all([calendarRes.json(), vintageRes.json()]);
+                }, { ttlMs: 6 * 60 * 60 * 1000 });
 
                 setHistoricalPerformance(
                     Array.isArray(calendarData) ? calendarData : []
@@ -426,7 +433,7 @@ export default function HistoryView() {
         }
 
         loadPerformanceTables();
-    }, []);
+    }, [fetchCached]);
 
     const chartData = useMemo(() => {
         return history.map((row) => ({

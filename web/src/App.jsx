@@ -29,10 +29,13 @@ const buttonSecondaryClass = "rounded-2xl border border-slate-700/70 bg-transpar
 const buttonPrimaryClass = "rounded-2xl bg-gradient-to-r from-indigo-500 to-blue-500 px-5 py-3 font-medium text-white shadow-[0_10px_30px_rgba(93,124,250,0.32)] transition-all duration-200 hover:opacity-90";
 
 function AppContent() {
-  const { summary, positions, movements, marketData, refreshAll, error, clearData } = usePortfolioData();
+  const {
+    summary, positions, movements, marketData, investments, platformAllocation,
+    refreshAll, refreshPrices, fetchCached, invalidateCache, error, clearData,
+  } = usePortfolioData();
   const [authToken, setAuthToken] = useState(() => window.localStorage.getItem("portfolio-auth-token"));
   const [authUser, setAuthUser] = useState(() => { try { const saved = window.localStorage.getItem("portfolio-auth-user"); return saved ? JSON.parse(saved) : null; } catch { return null; } });
-  function handleLogin(user, token) { window.localStorage.setItem("portfolio-auth-token", token); window.localStorage.setItem("portfolio-auth-user", JSON.stringify(user)); setAuthUser(user); setAuthToken(token); }
+  function handleLogin(user, token) { window.localStorage.setItem("portfolio-auth-token", token); window.localStorage.setItem("portfolio-auth-user", JSON.stringify(user)); setAuthUser(user); setAuthToken(token); refreshAll(); }
   function handleLogout() { window.localStorage.removeItem("portfolio-auth-token"); window.localStorage.removeItem("portfolio-auth-user"); clearData(); setAuthUser(null); setAuthToken(null); }
   useEffect(() => { if (error === "SESSION_EXPIRED") { clearData(); handleLogout(); } }, [error, clearData]);
 
@@ -45,12 +48,10 @@ function AppContent() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState("");
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
-  const [investments, setInvestments] = useState([]);
   const [activeIndex, setActiveIndex] = useState(null);
   const [selectedTicker, setSelectedTicker] = useState(null);
   const [showKpis, setShowKpis] = useState(true);
   const [pinKpis, setPinKpis] = useState(false);
-  const [platformAllocation, setPlatformAllocation] = useState([]);
   const [compositionMetric, setCompositionMetric] = useState("market_value_usd");
   const [investmentSearch, setInvestmentSearch] = useState("");
   const [investmentCategoryFilter, setInvestmentCategoryFilter] = useState("ALL");
@@ -63,25 +64,20 @@ function AppContent() {
   const [marketSort, setMarketSort] = useState({ key: "change_pct_1d", direction: "desc" });
   const lastAutomaticRefreshRef = useRef(Date.now());
 
-  async function loadAssetMovements(asset) {
+  const loadAssetMovements = useCallback(async (asset) => {
     if (!asset) { setAssetMovements([]); return; }
-    try { setAssetMovementsLoading(true); const response = await apiFetch(`/api/portfolio/movements?asset=${encodeURIComponent(asset)}`); if (!response.ok) throw new Error(`Error loading movements for ${asset} (${response.status})`); const data = await response.json(); setAssetMovements(Array.isArray(data) ? data : []); }
+    try {
+      setAssetMovementsLoading(true);
+      const data = await fetchCached(`asset-movements:${asset}`, async () => {
+        const response = await apiFetch(`/api/portfolio/movements?asset=${encodeURIComponent(asset)}`);
+        if (!response.ok) throw new Error(`Error loading movements for ${asset} (${response.status})`);
+        return response.json();
+      }, { ttlMs: 15 * 60 * 1000 });
+      setAssetMovements(Array.isArray(data) ? data : []);
+    }
     catch (error) { console.error("Error loading asset movements:", error); setAssetMovements([]); }
     finally { setAssetMovementsLoading(false); }
-  }
-
-  const loadDashboardExtraData = useCallback(async function loadDashboardExtraData() {
-    try {
-      const [investmentsRes, platformAllocationRes] = await Promise.all([apiFetch("/api/portfolio/investments"), apiFetch("/api/portfolio/platform-allocation")]);
-      if (!investmentsRes.ok) throw new Error(`Investments HTTP ${investmentsRes.status}`);
-      if (!platformAllocationRes.ok) throw new Error(`Platform allocation HTTP ${platformAllocationRes.status}`);
-      const [investmentsData, platformAllocationData] = await Promise.all([investmentsRes.json(), platformAllocationRes.json()]);
-      setInvestments(Array.isArray(investmentsData) ? investmentsData : []);
-      setPlatformAllocation(Array.isArray(platformAllocationData) ? platformAllocationData : []);
-    } catch (err) { console.error("Error loading dashboard extra data:", err); }
-  }, []);
-
-  useEffect(() => { if (!authToken) return; refreshAll(); loadDashboardExtraData(); }, [authToken, refreshAll, loadDashboardExtraData]);
+  }, [fetchCached]);
 
   useEffect(() => {
     if (!authToken) return undefined;
@@ -94,7 +90,7 @@ function AppContent() {
 
     async function refreshSilently() {
       lastAutomaticRefreshRef.current = Date.now();
-      await Promise.all([refreshAll({ silent: true }), loadDashboardExtraData()]);
+      await refreshPrices({ silent: true });
     }
 
     const timeoutId = window.setTimeout(() => {
@@ -113,7 +109,7 @@ function AppContent() {
       if (intervalId) window.clearInterval(intervalId);
       document.removeEventListener("visibilitychange", refreshWhenReturning);
     };
-  }, [authToken, refreshAll, loadDashboardExtraData]);
+  }, [authToken, refreshPrices]);
 
   async function refreshMarketData() {
     try {
@@ -122,14 +118,15 @@ function AppContent() {
       const pricesRes = await apiFetch("/api/jobs/update-prices", { method: "POST" }); if (!pricesRes.ok) throw new Error(`update-prices HTTP ${pricesRes.status}`);
       const benchmarkPricesRes = await apiFetch("/api/jobs/update-benchmark-prices", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ codes: ["SPY"] }) }); if (!benchmarkPricesRes.ok) throw new Error(`update-benchmark-prices HTTP ${benchmarkPricesRes.status}`);
       const snapshotRes = await apiFetch("/api/jobs/snapshot-portfolio", { method: "POST" }); if (!snapshotRes.ok) throw new Error(`snapshot-portfolio HTTP ${snapshotRes.status}`);
-      await refreshAll(); await loadDashboardExtraData();
+      invalidateCache();
+      await refreshAll();
     } catch (err) { console.error("Error refreshing market data:", err); setRefreshError(err.message || "Error actualizando datos"); }
     finally { setIsRefreshing(false); }
   }
 
   useEffect(() => { try { const savedPinned = window.localStorage.getItem("portfolio-kpis-pinned"); const savedVisible = window.localStorage.getItem("portfolio-kpis-visible"); if (savedPinned === "true") { setPinKpis(true); if (savedVisible === "false") setShowKpis(false); } } catch (error) { console.error("Error restoring KPI preference:", error); } }, []);
   useEffect(() => { try { if (pinKpis) { window.localStorage.setItem("portfolio-kpis-pinned", "true"); window.localStorage.setItem("portfolio-kpis-visible", String(showKpis)); } else { window.localStorage.removeItem("portfolio-kpis-pinned"); window.localStorage.removeItem("portfolio-kpis-visible"); } } catch (error) { console.error("Error persisting KPI preference:", error); } }, [pinKpis, showKpis]);
-  useEffect(() => { if (!selectedAssetMovements?.ticker) { setAssetMovements([]); return; } loadAssetMovements(selectedAssetMovements.ticker); }, [selectedAssetMovements]);
+  useEffect(() => { if (!selectedAssetMovements?.ticker) { setAssetMovements([]); return; } loadAssetMovements(selectedAssetMovements.ticker); }, [selectedAssetMovements, loadAssetMovements]);
 
   const visibleMovements = useMemo(() => selectedAssetMovements?.ticker ? assetMovements || [] : movements || [], [movements, assetMovements, selectedAssetMovements]);
   const normalizeTicker = (ticker) => String(ticker || "").toUpperCase().replace("CURRENCY:", "").replace("BATS:", "").replace("BCBA:", "").replace("ARS", "").replace("USD", "").trim();
@@ -204,7 +201,7 @@ function AppContent() {
           {activeView === "decision-maker" && <DecisionMaker />}
         </div>
       </main>
-      <TransactionModal isOpen={isTransactionModalOpen} onClose={() => setIsTransactionModalOpen(false)} onSaved={async () => { await refreshAll(); await loadDashboardExtraData(); }} />
+      <TransactionModal isOpen={isTransactionModalOpen} onClose={() => setIsTransactionModalOpen(false)} onSaved={async () => { invalidateCache(); await refreshAll(); }} />
     </div>
   );
 }

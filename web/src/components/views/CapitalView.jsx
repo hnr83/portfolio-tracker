@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../../utils/api";
 import { formatCurrency } from "../../utils/formatters";
+import { usePortfolioData } from "../../context/PortfolioDataContext";
 
 function MetricCard({ label, value, helper, positive }) {
   return (
@@ -15,25 +16,21 @@ function MetricCard({ label, value, helper, positive }) {
 }
 
 export default function CapitalView({ summary, positions }) {
+  const { fetchCached } = usePortfolioData();
   const [netContributions, setNetContributions] = useState(null);
   const [historicalTradingPnl, setHistoricalTradingPnl] = useState(null);
 
   useEffect(() => {
     async function loadHistoricalData() {
       try {
-        const [contributionsRes, tradingRes] = await Promise.all([
-          apiFetch("/api/portfolio/net-contributions-history?range=MAX"),
-          apiFetch("/api/trading/by-asset"),
-        ]);
-
-        if (!contributionsRes.ok || !tradingRes.ok) {
-          throw new Error("No se pudo cargar el histórico de capital");
-        }
-
-        const [contributionRows, tradingRows] = await Promise.all([
-          contributionsRes.json(),
-          tradingRes.json(),
-        ]);
+        const [contributionRows, tradingRows] = await fetchCached("capital-history", async () => {
+          const [contributionsRes, tradingRes] = await Promise.all([
+            apiFetch("/api/portfolio/net-contributions-history?range=MAX"),
+            apiFetch("/api/trading/by-asset"),
+          ]);
+          if (!contributionsRes.ok || !tradingRes.ok) throw new Error("No se pudo cargar el histórico de capital");
+          return Promise.all([contributionsRes.json(), tradingRes.json()]);
+        }, { ttlMs: 60 * 60 * 1000 });
 
         const last = Array.isArray(contributionRows) && contributionRows.length
           ? contributionRows[contributionRows.length - 1]
@@ -56,7 +53,7 @@ export default function CapitalView({ summary, positions }) {
     }
 
     loadHistoricalData();
-  }, []);
+  }, [fetchCached]);
 
   const data = useMemo(() => {
     const costBasis = Number(summary?.investments_cost_usd || 0);

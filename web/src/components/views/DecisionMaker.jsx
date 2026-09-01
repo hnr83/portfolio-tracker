@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../../utils/api";
+import { usePortfolioData } from "../../context/PortfolioDataContext";
 
 function money(value) {
     return new Intl.NumberFormat("es-AR", {
@@ -138,6 +139,7 @@ function AssetCard({ asset }) {
 }
 
 export default function DecisionMaker() {
+    const { fetchCached } = usePortfolioData();
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -150,10 +152,11 @@ export default function DecisionMaker() {
                 setLoading(true);
                 setError("");
 
-                const response = await apiFetch(
-                    "/api/portfolio/decision-maker"
-                );
-                const result = await response.json();
+                const result = await fetchCached("decision-maker", async () => {
+                    const response = await apiFetch("/api/portfolio/decision-maker");
+                    if (!response.ok) throw new Error(`Decision Maker HTTP ${response.status}`);
+                    return response.json();
+                }, { ttlMs: 60 * 60 * 1000 });
 
                 if (mounted) {
                     setData(result);
@@ -176,7 +179,7 @@ export default function DecisionMaker() {
         return () => {
             mounted = false;
         };
-    }, []);
+    }, [fetchCached]);
 
     if (loading) {
         return (
@@ -294,4 +297,3 @@ export default function DecisionMaker() {
         </div>
     );
 }
-
