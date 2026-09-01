@@ -345,12 +345,17 @@ async function getAssetDetail(req, res) {
         ticker, normalized_ticker, category, quantity_net, market_price,
         price_currency, underlying_ticker, ratio_numerator, ratio_denominator,
         market_value_usd, cost_value_usd, pnl_usd, pnl_pct,
+        (
+          SELECT MIN(m.fecha)
+          FROM ${table('movements')} m
+          WHERE m.ticker = vp.ticker OR m.ticker = vp.normalized_ticker
+        ) AS first_position_date,
         SAFE_DIVIDE(
           market_value_usd,
           (SELECT SUM(CAST(market_value_usd AS FLOAT64)) FROM ${table('vw_portfolio_valued')})
         ) * 100 AS current_weight_pct
-      FROM ${table('vw_portfolio_valued')}
-      WHERE ticker = @ticker OR normalized_ticker = @ticker
+      FROM ${table('vw_portfolio_valued')} vp
+      WHERE vp.ticker = @ticker OR vp.normalized_ticker = @ticker
       ORDER BY market_value_usd DESC
       LIMIT 1
     `;
@@ -480,7 +485,8 @@ async function getAssetDetail(req, res) {
         current_weight_pct: Number(current.current_weight_pct || 0),
         quantity_change: first && last ? last.quantity - first.quantity : 0,
         quantity_change_pct: first?.quantity ? ((last.quantity / first.quantity) - 1) * 100 : null,
-        first_position_date: first?.date || null,
+        first_position_date: current.first_position_date || null,
+        price_history_start_date: first?.date || null,
       },
       periods,
       series,
