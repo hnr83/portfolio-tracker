@@ -460,9 +460,46 @@ async function getAssetDetail(req, res) {
       ORDER BY v.date
     `;
 
-    const [currentRows, seriesRows] = await Promise.all([
+    const quantitySeriesQuery = `
+      WITH asset AS (
+        SELECT ticker, normalized_ticker
+        FROM ${table('vw_portfolio_valued')}
+        WHERE ticker = @ticker OR normalized_ticker = @ticker
+        ORDER BY market_value_usd DESC
+        LIMIT 1
+      ),
+      movement_daily AS (
+        SELECT
+          fecha AS date,
+          SUM(CASE
+            WHEN movement_type IN ('BUY_ASSET', 'BUY_USD', 'BUY_USDT', 'INCOME_USD') THEN CAST(quantity AS FLOAT64)
+            WHEN movement_type IN ('SELL_ASSET', 'SELL_USD', 'SELL_USDT', 'EXPENSE_USD') THEN -CAST(quantity AS FLOAT64)
+            ELSE 0
+          END) AS quantity_flow
+        FROM ${table('movements')} m
+        CROSS JOIN asset a
+        WHERE m.ticker = a.ticker OR m.ticker = a.normalized_ticker
+        GROUP BY date
+      )
+      SELECT date, quantity
+      FROM (
+        SELECT
+          date,
+          SUM(quantity_flow) OVER (ORDER BY date) AS quantity
+        FROM movement_daily
+
+        UNION ALL
+
+        SELECT DATE_SUB(MIN(date), INTERVAL 1 DAY) AS date, 0 AS quantity
+        FROM movement_daily
+      )
+      ORDER BY date
+    `;
+
+    const [currentRows, seriesRows, quantitySeriesRows] = await Promise.all([
       runQuery(currentQuery, { ticker }),
       runQuery(seriesQuery, { ticker }),
+      runQuery(quantitySeriesQuery, { ticker }),
     ]);
     const current = normalizeBigQueryRows(currentRows)[0];
     if (!current) return res.status(404).json({ error: "Asset not found" });
@@ -474,6 +511,10 @@ async function getAssetDetail(req, res) {
       price_usd: Number(row.price_usd || 0),
       market_value_usd: Number(row.market_value_usd || 0),
       portfolio_weight_pct: row.portfolio_weight_pct == null ? null : Number(row.portfolio_weight_pct),
+    }));
+    const quantitySeries = normalizeBigQueryRows(quantitySeriesRows).map((row) => ({
+      date: row.date,
+      quantity: Number(row.quantity || 0),
     }));
     const periods = ["1D", "7D", "30D", "YTD", "1Y", "MAX"].map((period) => calculateAssetPeriod(series, period));
     const first = series[0];
@@ -490,6 +531,7 @@ async function getAssetDetail(req, res) {
       },
       periods,
       series,
+      quantity_series: quantitySeries,
     });
   } catch (error) {
     console.error("Error in getAssetDetail:", error);
