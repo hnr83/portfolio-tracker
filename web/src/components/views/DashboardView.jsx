@@ -592,7 +592,7 @@ export default function DashboardView({
                                 return (
                                     <button
                                         key={`${inv.ticker}-${i}`}
-                                        onClick={() => openAssetTransactions(inv.ticker)}
+                                        onClick={() => openAssetTransactions(inv)}
                                         className={`w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-3 text-left transition ${selectedTicker && displayTicker === selectedTicker
                                             ? "border-indigo-500/40 bg-indigo-500/10"
                                             : "hover:border-slate-700"
@@ -710,7 +710,7 @@ export default function DashboardView({
                                         return (
                                             <tr
                                                 key={`${inv.ticker}-${i}`}
-                                                onClick={() => openAssetTransactions(inv.ticker)}
+                                                onClick={() => openAssetTransactions(inv)}
                                                 className={`cursor-pointer border-t border-slate-800/80 transition-colors hover:bg-slate-800/30 ${selectedTicker &&
                                                     (inv.normalized_ticker || inv.ticker) ===
                                                     selectedTicker

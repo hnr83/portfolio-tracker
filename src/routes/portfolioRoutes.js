@@ -20,12 +20,14 @@ const {
   getBingxSpotDebug,
   getBingxSpotSyncPreview,
   syncBingxSpotConfirm,
+  getAssetDetail,
 } = require('../controllers/portfolioController');
 
 router.get('/summary', getSummary);
 router.get('/positions', getPositions);
 router.get('/investments', getInvestments);
 router.get("/holdings", getHoldings);
+router.get("/assets/:ticker/detail", getAssetDetail);
 router.get("/movements", getMovements);
 router.get("/market", getMarket);
 router.get("/history", getHistoryWithNetContributions);

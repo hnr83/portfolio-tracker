@@ -17,6 +17,7 @@ import KpiVisibilityRail from "./components/layout/KpiVisibilityRail";
 import PerformanceView from "./components/views/PerformanceView.jsx";
 import PlannerView from "./components/views/planner/PlannerView";
 import LoginView from "./components/auth/LoginView";
+import AssetDetailView from "./components/views/AssetDetailView";
 import { PortfolioDataProvider, usePortfolioData } from "./context/PortfolioDataContext";
 import { apiFetch } from "./utils/api";
 import { formatCurrency, formatPercent, formatPortfolioPercent, formatNumber } from "./utils/formatters";
@@ -36,6 +37,8 @@ function AppContent() {
   useEffect(() => { if (error === "SESSION_EXPIRED") { clearData(); handleLogout(); } }, [error, clearData]);
 
   const [selectedAssetMovements, setSelectedAssetMovements] = useState(null);
+  const [selectedAssetDetail, setSelectedAssetDetail] = useState(null);
+  const [assetDetailOrigin, setAssetDetailOrigin] = useState("dashboard");
   const [assetMovements, setAssetMovements] = useState([]);
   const [assetMovementsLoading, setAssetMovementsLoading] = useState(false);
   const [activeView, setActiveView] = useState("dashboard");
@@ -119,6 +122,12 @@ function AppContent() {
   const chartTotalValue = chartData.reduce((acc, item) => acc + Number(item.value || 0), 0);
   function handleToggleKpis() { if (pinKpis) return; setShowKpis((prev) => !prev); }
   function handlePinKpisToggle() { setPinKpis((prev) => !prev); }
+  function openAssetDetail(holding, origin) {
+    const asset = typeof holding === "string" ? { ticker: holding } : holding;
+    setSelectedAssetDetail(asset);
+    setAssetDetailOrigin(origin);
+    setActiveView("asset-detail");
+  }
   if (!authToken) return <LoginView onLogin={handleLogin} />;
 
   return (
@@ -126,8 +135,9 @@ function AppContent() {
       <Sidebar summary={summary} activeView={activeView} setActiveView={setActiveView} setSelectedAssetMovements={setSelectedAssetMovements} authUser={authUser} onLogout={handleLogout} />
       <main className="min-h-screen min-w-0 bg-[radial-gradient(circle_at_top_left,rgba(78,99,255,0.16),transparent_22%),radial-gradient(circle_at_top_right,rgba(23,183,229,0.10),transparent_20%),linear-gradient(180deg,#030817_0%,#020617_100%)] xl:pl-72 2xl:pl-80">
         <div className="mx-auto w-full max-w-[1500px] px-3 pb-28 pt-3 text-[13px] sm:px-4 sm:py-4 lg:px-5 xl:px-6 xl:pb-5 xl:pt-4 2xl:max-w-[1720px] 2xl:px-8 2xl:text-[15px]">
-          {activeView === "dashboard" && <DashboardView summary={summary} showKpis={showKpis} refreshError={refreshError} isRefreshing={isRefreshing} refreshMarketData={refreshMarketData} setIsTransactionModalOpen={setIsTransactionModalOpen} handleToggleKpis={handleToggleKpis} handlePinKpisToggle={handlePinKpisToggle} pinKpis={pinKpis} selectedAssetMovements={selectedAssetMovements} activeView={activeView} KpiVisibilityRail={KpiVisibilityRail} SectionShell={SectionShell} SummaryCard={SummaryCard} FilterToolbar={FilterToolbar} SortableHeader={SortableHeader} formatCurrency={formatCurrency} formatPercent={formatPercent} formatPortfolioPercent={formatPortfolioPercent} formatNumber={formatNumber} chartData={chartData} compositionData={compositionData} activeIndex={activeIndex} setActiveIndex={setActiveIndex} selectedTicker={selectedTicker} setSelectedTicker={setSelectedTicker} filteredAndSortedInvestments={filteredAndSortedInvestments} filteredInvestments={filteredInvestments} investmentSearch={investmentSearch} setInvestmentSearch={setInvestmentSearch} investmentCategoryFilter={investmentCategoryFilter} setInvestmentCategoryFilter={setInvestmentCategoryFilter} investmentSort={investmentSort} setInvestmentSort={setInvestmentSort} openAssetTransactions={(holdingOrTicker) => { const holding = typeof holdingOrTicker === "string" ? { ticker: holdingOrTicker, normalized_ticker: null } : holdingOrTicker; setSelectedAssetMovements({ ticker: holding.ticker, normalized_ticker: holding.normalized_ticker || null }); setActiveView("transactions"); }} summaryTotalMarketUsd={summary?.total_market_usd} totalPortfolioUsd={totalPortfolioUsd} investmentsUsd={investmentsUsd} liquidityUsd={liquidityUsd} cryptoUsd={cryptoUsd} compositionTopCount={compositionTopCount} compositionMetric={compositionMetric} setCompositionMetric={setCompositionMetric} chartTotalValue={chartTotalValue} />}
-          {activeView === "holdings" && <HoldingsView formatNumber={formatNumber} formatCurrency={formatCurrency} SectionShell={SectionShell} onSelectHolding={(holding) => { setSelectedAssetMovements({ ticker: holding.ticker, normalized_ticker: holding.normalized_ticker }); setActiveView("transactions"); }} />}
+          {activeView === "dashboard" && <DashboardView summary={summary} showKpis={showKpis} refreshError={refreshError} isRefreshing={isRefreshing} refreshMarketData={refreshMarketData} setIsTransactionModalOpen={setIsTransactionModalOpen} handleToggleKpis={handleToggleKpis} handlePinKpisToggle={handlePinKpisToggle} pinKpis={pinKpis} selectedAssetMovements={selectedAssetMovements} activeView={activeView} KpiVisibilityRail={KpiVisibilityRail} SectionShell={SectionShell} SummaryCard={SummaryCard} FilterToolbar={FilterToolbar} SortableHeader={SortableHeader} formatCurrency={formatCurrency} formatPercent={formatPercent} formatPortfolioPercent={formatPortfolioPercent} formatNumber={formatNumber} chartData={chartData} compositionData={compositionData} activeIndex={activeIndex} setActiveIndex={setActiveIndex} selectedTicker={selectedTicker} setSelectedTicker={setSelectedTicker} filteredAndSortedInvestments={filteredAndSortedInvestments} filteredInvestments={filteredInvestments} investmentSearch={investmentSearch} setInvestmentSearch={setInvestmentSearch} investmentCategoryFilter={investmentCategoryFilter} setInvestmentCategoryFilter={setInvestmentCategoryFilter} investmentSort={investmentSort} setInvestmentSort={setInvestmentSort} openAssetTransactions={(holding) => openAssetDetail(holding, "dashboard")} summaryTotalMarketUsd={summary?.total_market_usd} totalPortfolioUsd={totalPortfolioUsd} investmentsUsd={investmentsUsd} liquidityUsd={liquidityUsd} cryptoUsd={cryptoUsd} compositionTopCount={compositionTopCount} compositionMetric={compositionMetric} setCompositionMetric={setCompositionMetric} chartTotalValue={chartTotalValue} />}
+          {activeView === "holdings" && <HoldingsView formatNumber={formatNumber} formatCurrency={formatCurrency} SectionShell={SectionShell} onSelectHolding={(holding) => openAssetDetail(holding, "holdings")} />}
+          {activeView === "asset-detail" && <AssetDetailView selectedAsset={selectedAssetDetail} onBack={() => setActiveView(assetDetailOrigin)} onTransactions={(holding) => { setSelectedAssetMovements({ ticker: holding.ticker, normalized_ticker: holding.normalized_ticker }); setActiveView("transactions"); }} />}
           {activeView === "transactions" && <TransactionsView selectedAssetMovements={selectedAssetMovements} setSelectedAssetMovements={setSelectedAssetMovements} filteredAndSortedMovements={filteredAndSortedMovements} movementSearch={movementSearch} setMovementSearch={setMovementSearch} movementCategoryFilter={movementCategoryFilter} setMovementCategoryFilter={setMovementCategoryFilter} movementSort={movementSort} setMovementSort={setMovementSort} formatNumber={formatNumber} formatCurrency={formatCurrency} SortableHeader={SortableHeader} FilterToolbar={FilterToolbar} SectionShell={SectionShell} marketData={marketData} />}
           {activeView === "performance" && <PerformanceView />}
           {activeView === "planner" && <PlannerView summary={summary} positions={positions} />}

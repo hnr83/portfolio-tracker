@@ -296,6 +296,201 @@ async function getHoldings(req, res) {
   }
 }
 
+function assetPeriodStart(period, today = new Date()) {
+  const date = new Date(today);
+  const days = { "1D": 1, "7D": 7, "30D": 30, "1Y": 365 }[period];
+  if (days) date.setUTCDate(date.getUTCDate() - days);
+  else if (period === "YTD") date.setUTCMonth(0, 1);
+  else return null;
+  return date.toISOString().slice(0, 10);
+}
+
+function calculateAssetPeriod(series, period) {
+  if (!series.length) return { period, pnl_usd: null, pnl_pct: null };
+  const startDate = assetPeriodStart(period);
+  const eligible = startDate ? series.filter((row) => row.date >= startDate) : series;
+  const start = eligible[0] || series[0];
+  const end = series[series.length - 1];
+  if (!start || start === end) return { period, pnl_usd: 0, pnl_pct: 0 };
+
+  const rows = series.filter((row) => row.date > start.date && row.date <= end.date);
+  const netFlow = rows.reduce((sum, row) => sum + Number(row.net_flow_usd || 0), 0);
+  const pnl = Number(end.market_value_usd || 0) - Number(start.market_value_usd || 0) - netFlow;
+
+  let twrFactor = 1;
+  let previousValue = Number(start.market_value_usd || 0);
+  for (const row of rows) {
+    if (previousValue > 0) {
+      twrFactor *= (Number(row.market_value_usd || 0) - Number(row.net_flow_usd || 0)) / previousValue;
+    }
+    previousValue = Number(row.market_value_usd || 0);
+  }
+
+  return {
+    period,
+    start_date: start.date,
+    end_date: end.date,
+    pnl_usd: pnl,
+    pnl_pct: Number.isFinite(twrFactor) ? (twrFactor - 1) * 100 : null,
+  };
+}
+
+async function getAssetDetail(req, res) {
+  try {
+    const ticker = decodeURIComponent(String(req.params.ticker || "")).trim();
+    if (!ticker) return res.status(400).json({ error: "Ticker is required" });
+
+    const currentQuery = `
+      SELECT
+        ticker, normalized_ticker, category, quantity_net, market_price,
+        price_currency, underlying_ticker, ratio_numerator, ratio_denominator,
+        market_value_usd, cost_value_usd, pnl_usd, pnl_pct,
+        SAFE_DIVIDE(
+          market_value_usd,
+          (SELECT SUM(CAST(market_value_usd AS FLOAT64)) FROM ${table('vw_portfolio_valued')})
+        ) * 100 AS current_weight_pct
+      FROM ${table('vw_portfolio_valued')}
+      WHERE ticker = @ticker OR normalized_ticker = @ticker
+      ORDER BY market_value_usd DESC
+      LIMIT 1
+    `;
+
+    const seriesQuery = `
+      WITH asset AS (
+        SELECT
+          ticker,
+          normalized_ticker,
+          category,
+          underlying_ticker,
+          CAST(ratio_numerator AS FLOAT64) AS ratio_numerator,
+          CAST(ratio_denominator AS FLOAT64) AS ratio_denominator
+        FROM ${table('vw_portfolio_valued')}
+        WHERE ticker = @ticker OR normalized_ticker = @ticker
+        ORDER BY market_value_usd DESC
+        LIMIT 1
+      ),
+      daily_prices AS (
+        SELECT
+          price_date AS date,
+          CAST(market_price AS FLOAT64) AS market_price,
+          currency
+        FROM ${table('vw_daily_latest_prices')} p
+        CROSS JOIN asset a
+        WHERE p.ticker = COALESCE(a.underlying_ticker, a.normalized_ticker)
+      ),
+      daily_fx AS (
+        SELECT
+          DATE(as_of_ts, 'America/Argentina/Buenos_Aires') AS date,
+          CAST(rate AS FLOAT64) AS usdars
+        FROM ${table('fx_rates')}
+        WHERE base_currency = 'USD' AND quote_currency = 'ARS'
+        QUALIFY ROW_NUMBER() OVER (PARTITION BY date ORDER BY as_of_ts DESC) = 1
+      ),
+      movement_daily AS (
+        SELECT
+          fecha AS date,
+          SUM(CASE
+            WHEN movement_type IN ('BUY_ASSET', 'BUY_USD', 'BUY_USDT', 'INCOME_USD') THEN CAST(quantity AS FLOAT64)
+            WHEN movement_type IN ('SELL_ASSET', 'SELL_USD', 'SELL_USDT', 'EXPENSE_USD') THEN -CAST(quantity AS FLOAT64)
+            ELSE 0 END) AS quantity_flow,
+          SUM(CASE
+            WHEN movement_type IN ('BUY_ASSET', 'BUY_USD', 'BUY_USDT', 'INCOME_USD') THEN
+              CASE WHEN settlement_currency = 'ARS' THEN SAFE_DIVIDE(CAST(net_amount AS FLOAT64), CAST(fx_rate AS FLOAT64)) ELSE CAST(net_amount AS FLOAT64) END
+            WHEN movement_type IN ('SELL_ASSET', 'SELL_USD', 'SELL_USDT', 'EXPENSE_USD') THEN -
+              CASE WHEN settlement_currency = 'ARS' THEN SAFE_DIVIDE(CAST(net_amount AS FLOAT64), CAST(fx_rate AS FLOAT64)) ELSE CAST(net_amount AS FLOAT64) END
+            ELSE 0 END) AS net_flow_usd
+        FROM ${table('movements')} m
+        CROSS JOIN asset a
+        WHERE m.ticker = a.ticker OR m.ticker = a.normalized_ticker
+        GROUP BY date
+      ),
+      all_dates AS (
+        SELECT date FROM daily_prices
+        UNION DISTINCT
+        SELECT date FROM movement_daily
+      ),
+      dated_raw AS (
+        SELECT dates.date, p.market_price, p.currency,
+          COALESCE(m.quantity_flow, 0) quantity_flow,
+          COALESCE(m.net_flow_usd, 0) net_flow_usd
+        FROM all_dates dates
+        LEFT JOIN daily_prices p USING (date)
+        LEFT JOIN movement_daily m USING (date)
+        WHERE dates.date >= (SELECT MIN(date) FROM movement_daily)
+      ),
+      dated AS (
+        SELECT
+          date,
+          LAST_VALUE(market_price IGNORE NULLS) OVER (ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS market_price,
+          LAST_VALUE(currency IGNORE NULLS) OVER (ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS currency,
+          quantity_flow,
+          net_flow_usd
+        FROM dated_raw
+      ),
+      valued AS (
+        SELECT
+          d.date,
+          SUM(quantity_flow) OVER (ORDER BY d.date) AS quantity,
+          d.net_flow_usd,
+          CASE
+            WHEN a.underlying_ticker IS NOT NULL THEN d.market_price * SAFE_DIVIDE(a.ratio_denominator, a.ratio_numerator)
+            WHEN d.currency = 'ARS' THEN SAFE_DIVIDE(d.market_price, fx.usdars)
+            ELSE d.market_price
+          END AS price_usd
+        FROM dated d
+        CROSS JOIN asset a
+        LEFT JOIN daily_fx fx USING (date)
+      ),
+      snapshots AS (
+        SELECT snapshot_date AS date, CAST(market_value_usd AS FLOAT64) AS portfolio_value_usd
+        FROM ${table('portfolio_snapshots')}
+      )
+      SELECT
+        v.date, v.quantity, v.net_flow_usd, v.price_usd,
+        v.quantity * v.price_usd AS market_value_usd,
+        SAFE_DIVIDE(v.quantity * v.price_usd, s.portfolio_value_usd) * 100 AS portfolio_weight_pct
+      FROM valued v
+      LEFT JOIN snapshots s USING (date)
+      WHERE v.quantity > 0 AND v.price_usd IS NOT NULL
+      ORDER BY v.date
+    `;
+
+    const [currentRows, seriesRows] = await Promise.all([
+      runQuery(currentQuery, { ticker }),
+      runQuery(seriesQuery, { ticker }),
+    ]);
+    const current = normalizeBigQueryRows(currentRows)[0];
+    if (!current) return res.status(404).json({ error: "Asset not found" });
+
+    const series = normalizeBigQueryRows(seriesRows).map((row) => ({
+      date: row.date,
+      quantity: Number(row.quantity || 0),
+      net_flow_usd: Number(row.net_flow_usd || 0),
+      price_usd: Number(row.price_usd || 0),
+      market_value_usd: Number(row.market_value_usd || 0),
+      portfolio_weight_pct: row.portfolio_weight_pct == null ? null : Number(row.portfolio_weight_pct),
+    }));
+    const periods = ["1D", "7D", "30D", "YTD", "1Y", "MAX"].map((period) => calculateAssetPeriod(series, period));
+    const first = series[0];
+    const last = series[series.length - 1];
+
+    res.json({
+      asset: current,
+      summary: {
+        current_weight_pct: Number(current.current_weight_pct || 0),
+        quantity_change: first && last ? last.quantity - first.quantity : 0,
+        quantity_change_pct: first?.quantity ? ((last.quantity / first.quantity) - 1) * 100 : null,
+        first_position_date: first?.date || null,
+      },
+      periods,
+      series,
+    });
+  } catch (error) {
+    console.error("Error in getAssetDetail:", error);
+    res.status(500).json({ error: "Error fetching asset detail", details: error?.message });
+  }
+}
+
 async function getPositions(req, res) {
   try {
     const query = `
@@ -1464,4 +1659,5 @@ module.exports = {
   getBingxSpotDebug,
   getBingxSpotSyncPreview,
   syncBingxSpotConfirm,
+  getAssetDetail,
 };
