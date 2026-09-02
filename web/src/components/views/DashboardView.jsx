@@ -267,8 +267,8 @@ export default function DashboardView({
                             }
                             subtitle={
                                 hideValues
-                                    ? "USD ••• · USDT •••"
-                                    : `USD ${formatCurrency(cashLiquidityUsd, "USD")} · USDT ${formatCurrency(usdtUsd, "USD")}`
+                                    ? "US$ ••• · USDT •••"
+                                    : `${formatCurrency(cashLiquidityUsd, "USD")} · USDT ${formatNumber(usdtUsd, 2)}`
                             }
                             subtitleClassName="text-slate-400"
                             icon="◉"
