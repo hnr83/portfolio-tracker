@@ -50,6 +50,8 @@ export default function DashboardView({
     openAssetTransactions,
     investmentsUsd,
     liquidityUsd,
+    cashLiquidityUsd,
+    usdtUsd,
     dailyPnlUsd,
     dailyPnlPct,
     compositionMetric,
@@ -263,6 +265,12 @@ export default function DashboardView({
                                     ? "US$ ••••••"
                                     : formatCurrency(liquidityUsd, "USD")
                             }
+                            subtitle={
+                                hideValues
+                                    ? "USD ••• · USDT •••"
+                                    : `USD ${formatCurrency(cashLiquidityUsd, "USD")} · USDT ${formatCurrency(usdtUsd, "USD")}`
+                            }
+                            subtitleClassName="text-slate-400"
                             icon="◉"
                         />
 
