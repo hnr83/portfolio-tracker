@@ -18,6 +18,7 @@ import PerformanceView from "./components/views/PerformanceView.jsx";
 import PlannerView from "./components/views/planner/PlannerView";
 import LoginView from "./components/auth/LoginView";
 import AssetDetailView from "./components/views/AssetDetailView";
+import CustodyAuditView from "./components/views/CustodyAuditView";
 import { PortfolioDataProvider, usePortfolioData } from "./context/PortfolioDataContext";
 import { apiFetch } from "./utils/api";
 import { formatCurrency, formatPercent, formatPortfolioPercent, formatNumber } from "./utils/formatters";
@@ -199,6 +200,7 @@ function AppContent() {
           {activeView === "capital" && <CapitalView summary={summary} positions={positions} />}
           {activeView === "trading" && <TradingView />}
           {activeView === "decision-maker" && <DecisionMaker />}
+          {activeView === "custody" && <CustodyAuditView />}
         </div>
       </main>
       <TransactionModal isOpen={isTransactionModalOpen} onClose={() => setIsTransactionModalOpen(false)} onSaved={async () => { invalidateCache(); await refreshAll(); }} />

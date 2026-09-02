@@ -3,6 +3,62 @@ const { table } = require('../utils/bigqueryHelper');
 const { buildDecisionMaker } = require("../services/decisionMakerService");
 const investmentThesis = require("../config/investmentThesis");
 const { getBingxSpotHistoryOrders, getBingxSpotMyTrades, } = require("../services/providers/bingxService");
+const crypto = require("crypto");
+
+let custodyTransfersReady;
+
+function ensureCustodyTransfersTable() {
+  if (!custodyTransfersReady) {
+    custodyTransfersReady = runQuery(`
+      CREATE TABLE IF NOT EXISTS ${table('custody_transfers')} (
+        id STRING NOT NULL,
+        transfer_date DATE NOT NULL,
+        ticker STRING NOT NULL,
+        owner STRING,
+        from_broker STRING NOT NULL,
+        to_broker STRING NOT NULL,
+        quantity NUMERIC NOT NULL,
+        description STRING,
+        created_at TIMESTAMP NOT NULL
+      )
+      PARTITION BY transfer_date
+      CLUSTER BY ticker, owner
+    `).catch((error) => {
+      custodyTransfersReady = null;
+      throw error;
+    });
+  }
+  return custodyTransfersReady;
+}
+
+function custodyTickerSql(expression) {
+  return `CASE
+    WHEN UPPER(${expression}) = 'USDT' THEN 'USDT'
+    WHEN STARTS_WITH(UPPER(${expression}), 'CURRENCY:') AND ENDS_WITH(UPPER(${expression}), 'ARS')
+      THEN REGEXP_REPLACE(REGEXP_REPLACE(UPPER(${expression}), r'^CURRENCY:', ''), r'ARS$', '')
+    WHEN STARTS_WITH(UPPER(${expression}), 'CURRENCY:')
+      THEN REGEXP_REPLACE(UPPER(${expression}), r'^CURRENCY:', '')
+    ELSE UPPER(TRIM(${expression}))
+  END`;
+}
+
+function custodyBrokerSql(expression) {
+  return `CASE
+    WHEN ${expression} IS NULL OR TRIM(${expression}) = '' THEN 'Sin plataforma'
+    WHEN LOWER(TRIM(${expression})) = 'bingx' THEN 'BingX'
+    WHEN LOWER(TRIM(${expression})) = 'binance' THEN 'Binance'
+    WHEN LOWER(TRIM(${expression})) = 'ibkr' THEN 'IBKR'
+    WHEN LOWER(TRIM(${expression})) = 'etoro' THEN 'eToro'
+    WHEN LOWER(TRIM(${expression})) = 'ledger' THEN 'Ledger'
+    WHEN LOWER(TRIM(${expression})) = 'ledger 2' THEN 'Ledger 2'
+    WHEN LOWER(TRIM(${expression})) = 'ledger flex' THEN 'Ledger Flex'
+    WHEN LOWER(TRIM(${expression})) = 'cocos' THEN 'Cocos'
+    WHEN LOWER(TRIM(${expression})) = 'cocos vale' THEN 'Cocos Vale'
+    WHEN LOWER(TRIM(${expression})) = 'bmb' THEN 'BMB'
+    WHEN LOWER(TRIM(${expression})) = 'bmb vale' THEN 'BMB Vale'
+    ELSE TRIM(${expression})
+  END`;
+}
 
 
 function isBigQueryNumericObject(value) {
@@ -782,33 +838,40 @@ async function getMarket(req, res) {
 
 async function getPlatformAllocation(req, res) {
   try {
+    await ensureCustodyTransfersTable();
+    const movementTicker = `COALESCE(
+      (SELECT ANY_VALUE(UPPER(COALESCE(NULLIF(v.normalized_ticker, ''), v.ticker)))
+       FROM ${table('vw_portfolio_valued')} v WHERE UPPER(v.ticker) = UPPER(m.ticker)),
+      ${custodyTickerSql('m.ticker')}
+    )`;
     const query = `
-SELECT
-  COALESCE(NULLIF(TRIM(broker), ''), 'Sin broker') AS broker,
-  SUM(
-    CASE
-      WHEN movement_type = 'BUY_ASSET'
-        THEN
-          CASE
-            WHEN settlement_currency = 'USD' THEN CAST(gross_amount AS FLOAT64)
-            WHEN settlement_currency = 'ARS' AND fx_rate IS NOT NULL THEN CAST(gross_amount AS FLOAT64) / fx_rate
-            ELSE 0
-          END
-      WHEN movement_type = 'SELL_ASSET'
-        THEN
-          CASE
-            WHEN settlement_currency = 'USD' THEN -CAST(gross_amount AS FLOAT64)
-            WHEN settlement_currency = 'ARS' AND fx_rate IS NOT NULL THEN -CAST(gross_amount AS FLOAT64) / fx_rate
-            ELSE 0
-          END
-      ELSE 0
-    END
-  ) AS invested_usd
-FROM ${table('movements')}
-WHERE movement_type IN ('BUY_ASSET', 'SELL_ASSET')
-GROUP BY 1
-HAVING invested_usd > 0
-ORDER BY invested_usd DESC
+      WITH movement_legs AS (
+        SELECT ${movementTicker} AS ticker, ${custodyBrokerSql('m.broker')} AS broker,
+          SUM(CASE WHEN movement_type IN ('BUY_ASSET', 'BUY_USDT') THEN CAST(quantity AS FLOAT64)
+                   WHEN movement_type IN ('SELL_ASSET', 'SELL_USDT') THEN -CAST(quantity AS FLOAT64) ELSE 0 END) AS quantity
+        FROM ${table('movements')} m
+        WHERE movement_type IN ('BUY_ASSET', 'SELL_ASSET', 'BUY_USDT', 'SELL_USDT') AND quantity IS NOT NULL
+        GROUP BY 1, 2
+      ),
+      transfer_legs AS (
+        SELECT ${custodyTickerSql('ticker')} AS ticker, ${custodyBrokerSql('from_broker')} AS broker, -CAST(quantity AS FLOAT64) AS quantity FROM ${table('custody_transfers')}
+        UNION ALL
+        SELECT ${custodyTickerSql('ticker')} AS ticker, ${custodyBrokerSql('to_broker')} AS broker, CAST(quantity AS FLOAT64) AS quantity FROM ${table('custody_transfers')}
+      ),
+      located AS (
+        SELECT ticker, broker, SUM(quantity) AS quantity FROM (SELECT * FROM movement_legs UNION ALL SELECT * FROM transfer_legs) GROUP BY 1, 2
+      ),
+      valued AS (
+        SELECT UPPER(COALESCE(NULLIF(normalized_ticker, ''), ticker)) AS ticker,
+          SAFE_DIVIDE(SUM(CAST(market_value_usd AS FLOAT64)), NULLIF(SUM(CAST(quantity_net AS FLOAT64)), 0)) AS unit_value_usd
+        FROM ${table('vw_portfolio_valued')}
+        WHERE UPPER(COALESCE(NULLIF(normalized_ticker, ''), ticker)) != 'USD'
+        GROUP BY 1
+      )
+      SELECT l.broker, SUM(l.quantity * v.unit_value_usd) AS invested_usd
+      FROM located l JOIN valued v USING (ticker)
+      WHERE l.quantity > 0
+      GROUP BY 1 HAVING invested_usd > 0 ORDER BY invested_usd DESC
     `;
 
     const rows = await runQuery(query);
@@ -816,6 +879,178 @@ ORDER BY invested_usd DESC
   } catch (error) {
     console.error("Error in getPlatformAllocation:", error);
     res.status(500).json({ error: "Error fetching platform allocation" });
+  }
+}
+
+async function getCustodyAudit(req, res) {
+  try {
+    await ensureCustodyTransfersTable();
+    const movementTicker = `COALESCE(
+      (SELECT ANY_VALUE(UPPER(COALESCE(NULLIF(v.normalized_ticker, ''), v.ticker)))
+       FROM ${table('vw_portfolio_valued')} v WHERE UPPER(v.ticker) = UPPER(m.ticker)),
+      ${custodyTickerSql('m.ticker')}
+    )`;
+    const transferTicker = custodyTickerSql('ticker');
+    const movementBroker = custodyBrokerSql('broker');
+    const fromBroker = custodyBrokerSql('from_broker');
+    const toBroker = custodyBrokerSql('to_broker');
+
+    const rowsQuery = `
+      WITH movement_legs AS (
+        SELECT
+          ${movementTicker} AS ticker,
+          COALESCE(NULLIF(TRIM(owner), ''), 'Sin titular') AS owner,
+          ${movementBroker} AS platform,
+          SUM(CASE
+            WHEN movement_type IN ('BUY_ASSET', 'BUY_USDT') THEN CAST(quantity AS NUMERIC)
+            WHEN movement_type IN ('SELL_ASSET', 'SELL_USDT') THEN -CAST(quantity AS NUMERIC)
+            ELSE 0 END) AS quantity
+        FROM ${table('movements')} m
+        WHERE movement_type IN ('BUY_ASSET', 'SELL_ASSET', 'BUY_USDT', 'SELL_USDT')
+          AND quantity IS NOT NULL
+        GROUP BY 1, 2, 3
+      ),
+      transfer_legs AS (
+        SELECT ${transferTicker} AS ticker,
+          COALESCE(NULLIF(TRIM(owner), ''), 'Sin titular') AS owner,
+          ${fromBroker} AS platform, -CAST(quantity AS NUMERIC) AS quantity
+        FROM ${table('custody_transfers')}
+        UNION ALL
+        SELECT ${transferTicker} AS ticker,
+          COALESCE(NULLIF(TRIM(owner), ''), 'Sin titular') AS owner,
+          ${toBroker} AS platform, CAST(quantity AS NUMERIC) AS quantity
+        FROM ${table('custody_transfers')}
+      ),
+      located AS (
+        SELECT ticker, owner, platform, SUM(quantity) AS located_quantity
+        FROM (SELECT * FROM movement_legs UNION ALL SELECT * FROM transfer_legs)
+        GROUP BY 1, 2, 3
+      ),
+      expected AS (
+        SELECT
+          UPPER(COALESCE(NULLIF(normalized_ticker, ''), ticker)) AS ticker,
+          SUM(CAST(quantity_net AS FLOAT64)) AS expected_quantity,
+          SUM(CAST(market_value_usd AS FLOAT64)) AS market_value_usd
+        FROM ${table('vw_portfolio_valued')}
+        WHERE UPPER(COALESCE(NULLIF(normalized_ticker, ''), ticker)) NOT IN ('USD')
+        GROUP BY 1
+      ),
+      located_totals AS (
+        SELECT ticker, SUM(CAST(located_quantity AS FLOAT64)) AS total_located_quantity
+        FROM located GROUP BY 1
+      )
+      SELECT
+        l.ticker, l.owner, l.platform,
+        CAST(l.located_quantity AS FLOAT64) AS quantity,
+        e.expected_quantity,
+        COALESCE(lt.total_located_quantity, 0) AS total_located_quantity,
+        e.expected_quantity - COALESCE(lt.total_located_quantity, 0) AS difference_quantity,
+        SAFE_DIVIDE(e.market_value_usd, NULLIF(e.expected_quantity, 0)) * CAST(l.located_quantity AS FLOAT64) AS market_value_usd,
+        CASE
+          WHEN l.platform = 'Sin plataforma' THEN 'MISSING_PLATFORM'
+          WHEN CAST(l.located_quantity AS FLOAT64) < -0.00000001 THEN 'NEGATIVE_BALANCE'
+          WHEN ABS(e.expected_quantity - COALESCE(lt.total_located_quantity, 0)) > GREATEST(ABS(e.expected_quantity) * 0.000001, 0.00000001) THEN 'MISMATCH'
+          ELSE 'OK'
+        END AS status
+      FROM located l
+      LEFT JOIN expected e USING (ticker)
+      LEFT JOIN located_totals lt USING (ticker)
+      WHERE ABS(CAST(l.located_quantity AS FLOAT64)) > 0.00000001
+      ORDER BY l.ticker, l.owner, quantity DESC
+    `;
+
+    const assetsQuery = `
+      WITH movement_totals AS (
+        SELECT ${movementTicker} AS ticker,
+          SUM(CASE WHEN movement_type IN ('BUY_ASSET', 'BUY_USDT') THEN CAST(quantity AS FLOAT64)
+                   WHEN movement_type IN ('SELL_ASSET', 'SELL_USDT') THEN -CAST(quantity AS FLOAT64) ELSE 0 END) AS located_quantity,
+          COUNTIF(broker IS NULL OR TRIM(broker) = '') AS missing_platform_movements
+        FROM ${table('movements')} m
+        WHERE movement_type IN ('BUY_ASSET', 'SELL_ASSET', 'BUY_USDT', 'SELL_USDT')
+        GROUP BY 1
+      ),
+      expected AS (
+        SELECT UPPER(COALESCE(NULLIF(normalized_ticker, ''), ticker)) AS ticker,
+          SUM(CAST(quantity_net AS FLOAT64)) AS expected_quantity,
+          SUM(CAST(market_value_usd AS FLOAT64)) AS market_value_usd
+        FROM ${table('vw_portfolio_valued')}
+        WHERE UPPER(COALESCE(NULLIF(normalized_ticker, ''), ticker)) != 'USD'
+        GROUP BY 1
+      ),
+      keys AS (SELECT ticker FROM movement_totals UNION DISTINCT SELECT ticker FROM expected)
+      SELECT k.ticker, COALESCE(e.expected_quantity, 0) AS expected_quantity,
+        COALESCE(m.located_quantity, 0) AS located_quantity,
+        COALESCE(e.expected_quantity, 0) - COALESCE(m.located_quantity, 0) AS difference_quantity,
+        COALESCE(e.market_value_usd, 0) AS market_value_usd,
+        COALESCE(m.missing_platform_movements, 0) AS missing_platform_movements,
+        CASE
+          WHEN COALESCE(m.missing_platform_movements, 0) > 0 THEN 'REVIEW'
+          WHEN ABS(COALESCE(e.expected_quantity, 0) - COALESCE(m.located_quantity, 0)) > GREATEST(ABS(COALESCE(e.expected_quantity, 0)) * 0.000001, 0.00000001) THEN 'MISMATCH'
+          ELSE 'OK'
+        END AS status
+      FROM keys k LEFT JOIN expected e USING (ticker) LEFT JOIN movement_totals m USING (ticker)
+      ORDER BY market_value_usd DESC, ticker
+    `;
+
+    const transfersQuery = `SELECT id, transfer_date, ticker, owner, from_broker, to_broker,
+      CAST(quantity AS FLOAT64) AS quantity, description, created_at
+      FROM ${table('custody_transfers')} ORDER BY transfer_date DESC, created_at DESC`;
+    const [rows, assets, transfers] = await Promise.all([
+      runQuery(rowsQuery), runQuery(assetsQuery), runQuery(transfersQuery),
+    ]);
+    const normalizedRows = normalizeBigQueryRows(rows);
+    const normalizedAssets = normalizeBigQueryRows(assets);
+    res.json({
+      rows: normalizedRows,
+      assets: normalizedAssets,
+      transfers: normalizeBigQueryRows(transfers),
+      summary: {
+        assets: normalizedAssets.length,
+        ok: normalizedAssets.filter((row) => row.status === 'OK').length,
+        review: normalizedAssets.filter((row) => row.status !== 'OK').length,
+        missingPlatform: normalizedRows.filter((row) => row.platform === 'Sin plataforma').length,
+        negativeBalances: normalizedRows.filter((row) => Number(row.quantity) < -0.00000001).length,
+      },
+    });
+  } catch (error) {
+    console.error('Error in getCustodyAudit:', error);
+    res.status(500).json({ error: 'Error fetching custody audit', details: error?.message });
+  }
+}
+
+async function createCustodyTransfer(req, res) {
+  try {
+    await ensureCustodyTransfersTable();
+    const { transfer_date, ticker, owner, from_broker, to_broker, quantity, description } = req.body || {};
+    const parsedQuantity = Number(quantity);
+    if (!transfer_date || !ticker || !from_broker || !to_broker) return res.status(400).json({ error: 'Fecha, activo, origen y destino son obligatorios.' });
+    if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) return res.status(400).json({ error: 'La cantidad debe ser mayor a cero.' });
+    if (String(from_broker).trim().toLowerCase() === String(to_broker).trim().toLowerCase()) return res.status(400).json({ error: 'La plataforma de origen y destino deben ser diferentes.' });
+    const id = crypto.randomUUID();
+    await runQuery(`INSERT INTO ${table('custody_transfers')}
+      (id, transfer_date, ticker, owner, from_broker, to_broker, quantity, description, created_at)
+      VALUES (@id, DATE(@transfer_date), @ticker, @owner, @from_broker, @to_broker, CAST(@quantity AS NUMERIC), @description, CURRENT_TIMESTAMP())`, {
+      id, transfer_date, ticker: String(ticker).trim().toUpperCase(), owner: owner || null,
+      from_broker: String(from_broker).trim(), to_broker: String(to_broker).trim(),
+      quantity: parsedQuantity, description: description || null,
+    });
+    res.status(201).json({ success: true, id });
+  } catch (error) {
+    console.error('Error creating custody transfer:', error);
+    res.status(500).json({ error: 'Error creating custody transfer', details: error?.message });
+  }
+}
+
+async function deleteCustodyTransfer(req, res) {
+  try {
+    await ensureCustodyTransfersTable();
+    const result = await runQuery(`SELECT id FROM ${table('custody_transfers')} WHERE id = @id LIMIT 1`, { id: req.params.id });
+    if (!result.length) return res.status(404).json({ error: 'Transferencia no encontrada.' });
+    await runQuery(`DELETE FROM ${table('custody_transfers')} WHERE id = @id`, { id: req.params.id });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting custody transfer:', error);
+    res.status(500).json({ error: 'Error deleting custody transfer', details: error?.message });
   }
 }
 
@@ -1699,6 +1934,9 @@ module.exports = {
   getMarket,
   getHistory,
   getPlatformAllocation,
+  getCustodyAudit,
+  createCustodyTransfer,
+  deleteCustodyTransfer,
   getBenchmarkComparison,
   getAssetPerformance,
   getHistoricalPerformance,

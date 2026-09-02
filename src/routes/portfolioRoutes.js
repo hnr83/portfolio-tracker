@@ -12,6 +12,9 @@ const {
   getMovements,
   getMarket,
   getPlatformAllocation,
+  getCustodyAudit,
+  createCustodyTransfer,
+  deleteCustodyTransfer,
   getBenchmarkComparison,
   getAssetPerformance,
   getHistoricalPerformance,
@@ -33,6 +36,9 @@ router.get("/market", getMarket);
 router.get("/history", getHistoryWithNetContributions);
 router.get("/net-contributions-history", getNetContributionsHistory);
 router.get("/platform-allocation", getPlatformAllocation);
+router.get("/custody-audit", getCustodyAudit);
+router.post("/custody-transfers", createCustodyTransfer);
+router.delete("/custody-transfers/:id", deleteCustodyTransfer);
 router.get("/benchmark", getBenchmarkComparison);
 router.get("/performance",getAssetPerformance);
 router.get("/historical-performance", getHistoricalPerformance);

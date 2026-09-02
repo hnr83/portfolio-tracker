@@ -36,6 +36,7 @@ export default function Sidebar({ summary, activeView, setActiveView, setSelecte
       <nav className="mt-6 space-y-1.5">
         <DesktopItem view="dashboard" label="Portfolio Jubilación" bold />
         <DesktopItem view="holdings" label="Holdings" />
+        <DesktopItem view="custody" label="Custodia" />
         <DesktopItem view="market" label="Mercado" />
         <DesktopItem view="history" label="Histórico" />
         <DesktopItem view="capital" label="Capital" />
@@ -59,6 +60,7 @@ export default function Sidebar({ summary, activeView, setActiveView, setSelecte
     {showMoreMenu && <><div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm xl:hidden" onClick={() => setShowMoreMenu(false)} /><div className="fixed bottom-28 left-3 right-3 z-[70] rounded-[30px] border border-slate-700/70 bg-[#020617]/98 p-4 shadow-[0_20px_70px_rgba(0,0,0,0.65)] backdrop-blur-xl xl:hidden"><div className="mb-4 text-sm font-semibold text-white">Más opciones</div><div className="space-y-2">
       <MoreButton view="capital" label="Capital" icon="$" />
       <MoreButton view="holdings" label="Holdings" icon="◫" />
+      <MoreButton view="custody" label="Custodia" icon="⌂" />
       <MoreButton view="transactions" label="Transacciones" icon="⇄" onBefore={() => setSelectedAssetMovements(null)} />
       <MoreButton view="performance" label="Performance" icon="▥" />
       <MoreButton view="planner" label="Planner" icon="📈" />
