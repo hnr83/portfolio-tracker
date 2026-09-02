@@ -15,6 +15,10 @@ const {
   getCustodyAudit,
   createCustodyTransfer,
   deleteCustodyTransfer,
+  upsertCustodyBrokerAlias,
+  deleteCustodyBrokerAlias,
+  upsertCustodyOwnerAssignment,
+  deleteCustodyOwnerAssignment,
   getBenchmarkComparison,
   getAssetPerformance,
   getHistoricalPerformance,
@@ -39,6 +43,10 @@ router.get("/platform-allocation", getPlatformAllocation);
 router.get("/custody-audit", getCustodyAudit);
 router.post("/custody-transfers", createCustodyTransfer);
 router.delete("/custody-transfers/:id", deleteCustodyTransfer);
+router.post("/custody-broker-aliases", upsertCustodyBrokerAlias);
+router.delete("/custody-broker-aliases/:id", deleteCustodyBrokerAlias);
+router.post("/custody-owner-assignments", upsertCustodyOwnerAssignment);
+router.delete("/custody-owner-assignments/:id", deleteCustodyOwnerAssignment);
 router.get("/benchmark", getBenchmarkComparison);
 router.get("/performance",getAssetPerformance);
 router.get("/historical-performance", getHistoricalPerformance);

@@ -31,6 +31,29 @@ function ensureCustodyTransfersTable() {
   return custodyTransfersReady;
 }
 
+let custodyCorrectionsReady;
+
+function ensureCustodyCorrectionsTables() {
+  if (!custodyCorrectionsReady) {
+    custodyCorrectionsReady = Promise.all([
+      runQuery(`CREATE TABLE IF NOT EXISTS ${table('custody_broker_aliases')} (
+        id STRING NOT NULL, raw_broker STRING NOT NULL, canonical_broker STRING NOT NULL, created_at TIMESTAMP NOT NULL
+      ) CLUSTER BY raw_broker`),
+      runQuery(`CREATE TABLE IF NOT EXISTS ${table('custody_owner_assignments')} (
+        id STRING NOT NULL, ticker STRING NOT NULL, platform STRING NOT NULL, owner STRING NOT NULL, created_at TIMESTAMP NOT NULL
+      ) CLUSTER BY ticker, platform`),
+    ]).catch((error) => {
+      custodyCorrectionsReady = null;
+      throw error;
+    });
+  }
+  return custodyCorrectionsReady;
+}
+
+async function ensureCustodyTables() {
+  await Promise.all([ensureCustodyTransfersTable(), ensureCustodyCorrectionsTables()]);
+}
+
 function custodyTickerSql(expression) {
   return `CASE
     WHEN UPPER(${expression}) = 'USDT' THEN 'USDT'
@@ -58,6 +81,14 @@ function custodyBrokerSql(expression) {
     WHEN LOWER(TRIM(${expression})) = 'bmb vale' THEN 'BMB Vale'
     ELSE TRIM(${expression})
   END`;
+}
+
+function custodyResolvedBrokerSql(expression) {
+  return `COALESCE(
+    (SELECT ANY_VALUE(a.canonical_broker) FROM ${table('custody_broker_aliases')} a
+      WHERE LOWER(TRIM(a.raw_broker)) = LOWER(TRIM(${expression}))),
+    ${custodyBrokerSql(expression)}
+  )`;
 }
 
 
@@ -838,7 +869,7 @@ async function getMarket(req, res) {
 
 async function getPlatformAllocation(req, res) {
   try {
-    await ensureCustodyTransfersTable();
+    await ensureCustodyTables();
     const movementTicker = `COALESCE(
       (SELECT ANY_VALUE(UPPER(COALESCE(NULLIF(v.normalized_ticker, ''), v.ticker)))
        FROM ${table('vw_portfolio_valued')} v WHERE UPPER(v.ticker) = UPPER(m.ticker)),
@@ -846,7 +877,7 @@ async function getPlatformAllocation(req, res) {
     )`;
     const query = `
       WITH movement_legs AS (
-        SELECT ${movementTicker} AS ticker, ${custodyBrokerSql('m.broker')} AS broker,
+        SELECT ${movementTicker} AS ticker, ${custodyResolvedBrokerSql('m.broker')} AS broker,
           SUM(CASE WHEN movement_type IN ('BUY_ASSET', 'BUY_USDT') THEN CAST(quantity AS FLOAT64)
                    WHEN movement_type IN ('SELL_ASSET', 'SELL_USDT') THEN -CAST(quantity AS FLOAT64) ELSE 0 END) AS quantity
         FROM ${table('movements')} m
@@ -854,9 +885,9 @@ async function getPlatformAllocation(req, res) {
         GROUP BY 1, 2
       ),
       transfer_legs AS (
-        SELECT ${custodyTickerSql('ticker')} AS ticker, ${custodyBrokerSql('from_broker')} AS broker, -CAST(quantity AS FLOAT64) AS quantity FROM ${table('custody_transfers')}
+        SELECT ${custodyTickerSql('ticker')} AS ticker, ${custodyResolvedBrokerSql('from_broker')} AS broker, -CAST(quantity AS FLOAT64) AS quantity FROM ${table('custody_transfers')}
         UNION ALL
-        SELECT ${custodyTickerSql('ticker')} AS ticker, ${custodyBrokerSql('to_broker')} AS broker, CAST(quantity AS FLOAT64) AS quantity FROM ${table('custody_transfers')}
+        SELECT ${custodyTickerSql('ticker')} AS ticker, ${custodyResolvedBrokerSql('to_broker')} AS broker, CAST(quantity AS FLOAT64) AS quantity FROM ${table('custody_transfers')}
       ),
       located AS (
         SELECT ticker, broker, SUM(quantity) AS quantity FROM (SELECT * FROM movement_legs UNION ALL SELECT * FROM transfer_legs) GROUP BY 1, 2
@@ -899,16 +930,16 @@ async function getPlatformAllocation(req, res) {
 
 async function getCustodyAudit(req, res) {
   try {
-    await ensureCustodyTransfersTable();
+    await ensureCustodyTables();
     const movementTicker = `COALESCE(
       (SELECT ANY_VALUE(UPPER(COALESCE(NULLIF(v.normalized_ticker, ''), v.ticker)))
        FROM ${table('vw_portfolio_valued')} v WHERE UPPER(v.ticker) = UPPER(m.ticker)),
       ${custodyTickerSql('m.ticker')}
     )`;
     const transferTicker = custodyTickerSql('ticker');
-    const movementBroker = custodyBrokerSql('broker');
-    const fromBroker = custodyBrokerSql('from_broker');
-    const toBroker = custodyBrokerSql('to_broker');
+    const movementBroker = custodyResolvedBrokerSql('broker');
+    const fromBroker = custodyResolvedBrokerSql('from_broker');
+    const toBroker = custodyResolvedBrokerSql('to_broker');
 
     const rowsQuery = `
       WITH movement_legs AS (
@@ -936,9 +967,17 @@ async function getCustodyAudit(req, res) {
           ${toBroker} AS platform, CAST(quantity AS NUMERIC) AS quantity
         FROM ${table('custody_transfers')}
       ),
+      assigned_legs AS (
+        SELECT ticker,
+          COALESCE((SELECT ANY_VALUE(a.owner) FROM ${table('custody_owner_assignments')} a
+            WHERE UPPER(a.ticker) = UPPER(legs.ticker) AND LOWER(TRIM(a.platform)) = LOWER(TRIM(legs.platform))), owner) AS owner,
+          platform, quantity
+        FROM (SELECT * FROM movement_legs UNION ALL SELECT * FROM transfer_legs)
+          AS legs
+      ),
       located AS (
         SELECT ticker, owner, platform, SUM(quantity) AS located_quantity
-        FROM (SELECT * FROM movement_legs UNION ALL SELECT * FROM transfer_legs)
+        FROM assigned_legs
         GROUP BY 1, 2, 3
       ),
       expected AS (
@@ -1010,8 +1049,10 @@ async function getCustodyAudit(req, res) {
     const transfersQuery = `SELECT id, transfer_date, ticker, owner, from_broker, to_broker,
       CAST(quantity AS FLOAT64) AS quantity, description, created_at
       FROM ${table('custody_transfers')} ORDER BY transfer_date DESC, created_at DESC`;
-    const [rows, assets, transfers] = await Promise.all([
-      runQuery(rowsQuery), runQuery(assetsQuery), runQuery(transfersQuery),
+    const aliasesQuery = `SELECT id, raw_broker, canonical_broker, created_at FROM ${table('custody_broker_aliases')} ORDER BY canonical_broker, raw_broker`;
+    const assignmentsQuery = `SELECT id, ticker, platform, owner, created_at FROM ${table('custody_owner_assignments')} ORDER BY ticker, platform`;
+    const [rows, assets, transfers, aliases, assignments] = await Promise.all([
+      runQuery(rowsQuery), runQuery(assetsQuery), runQuery(transfersQuery), runQuery(aliasesQuery), runQuery(assignmentsQuery),
     ]);
     const normalizedRows = normalizeBigQueryRows(rows);
     const normalizedAssets = normalizeBigQueryRows(assets);
@@ -1019,6 +1060,8 @@ async function getCustodyAudit(req, res) {
       rows: normalizedRows,
       assets: normalizedAssets,
       transfers: normalizeBigQueryRows(transfers),
+      brokerAliases: normalizeBigQueryRows(aliases),
+      ownerAssignments: normalizeBigQueryRows(assignments),
       summary: {
         assets: normalizedAssets.length,
         ok: normalizedAssets.filter((row) => row.status === 'OK').length,
@@ -1030,6 +1073,69 @@ async function getCustodyAudit(req, res) {
   } catch (error) {
     console.error('Error in getCustodyAudit:', error);
     res.status(500).json({ error: 'Error fetching custody audit', details: error?.message });
+  }
+}
+
+async function upsertCustodyBrokerAlias(req, res) {
+  try {
+    await ensureCustodyCorrectionsTables();
+    const rawBroker = String(req.body?.raw_broker || '').trim();
+    const canonicalBroker = String(req.body?.canonical_broker || '').trim();
+    if (!rawBroker || !canonicalBroker) return res.status(400).json({ error: 'El nombre original y el nombre definitivo son obligatorios.' });
+    const id = crypto.randomUUID();
+    await runQuery(`MERGE ${table('custody_broker_aliases')} target
+      USING (SELECT @raw_broker AS raw_broker) source
+      ON LOWER(TRIM(target.raw_broker)) = LOWER(TRIM(source.raw_broker))
+      WHEN MATCHED THEN UPDATE SET canonical_broker = @canonical_broker
+      WHEN NOT MATCHED THEN INSERT (id, raw_broker, canonical_broker, created_at)
+        VALUES (@id, @raw_broker, @canonical_broker, CURRENT_TIMESTAMP())`,
+      { id, raw_broker: rawBroker, canonical_broker: canonicalBroker });
+    res.status(201).json({ success: true });
+  } catch (error) {
+    console.error('Error saving custody broker alias:', error);
+    res.status(500).json({ error: 'Error saving custody broker alias', details: error?.message });
+  }
+}
+
+async function deleteCustodyBrokerAlias(req, res) {
+  try {
+    await ensureCustodyCorrectionsTables();
+    await runQuery(`DELETE FROM ${table('custody_broker_aliases')} WHERE id = @id`, { id: req.params.id });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Error deleting custody broker alias', details: error?.message });
+  }
+}
+
+async function upsertCustodyOwnerAssignment(req, res) {
+  try {
+    await ensureCustodyCorrectionsTables();
+    const ticker = String(req.body?.ticker || '').trim().toUpperCase();
+    const platform = String(req.body?.platform || '').trim();
+    const owner = String(req.body?.owner || '').trim();
+    if (!ticker || !platform || !owner) return res.status(400).json({ error: 'Activo, plataforma y titular son obligatorios.' });
+    const id = crypto.randomUUID();
+    await runQuery(`MERGE ${table('custody_owner_assignments')} target
+      USING (SELECT @ticker AS ticker, @platform AS platform) source
+      ON UPPER(target.ticker) = UPPER(source.ticker) AND LOWER(TRIM(target.platform)) = LOWER(TRIM(source.platform))
+      WHEN MATCHED THEN UPDATE SET owner = @owner
+      WHEN NOT MATCHED THEN INSERT (id, ticker, platform, owner, created_at)
+        VALUES (@id, @ticker, @platform, @owner, CURRENT_TIMESTAMP())`,
+      { id, ticker, platform, owner });
+    res.status(201).json({ success: true });
+  } catch (error) {
+    console.error('Error saving custody owner assignment:', error);
+    res.status(500).json({ error: 'Error saving custody owner assignment', details: error?.message });
+  }
+}
+
+async function deleteCustodyOwnerAssignment(req, res) {
+  try {
+    await ensureCustodyCorrectionsTables();
+    await runQuery(`DELETE FROM ${table('custody_owner_assignments')} WHERE id = @id`, { id: req.params.id });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Error deleting custody owner assignment', details: error?.message });
   }
 }
 
@@ -1952,6 +2058,10 @@ module.exports = {
   getCustodyAudit,
   createCustodyTransfer,
   deleteCustodyTransfer,
+  upsertCustodyBrokerAlias,
+  deleteCustodyBrokerAlias,
+  upsertCustodyOwnerAssignment,
+  deleteCustodyOwnerAssignment,
   getBenchmarkComparison,
   getAssetPerformance,
   getHistoricalPerformance,

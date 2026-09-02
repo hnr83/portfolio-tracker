@@ -43,6 +43,8 @@ export default function CustodyAuditView() {
   const [form, setForm] = useState(EMPTY_TRANSFER);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+  const [correction, setCorrection] = useState(null);
+  const [correctionValue, setCorrectionValue] = useState("");
 
   const load = useCallback(async (force = false) => {
     try {
@@ -92,6 +94,39 @@ export default function CustodyAuditView() {
     } catch (err) { setError(err.message || "No se pudo eliminar la transferencia."); }
   }
 
+  function openCorrection(type, row) {
+    setCorrection({ type, row });
+    setCorrectionValue(type === "owner" ? (row.owner === "Sin titular" ? "" : row.owner) : row.platform);
+    setFormError("");
+  }
+
+  async function saveCorrection(event) {
+    event.preventDefault();
+    try {
+      setSaving(true); setFormError("");
+      const isOwner = correction.type === "owner";
+      const path = isOwner ? "/api/portfolio/custody-owner-assignments" : "/api/portfolio/custody-broker-aliases";
+      const body = isOwner
+        ? { ticker: correction.row.ticker, platform: correction.row.platform, owner: correctionValue }
+        : { raw_broker: correction.row.platform, canonical_broker: correctionValue };
+      await readJson(await apiFetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }));
+      invalidateCache("custody:");
+      setCorrection(null);
+      await load(true);
+    } catch (err) { setFormError(err.message || "No se pudo guardar la corrección."); }
+    finally { setSaving(false); }
+  }
+
+  async function removeRule(type, id) {
+    if (!window.confirm("¿Eliminar esta regla de corrección?")) return;
+    const path = type === "owner" ? `/api/portfolio/custody-owner-assignments/${id}` : `/api/portfolio/custody-broker-aliases/${id}`;
+    try {
+      await readJson(await apiFetch(path, { method: "DELETE" }));
+      invalidateCache("custody:");
+      await load(true);
+    } catch (err) { setError(err.message || "No se pudo eliminar la corrección."); }
+  }
+
   return (
     <div className="space-y-5">
       <header className="flex flex-col gap-4 border-b border-slate-800/80 pb-5 md:flex-row md:items-end md:justify-between">
@@ -124,7 +159,7 @@ export default function CustodyAuditView() {
             <thead className="bg-slate-900/70 text-[10px] uppercase tracking-[0.18em] text-slate-500"><tr><th className="px-4 py-3">Activo</th><th className="px-4 py-3">Plataforma</th><th className="px-4 py-3">Titular</th><th className="px-4 py-3 text-right">Cantidad</th><th className="px-4 py-3 text-right">Valor estimado</th><th className="px-4 py-3">Estado</th><th className="px-4 py-3"></th></tr></thead>
             <tbody className="divide-y divide-slate-800">
               {rows.map((row) => <tr key={`${row.ticker}-${row.owner}-${row.platform}`} className="text-slate-300">
-                <td className="px-4 py-3 font-semibold text-white">{row.ticker}</td><td className="px-4 py-3">{row.platform}</td><td className="px-4 py-3">{row.owner}</td><td className={`px-4 py-3 text-right tabular-nums ${Number(row.quantity) < 0 ? "text-red-300" : ""}`}>{formatNumber(row.quantity, 8)}</td><td className="px-4 py-3 text-right tabular-nums">{formatCurrency(row.market_value_usd, "USD")}</td><td className="px-4 py-3"><StatusBadge status={row.status} /></td><td className="px-4 py-3 text-right"><button type="button" onClick={() => openTransfer(row)} className="text-xs font-medium text-indigo-300 hover:text-indigo-200">Transferir</button></td>
+                <td className="px-4 py-3 font-semibold text-white">{row.ticker}</td><td className="px-4 py-3">{row.platform}</td><td className="px-4 py-3">{row.owner}</td><td className={`px-4 py-3 text-right tabular-nums ${Number(row.quantity) < 0 ? "text-red-300" : ""}`}>{formatNumber(row.quantity, 8)}</td><td className="px-4 py-3 text-right tabular-nums">{formatCurrency(row.market_value_usd, "USD")}</td><td className="px-4 py-3"><StatusBadge status={row.status} /></td><td className="px-4 py-3"><div className="flex justify-end gap-3"><button type="button" onClick={() => openCorrection("owner", row)} className="text-xs text-sky-300 hover:text-sky-200">Titular</button><button type="button" onClick={() => openCorrection("broker", row)} className="text-xs text-violet-300 hover:text-violet-200">Broker</button><button type="button" onClick={() => openTransfer(row)} className="text-xs font-medium text-indigo-300 hover:text-indigo-200">Transferir</button></div></td>
               </tr>)}
               {!loading && rows.length === 0 && <tr><td colSpan="7" className="px-4 py-10 text-center text-slate-500">No hay posiciones para mostrar.</td></tr>}
             </tbody>
@@ -133,6 +168,11 @@ export default function CustodyAuditView() {
       </section>
 
       {(data.transfers || []).length > 0 && <section className="rounded-[26px] border border-slate-800 bg-slate-950/35 p-5"><h2 className="text-lg font-semibold text-white">Transferencias registradas</h2><div className="mt-4 space-y-2">{data.transfers.map((transfer) => <div key={transfer.id} className="flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-900/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"><div><span className="font-semibold text-white">{transfer.ticker}</span><span className="ml-2 text-slate-400">{formatNumber(transfer.quantity, 8)} · {transfer.from_broker} → {transfer.to_broker}</span><div className="mt-1 text-xs text-slate-500">{String(transfer.transfer_date).slice(0, 10)} · {transfer.owner || "Sin titular"}{transfer.description ? ` · ${transfer.description}` : ""}</div></div><button type="button" onClick={() => removeTransfer(transfer.id)} className="self-start text-xs text-red-300 hover:text-red-200 sm:self-auto">Eliminar</button></div>)}</div></section>}
+
+      {((data.brokerAliases || []).length > 0 || (data.ownerAssignments || []).length > 0) && <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="rounded-[26px] border border-slate-800 bg-slate-950/35 p-5"><h2 className="text-lg font-semibold text-white">Alias de plataformas</h2><div className="mt-4 space-y-2">{(data.brokerAliases || []).map((rule) => <div key={rule.id} className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/50 px-4 py-3 text-sm"><span className="text-slate-300">{rule.raw_broker} <span className="mx-2 text-slate-600">→</span> <strong className="text-white">{rule.canonical_broker}</strong></span><button type="button" onClick={() => removeRule("broker", rule.id)} className="text-xs text-red-300">Eliminar</button></div>)}</div></div>
+        <div className="rounded-[26px] border border-slate-800 bg-slate-950/35 p-5"><h2 className="text-lg font-semibold text-white">Titulares asignados</h2><div className="mt-4 space-y-2">{(data.ownerAssignments || []).map((rule) => <div key={rule.id} className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/50 px-4 py-3 text-sm"><span className="text-slate-300"><strong className="text-white">{rule.ticker}</strong> · {rule.platform} <span className="mx-2 text-slate-600">→</span> {rule.owner}</span><button type="button" onClick={() => removeRule("owner", rule.id)} className="text-xs text-red-300">Eliminar</button></div>)}</div></div>
+      </section>}
 
       {modalOpen && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"><form onSubmit={saveTransfer} className="w-full max-w-xl rounded-[28px] border border-slate-700 bg-slate-900 p-6 shadow-2xl"><div className="flex items-center justify-between"><div><h2 className="text-xl font-semibold text-white">Transferencia de custodia</h2><p className="mt-1 text-sm text-slate-400">No modifica costo, aportes ni PnL.</p></div><button type="button" onClick={() => setModalOpen(false)} className="text-2xl text-slate-400">×</button></div>{formError && <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">{formError}</div>}<div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <label className="text-sm text-slate-400">Fecha<input type="date" required value={form.transfer_date} onChange={(e) => setForm({ ...form, transfer_date: e.target.value })} className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-white" /></label>
@@ -143,6 +183,8 @@ export default function CustodyAuditView() {
         <label className="text-sm text-slate-400">Hacia<input required list="custody-platforms" value={form.to_broker} onChange={(e) => setForm({ ...form, to_broker: e.target.value })} className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-white" /><datalist id="custody-platforms">{PLATFORMS.map((platform) => <option key={platform} value={platform} />)}</datalist></label>
         <label className="text-sm text-slate-400 sm:col-span-2">Nota<input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Opcional" className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-white" /></label>
       </div><div className="mt-6 flex justify-end gap-3"><button type="button" onClick={() => setModalOpen(false)} className="rounded-xl border border-slate-700 px-4 py-2.5 text-sm text-slate-300">Cancelar</button><button type="submit" disabled={saving} className="rounded-xl bg-indigo-500 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50">{saving ? "Guardando…" : "Guardar transferencia"}</button></div></form></div>}
+
+      {correction && <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"><form onSubmit={saveCorrection} className="w-full max-w-md rounded-[28px] border border-slate-700 bg-slate-900 p-6 shadow-2xl"><div className="flex items-center justify-between"><h2 className="text-xl font-semibold text-white">{correction.type === "owner" ? "Asignar titular" : "Normalizar plataforma"}</h2><button type="button" onClick={() => setCorrection(null)} className="text-2xl text-slate-400">×</button></div><p className="mt-2 text-sm text-slate-400">{correction.type === "owner" ? `${correction.row.ticker} · ${correction.row.platform}` : `Reemplazar “${correction.row.platform}” en toda la auditoría`}</p>{formError && <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">{formError}</div>}<label className="mt-5 block text-sm text-slate-400">{correction.type === "owner" ? "Titular" : "Nombre definitivo"}<input autoFocus required list={correction.type === "owner" ? "custody-owners" : "correction-platforms"} value={correctionValue} onChange={(event) => setCorrectionValue(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-white" /><datalist id="custody-owners"><option value="Horacio" /><option value="Vale" /></datalist><datalist id="correction-platforms">{PLATFORMS.filter((platform) => platform !== "Sin plataforma").map((platform) => <option key={platform} value={platform} />)}</datalist></label><div className="mt-6 flex justify-end gap-3"><button type="button" onClick={() => setCorrection(null)} className="rounded-xl border border-slate-700 px-4 py-2.5 text-sm text-slate-300">Cancelar</button><button type="submit" disabled={saving} className="rounded-xl bg-indigo-500 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50">{saving ? "Guardando…" : "Guardar"}</button></div></form></div>}
     </div>
   );
 }
