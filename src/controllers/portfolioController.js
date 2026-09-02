@@ -861,16 +861,31 @@ async function getPlatformAllocation(req, res) {
       located AS (
         SELECT ticker, broker, SUM(quantity) AS quantity FROM (SELECT * FROM movement_legs UNION ALL SELECT * FROM transfer_legs) GROUP BY 1, 2
       ),
+      located_totals AS (
+        SELECT ticker, SUM(GREATEST(quantity, 0)) AS positive_quantity
+        FROM located GROUP BY 1
+      ),
       valued AS (
         SELECT UPPER(COALESCE(NULLIF(normalized_ticker, ''), ticker)) AS ticker,
+          SUM(CAST(quantity_net AS FLOAT64)) AS expected_quantity,
           SAFE_DIVIDE(SUM(CAST(market_value_usd AS FLOAT64)), NULLIF(SUM(CAST(quantity_net AS FLOAT64)), 0)) AS unit_value_usd
         FROM ${table('vw_portfolio_valued')}
         WHERE UPPER(COALESCE(NULLIF(normalized_ticker, ''), ticker)) != 'USD'
         GROUP BY 1
+      ),
+      allocation AS (
+        SELECT l.broker,
+          GREATEST(l.quantity, 0) * LEAST(1, SAFE_DIVIDE(v.expected_quantity, NULLIF(t.positive_quantity, 0))) * v.unit_value_usd AS invested_usd
+        FROM located l JOIN valued v USING (ticker) JOIN located_totals t USING (ticker)
+        WHERE l.quantity > 0 AND v.expected_quantity > 0
+        UNION ALL
+        SELECT 'Por confirmar' AS broker,
+          GREATEST(v.expected_quantity - COALESCE(t.positive_quantity, 0), 0) * v.unit_value_usd AS invested_usd
+        FROM valued v LEFT JOIN located_totals t USING (ticker)
+        WHERE v.expected_quantity > COALESCE(t.positive_quantity, 0)
       )
-      SELECT l.broker, SUM(l.quantity * v.unit_value_usd) AS invested_usd
-      FROM located l JOIN valued v USING (ticker)
-      WHERE l.quantity > 0
+      SELECT broker, SUM(invested_usd) AS invested_usd
+      FROM allocation
       GROUP BY 1 HAVING invested_usd > 0 ORDER BY invested_usd DESC
     `;
 
@@ -936,7 +951,7 @@ async function getCustodyAudit(req, res) {
         GROUP BY 1
       ),
       located_totals AS (
-        SELECT ticker, SUM(CAST(located_quantity AS FLOAT64)) AS total_located_quantity
+        SELECT ticker, SUM(GREATEST(CAST(located_quantity AS FLOAT64), 0)) AS total_located_quantity
         FROM located GROUP BY 1
       )
       SELECT
@@ -948,14 +963,14 @@ async function getCustodyAudit(req, res) {
         SAFE_DIVIDE(e.market_value_usd, NULLIF(e.expected_quantity, 0)) * CAST(l.located_quantity AS FLOAT64) AS market_value_usd,
         CASE
           WHEN l.platform = 'Sin plataforma' THEN 'MISSING_PLATFORM'
-          WHEN CAST(l.located_quantity AS FLOAT64) < -0.00000001 THEN 'NEGATIVE_BALANCE'
           WHEN ABS(e.expected_quantity - COALESCE(lt.total_located_quantity, 0)) > GREATEST(ABS(e.expected_quantity) * 0.000001, 0.00000001) THEN 'MISMATCH'
           ELSE 'OK'
         END AS status
       FROM located l
       LEFT JOIN expected e USING (ticker)
       LEFT JOIN located_totals lt USING (ticker)
-      WHERE ABS(CAST(l.located_quantity AS FLOAT64)) > 0.00000001
+      WHERE CAST(l.located_quantity AS FLOAT64) > 0.00000001
+        AND e.expected_quantity > 0.00000001
       ORDER BY l.ticker, l.owner, quantity DESC
     `;
 
@@ -964,7 +979,7 @@ async function getCustodyAudit(req, res) {
         SELECT ${movementTicker} AS ticker,
           SUM(CASE WHEN movement_type IN ('BUY_ASSET', 'BUY_USDT') THEN CAST(quantity AS FLOAT64)
                    WHEN movement_type IN ('SELL_ASSET', 'SELL_USDT') THEN -CAST(quantity AS FLOAT64) ELSE 0 END) AS located_quantity,
-          COUNTIF(broker IS NULL OR TRIM(broker) = '') AS missing_platform_movements
+          COUNTIF((broker IS NULL OR TRIM(broker) = '') AND movement_type IN ('BUY_ASSET', 'BUY_USDT')) AS missing_platform_movements
         FROM ${table('movements')} m
         WHERE movement_type IN ('BUY_ASSET', 'SELL_ASSET', 'BUY_USDT', 'SELL_USDT')
         GROUP BY 1
@@ -977,7 +992,7 @@ async function getCustodyAudit(req, res) {
         WHERE UPPER(COALESCE(NULLIF(normalized_ticker, ''), ticker)) != 'USD'
         GROUP BY 1
       ),
-      keys AS (SELECT ticker FROM movement_totals UNION DISTINCT SELECT ticker FROM expected)
+      keys AS (SELECT ticker FROM expected WHERE expected_quantity > 0.00000001)
       SELECT k.ticker, COALESCE(e.expected_quantity, 0) AS expected_quantity,
         COALESCE(m.located_quantity, 0) AS located_quantity,
         COALESCE(e.expected_quantity, 0) - COALESCE(m.located_quantity, 0) AS difference_quantity,
@@ -1009,7 +1024,7 @@ async function getCustodyAudit(req, res) {
         ok: normalizedAssets.filter((row) => row.status === 'OK').length,
         review: normalizedAssets.filter((row) => row.status !== 'OK').length,
         missingPlatform: normalizedRows.filter((row) => row.platform === 'Sin plataforma').length,
-        negativeBalances: normalizedRows.filter((row) => Number(row.quantity) < -0.00000001).length,
+        negativeBalances: 0,
       },
     });
   } catch (error) {
