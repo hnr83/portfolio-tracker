@@ -91,6 +91,10 @@ function custodyResolvedBrokerSql(expression) {
   )`;
 }
 
+function custodyOpenMovementSql(alias = 'm') {
+  return `NOT REGEXP_CONTAINS(LOWER(COALESCE(${alias}.description, '')), r'posici[oó]n cerrada')`;
+}
+
 
 function isBigQueryNumericObject(value) {
   return (
@@ -882,6 +886,7 @@ async function getPlatformAllocation(req, res) {
                    WHEN movement_type IN ('SELL_ASSET', 'SELL_USDT') THEN -ABS(CAST(quantity AS FLOAT64)) ELSE 0 END) AS quantity
         FROM ${table('movements')} m
         WHERE movement_type IN ('BUY_ASSET', 'SELL_ASSET', 'BUY_USDT', 'SELL_USDT') AND quantity IS NOT NULL
+          AND ${custodyOpenMovementSql('m')}
         GROUP BY 1, 2
       ),
       transfer_legs AS (
@@ -954,6 +959,7 @@ async function getCustodyAudit(req, res) {
         FROM ${table('movements')} m
         WHERE movement_type IN ('BUY_ASSET', 'SELL_ASSET', 'BUY_USDT', 'SELL_USDT')
           AND quantity IS NOT NULL
+          AND ${custodyOpenMovementSql('m')}
         GROUP BY 1, 2, 3
       ),
       transfer_legs AS (
@@ -1021,6 +1027,7 @@ async function getCustodyAudit(req, res) {
           COUNTIF((broker IS NULL OR TRIM(broker) = '') AND movement_type IN ('BUY_ASSET', 'BUY_USDT')) AS missing_platform_movements
         FROM ${table('movements')} m
         WHERE movement_type IN ('BUY_ASSET', 'SELL_ASSET', 'BUY_USDT', 'SELL_USDT')
+          AND ${custodyOpenMovementSql('m')}
         GROUP BY 1
       ),
       expected AS (
