@@ -1056,17 +1056,26 @@ async function getCustodyAudit(req, res) {
     ]);
     const normalizedRows = normalizeBigQueryRows(rows);
     const normalizedAssets = normalizeBigQueryRows(assets);
+    const reviewTickers = new Set(
+      normalizedRows.filter((row) => row.status !== 'OK').map((row) => row.ticker)
+    );
+    const missingPlatformTickers = new Set(
+      normalizedRows.filter((row) => row.platform === 'Sin plataforma').map((row) => row.ticker)
+    );
+    const reconciledAssets = normalizedAssets.map((asset) =>
+      reviewTickers.has(asset.ticker) ? { ...asset, status: 'REVIEW' } : asset
+    );
     res.json({
       rows: normalizedRows,
-      assets: normalizedAssets,
+      assets: reconciledAssets,
       transfers: normalizeBigQueryRows(transfers),
       brokerAliases: normalizeBigQueryRows(aliases),
       ownerAssignments: normalizeBigQueryRows(assignments),
       summary: {
         assets: normalizedAssets.length,
-        ok: normalizedAssets.filter((row) => row.status === 'OK').length,
-        review: normalizedAssets.filter((row) => row.status !== 'OK').length,
-        missingPlatform: normalizedRows.filter((row) => row.platform === 'Sin plataforma').length,
+        ok: normalizedAssets.length - reviewTickers.size,
+        review: reviewTickers.size,
+        missingPlatform: missingPlatformTickers.size,
         negativeBalances: 0,
       },
     });
