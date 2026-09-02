@@ -46,11 +46,11 @@ export default function CustodyAuditView() {
   const [correction, setCorrection] = useState(null);
   const [correctionValue, setCorrectionValue] = useState("");
 
-  const load = useCallback(async (force = false) => {
+  const load = useCallback(async () => {
     try {
       setLoading(true);
       setError("");
-      const result = await fetchCached("custody:audit", async () => readJson(await apiFetch("/api/portfolio/custody-audit")), { ttlMs: 15 * 60 * 1000, force });
+      const result = await fetchCached("custody:audit", async () => readJson(await apiFetch("/api/portfolio/custody-audit", { cache: "no-store" })), { ttlMs: 0, force: true });
       setData(result);
     } catch (err) {
       setError(err.message || "No se pudo cargar la auditoría de custodia.");
@@ -80,7 +80,7 @@ export default function CustodyAuditView() {
       await readJson(await apiFetch("/api/portfolio/custody-transfers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) }));
       invalidateCache("custody:");
       setModalOpen(false);
-      await load(true);
+      await load();
     } catch (err) { setFormError(err.message || "No se pudo guardar la transferencia."); }
     finally { setSaving(false); }
   }
@@ -90,7 +90,7 @@ export default function CustodyAuditView() {
     try {
       await readJson(await apiFetch(`/api/portfolio/custody-transfers/${id}`, { method: "DELETE" }));
       invalidateCache("custody:");
-      await load(true);
+      await load();
     } catch (err) { setError(err.message || "No se pudo eliminar la transferencia."); }
   }
 
@@ -112,7 +112,7 @@ export default function CustodyAuditView() {
       await readJson(await apiFetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }));
       invalidateCache("custody:");
       setCorrection(null);
-      await load(true);
+      await load();
     } catch (err) { setFormError(err.message || "No se pudo guardar la corrección."); }
     finally { setSaving(false); }
   }
@@ -123,7 +123,7 @@ export default function CustodyAuditView() {
     try {
       await readJson(await apiFetch(path, { method: "DELETE" }));
       invalidateCache("custody:");
-      await load(true);
+      await load();
     } catch (err) { setError(err.message || "No se pudo eliminar la corrección."); }
   }
 
@@ -136,7 +136,7 @@ export default function CustodyAuditView() {
           <p className="mt-2 max-w-3xl text-sm text-slate-400">Reconstrucción de cada activo por plataforma y titular, conciliada contra la posición global.</p>
         </div>
         <div className="flex gap-3">
-          <button type="button" onClick={() => load(true)} disabled={loading} className="rounded-2xl border border-slate-700 px-4 py-2.5 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-50">{loading ? "Actualizando…" : "Actualizar"}</button>
+          <button type="button" onClick={() => load()} disabled={loading} className="rounded-2xl border border-slate-700 px-4 py-2.5 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-50">{loading ? "Actualizando…" : "Actualizar"}</button>
           <button type="button" onClick={() => openTransfer()} className="rounded-2xl bg-gradient-to-r from-indigo-500 to-blue-500 px-4 py-2.5 text-sm font-medium text-white">Registrar transferencia</button>
         </div>
       </header>
