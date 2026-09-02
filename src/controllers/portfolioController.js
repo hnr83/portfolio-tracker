@@ -98,6 +98,20 @@ function custodyOpenMovementSql(alias = 'm') {
   )`;
 }
 
+function custodyMovementQuantitySql(alias = 'm', numericType = 'FLOAT64') {
+  return `CASE
+    WHEN ${alias}.movement_type IN ('BUY_ASSET', 'BUY_USD', 'BUY_USDT')
+      THEN ABS(CAST(${alias}.quantity AS ${numericType}))
+    WHEN ${alias}.movement_type = 'INCOME_USD'
+      THEN ABS(CAST(COALESCE(${alias}.quantity, ${alias}.net_amount, ${alias}.gross_amount) AS ${numericType}))
+    WHEN ${alias}.movement_type IN ('SELL_ASSET', 'SELL_USD', 'SELL_USDT')
+      THEN -ABS(CAST(${alias}.quantity AS ${numericType}))
+    WHEN ${alias}.movement_type = 'EXPENSE_USD'
+      THEN -ABS(CAST(COALESCE(${alias}.quantity, ${alias}.net_amount, ${alias}.gross_amount) AS ${numericType}))
+    ELSE 0
+  END`;
+}
+
 
 function isBigQueryNumericObject(value) {
   return (
@@ -948,6 +962,9 @@ async function getCustodyAudit(req, res) {
     const movementBroker = custodyResolvedBrokerSql('broker');
     const fromBroker = custodyResolvedBrokerSql('from_broker');
     const toBroker = custodyResolvedBrokerSql('to_broker');
+    const signedMovementQuantity = custodyMovementQuantitySql('m', 'NUMERIC');
+    const signedMovementQuantityFloat = custodyMovementQuantitySql('m', 'FLOAT64');
+    const custodyMovementTypes = "'BUY_ASSET', 'SELL_ASSET', 'BUY_USD', 'SELL_USD', 'INCOME_USD', 'EXPENSE_USD', 'BUY_USDT', 'SELL_USDT'";
 
     const rowsQuery = `
       WITH movement_legs AS (
@@ -955,13 +972,10 @@ async function getCustodyAudit(req, res) {
           ${movementTicker} AS ticker,
           COALESCE(NULLIF(TRIM(owner), ''), 'Sin titular') AS owner,
           ${movementBroker} AS platform,
-          SUM(CASE
-            WHEN movement_type IN ('BUY_ASSET', 'BUY_USDT') THEN ABS(CAST(quantity AS NUMERIC))
-            WHEN movement_type IN ('SELL_ASSET', 'SELL_USDT') THEN -ABS(CAST(quantity AS NUMERIC))
-            ELSE 0 END) AS quantity
+          SUM(${signedMovementQuantity}) AS quantity
         FROM ${table('movements')} m
-        WHERE movement_type IN ('BUY_ASSET', 'SELL_ASSET', 'BUY_USDT', 'SELL_USDT')
-          AND quantity IS NOT NULL
+        WHERE movement_type IN (${custodyMovementTypes})
+          AND COALESCE(quantity, net_amount, gross_amount) IS NOT NULL
           AND ${custodyOpenMovementSql('m')}
         GROUP BY 1, 2, 3
       ),
@@ -995,7 +1009,6 @@ async function getCustodyAudit(req, res) {
           SUM(CAST(quantity_net AS FLOAT64)) AS expected_quantity,
           SUM(CAST(market_value_usd AS FLOAT64)) AS market_value_usd
         FROM ${table('vw_portfolio_valued')}
-        WHERE UPPER(COALESCE(NULLIF(normalized_ticker, ''), ticker)) NOT IN ('USD')
         GROUP BY 1
       ),
       located_totals AS (
@@ -1031,11 +1044,11 @@ async function getCustodyAudit(req, res) {
     const assetsQuery = `
       WITH movement_totals AS (
         SELECT ${movementTicker} AS ticker,
-          SUM(CASE WHEN movement_type IN ('BUY_ASSET', 'BUY_USDT') THEN ABS(CAST(quantity AS FLOAT64))
-                   WHEN movement_type IN ('SELL_ASSET', 'SELL_USDT') THEN -ABS(CAST(quantity AS FLOAT64)) ELSE 0 END) AS located_quantity,
-          COUNTIF((broker IS NULL OR TRIM(broker) = '') AND movement_type IN ('BUY_ASSET', 'BUY_USDT')) AS missing_platform_movements
+          SUM(${signedMovementQuantityFloat}) AS located_quantity,
+          COUNTIF((broker IS NULL OR TRIM(broker) = '') AND movement_type IN ('BUY_ASSET', 'BUY_USD', 'INCOME_USD', 'BUY_USDT')) AS missing_platform_movements
         FROM ${table('movements')} m
-        WHERE movement_type IN ('BUY_ASSET', 'SELL_ASSET', 'BUY_USDT', 'SELL_USDT')
+        WHERE movement_type IN (${custodyMovementTypes})
+          AND COALESCE(quantity, net_amount, gross_amount) IS NOT NULL
           AND ${custodyOpenMovementSql('m')}
         GROUP BY 1
       ),
@@ -1044,7 +1057,6 @@ async function getCustodyAudit(req, res) {
           SUM(CAST(quantity_net AS FLOAT64)) AS expected_quantity,
           SUM(CAST(market_value_usd AS FLOAT64)) AS market_value_usd
         FROM ${table('vw_portfolio_valued')}
-        WHERE UPPER(COALESCE(NULLIF(normalized_ticker, ''), ticker)) != 'USD'
         GROUP BY 1
       ),
       keys AS (SELECT ticker FROM expected WHERE expected_quantity > 0.00000001)
