@@ -878,8 +878,8 @@ async function getPlatformAllocation(req, res) {
     const query = `
       WITH movement_legs AS (
         SELECT ${movementTicker} AS ticker, ${custodyResolvedBrokerSql('m.broker')} AS broker,
-          SUM(CASE WHEN movement_type IN ('BUY_ASSET', 'BUY_USDT') THEN CAST(quantity AS FLOAT64)
-                   WHEN movement_type IN ('SELL_ASSET', 'SELL_USDT') THEN -CAST(quantity AS FLOAT64) ELSE 0 END) AS quantity
+          SUM(CASE WHEN movement_type IN ('BUY_ASSET', 'BUY_USDT') THEN ABS(CAST(quantity AS FLOAT64))
+                   WHEN movement_type IN ('SELL_ASSET', 'SELL_USDT') THEN -ABS(CAST(quantity AS FLOAT64)) ELSE 0 END) AS quantity
         FROM ${table('movements')} m
         WHERE movement_type IN ('BUY_ASSET', 'SELL_ASSET', 'BUY_USDT', 'SELL_USDT') AND quantity IS NOT NULL
         GROUP BY 1, 2
@@ -948,8 +948,8 @@ async function getCustodyAudit(req, res) {
           COALESCE(NULLIF(TRIM(owner), ''), 'Sin titular') AS owner,
           ${movementBroker} AS platform,
           SUM(CASE
-            WHEN movement_type IN ('BUY_ASSET', 'BUY_USDT') THEN CAST(quantity AS NUMERIC)
-            WHEN movement_type IN ('SELL_ASSET', 'SELL_USDT') THEN -CAST(quantity AS NUMERIC)
+            WHEN movement_type IN ('BUY_ASSET', 'BUY_USDT') THEN ABS(CAST(quantity AS NUMERIC))
+            WHEN movement_type IN ('SELL_ASSET', 'SELL_USDT') THEN -ABS(CAST(quantity AS NUMERIC))
             ELSE 0 END) AS quantity
         FROM ${table('movements')} m
         WHERE movement_type IN ('BUY_ASSET', 'SELL_ASSET', 'BUY_USDT', 'SELL_USDT')
@@ -1016,8 +1016,8 @@ async function getCustodyAudit(req, res) {
     const assetsQuery = `
       WITH movement_totals AS (
         SELECT ${movementTicker} AS ticker,
-          SUM(CASE WHEN movement_type IN ('BUY_ASSET', 'BUY_USDT') THEN CAST(quantity AS FLOAT64)
-                   WHEN movement_type IN ('SELL_ASSET', 'SELL_USDT') THEN -CAST(quantity AS FLOAT64) ELSE 0 END) AS located_quantity,
+          SUM(CASE WHEN movement_type IN ('BUY_ASSET', 'BUY_USDT') THEN ABS(CAST(quantity AS FLOAT64))
+                   WHEN movement_type IN ('SELL_ASSET', 'SELL_USDT') THEN -ABS(CAST(quantity AS FLOAT64)) ELSE 0 END) AS located_quantity,
           COUNTIF((broker IS NULL OR TRIM(broker) = '') AND movement_type IN ('BUY_ASSET', 'BUY_USDT')) AS missing_platform_movements
         FROM ${table('movements')} m
         WHERE movement_type IN ('BUY_ASSET', 'SELL_ASSET', 'BUY_USDT', 'SELL_USDT')
