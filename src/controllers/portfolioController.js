@@ -900,13 +900,15 @@ async function getPlatformAllocation(req, res) {
        FROM ${table('vw_portfolio_valued')} v WHERE UPPER(v.ticker) = UPPER(m.ticker)),
       ${custodyTickerSql('m.ticker')}
     )`;
+    const signedMovementQuantity = custodyMovementQuantitySql('m', 'FLOAT64');
+    const custodyMovementTypes = "'BUY_ASSET', 'SELL_ASSET', 'BUY_USD', 'SELL_USD', 'INCOME_USD', 'EXPENSE_USD', 'BUY_USDT', 'SELL_USDT'";
     const query = `
       WITH movement_legs AS (
         SELECT ${movementTicker} AS ticker, ${custodyResolvedBrokerSql('m.broker')} AS broker,
-          SUM(CASE WHEN movement_type IN ('BUY_ASSET', 'BUY_USDT') THEN ABS(CAST(quantity AS FLOAT64))
-                   WHEN movement_type IN ('SELL_ASSET', 'SELL_USDT') THEN -ABS(CAST(quantity AS FLOAT64)) ELSE 0 END) AS quantity
+          SUM(${signedMovementQuantity}) AS quantity
         FROM ${table('movements')} m
-        WHERE movement_type IN ('BUY_ASSET', 'SELL_ASSET', 'BUY_USDT', 'SELL_USDT') AND quantity IS NOT NULL
+        WHERE movement_type IN (${custodyMovementTypes})
+          AND COALESCE(quantity, net_amount, gross_amount) IS NOT NULL
           AND ${custodyOpenMovementSql('m')}
         GROUP BY 1, 2
       ),
@@ -927,7 +929,6 @@ async function getPlatformAllocation(req, res) {
           SUM(CAST(quantity_net AS FLOAT64)) AS expected_quantity,
           SAFE_DIVIDE(SUM(CAST(market_value_usd AS FLOAT64)), NULLIF(SUM(CAST(quantity_net AS FLOAT64)), 0)) AS unit_value_usd
         FROM ${table('vw_portfolio_valued')}
-        WHERE UPPER(COALESCE(NULLIF(normalized_ticker, ''), ticker)) != 'USD'
         GROUP BY 1
       ),
       allocation AS (
@@ -940,9 +941,18 @@ async function getPlatformAllocation(req, res) {
           GREATEST(v.expected_quantity - COALESCE(t.positive_quantity, 0), 0) * v.unit_value_usd AS invested_usd
         FROM valued v LEFT JOIN located_totals t USING (ticker)
         WHERE v.expected_quantity > COALESCE(t.positive_quantity, 0)
+      ),
+      trading AS (
+        SELECT 'Trading retenido' AS broker,
+          COALESCE(SUM(CAST(market_value_usd AS FLOAT64)), 0) AS invested_usd
+        FROM ${table('vw_trading_balances_valued')}
       )
       SELECT broker, SUM(invested_usd) AS invested_usd
-      FROM allocation
+      FROM (
+        SELECT broker, invested_usd FROM allocation
+        UNION ALL
+        SELECT broker, invested_usd FROM trading
+      )
       GROUP BY 1 HAVING invested_usd > 0 ORDER BY invested_usd DESC
     `;
 
