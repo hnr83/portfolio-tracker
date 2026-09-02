@@ -92,7 +92,10 @@ function custodyResolvedBrokerSql(expression) {
 }
 
 function custodyOpenMovementSql(alias = 'm') {
-  return `NOT REGEXP_CONTAINS(LOWER(COALESCE(${alias}.description, '')), r'posici[oó]n cerrada')`;
+  return `(
+    ${custodyTickerSql(`${alias}.ticker`)} = 'USDT'
+    OR NOT REGEXP_CONTAINS(LOWER(COALESCE(${alias}.description, '')), r'posici[oó]n cerrada')
+  )`;
 }
 
 
@@ -996,7 +999,10 @@ async function getCustodyAudit(req, res) {
         GROUP BY 1
       ),
       located_totals AS (
-        SELECT ticker, SUM(GREATEST(CAST(located_quantity AS FLOAT64), 0)) AS total_located_quantity
+        SELECT ticker,
+          SUM(CAST(located_quantity AS FLOAT64)) AS total_located_quantity,
+          SUM(GREATEST(CAST(located_quantity AS FLOAT64), 0)) AS positive_located_quantity,
+          SUM(LEAST(CAST(located_quantity AS FLOAT64), 0)) AS negative_located_quantity
         FROM located GROUP BY 1
       )
       SELECT
@@ -1004,17 +1010,20 @@ async function getCustodyAudit(req, res) {
         CAST(l.located_quantity AS FLOAT64) AS quantity,
         e.expected_quantity,
         COALESCE(lt.total_located_quantity, 0) AS total_located_quantity,
+        COALESCE(lt.positive_located_quantity, 0) AS positive_located_quantity,
+        COALESCE(lt.negative_located_quantity, 0) AS negative_located_quantity,
         e.expected_quantity - COALESCE(lt.total_located_quantity, 0) AS difference_quantity,
         SAFE_DIVIDE(e.market_value_usd, NULLIF(e.expected_quantity, 0)) * CAST(l.located_quantity AS FLOAT64) AS market_value_usd,
         CASE
           WHEN l.platform = 'Sin plataforma' THEN 'MISSING_PLATFORM'
+          WHEN CAST(l.located_quantity AS FLOAT64) < -0.00000001 THEN 'NEGATIVE_BALANCE'
           WHEN ABS(e.expected_quantity - COALESCE(lt.total_located_quantity, 0)) > GREATEST(ABS(e.expected_quantity) * 0.000001, 0.00000001) THEN 'MISMATCH'
           ELSE 'OK'
         END AS status
       FROM located l
       LEFT JOIN expected e USING (ticker)
       LEFT JOIN located_totals lt USING (ticker)
-      WHERE CAST(l.located_quantity AS FLOAT64) > 0.00000001
+      WHERE ABS(CAST(l.located_quantity AS FLOAT64)) > 0.00000001
         AND e.expected_quantity > 0.00000001
       ORDER BY l.ticker, l.owner, quantity DESC
     `;

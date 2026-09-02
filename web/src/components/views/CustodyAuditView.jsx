@@ -67,6 +67,18 @@ export default function CustodyAuditView() {
     return matches && (!onlyReview || row.status !== "OK");
   }), [data.rows, search, onlyReview]);
 
+  const selectedAssetSummary = useMemo(() => {
+    const ticker = search.trim().toUpperCase();
+    if (!ticker) return null;
+    const assetRows = (data.rows || []).filter((row) => String(row.ticker || "").toUpperCase() === ticker);
+    if (!assetRows.length) return null;
+    const expected = Number(assetRows[0].expected_quantity || 0);
+    const positive = assetRows.reduce((sum, row) => sum + Math.max(Number(row.quantity || 0), 0), 0);
+    const negative = assetRows.reduce((sum, row) => sum + Math.min(Number(row.quantity || 0), 0), 0);
+    const net = positive + negative;
+    return { ticker, expected, positive, negative, net, difference: expected - net };
+  }, [data.rows, search]);
+
   function openTransfer(row = null) {
     setForm({ ...EMPTY_TRANSFER, ticker: row?.ticker || "", owner: row?.owner === "Sin titular" ? "" : row?.owner || "Horacio", from_broker: row?.platform || "", quantity: row?.quantity > 0 ? String(row.quantity) : "" });
     setFormError("");
@@ -154,6 +166,15 @@ export default function CustodyAuditView() {
           <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar activo, plataforma o titular…" className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-white outline-none focus:border-indigo-500" />
           <label className="flex items-center gap-2 text-sm text-slate-300"><input type="checkbox" checked={onlyReview} onChange={(event) => setOnlyReview(event.target.checked)} className="accent-indigo-500" /> Mostrar solo inconsistencias</label>
         </div>
+        {selectedAssetSummary && <div className="grid grid-cols-2 gap-px border-b border-slate-800 bg-slate-800 md:grid-cols-5">
+          {[
+            ["Esperado", selectedAssetSummary.expected],
+            ["Saldos positivos", selectedAssetSummary.positive],
+            ["Saldos negativos", selectedAssetSummary.negative],
+            ["Neto distribuido", selectedAssetSummary.net],
+            ["Diferencia", selectedAssetSummary.difference],
+          ].map(([label, value]) => <div key={label} className="bg-slate-950 px-4 py-3"><div className="text-[9px] uppercase tracking-[0.16em] text-slate-500">{label}</div><div className={`mt-1 text-sm font-medium tabular-nums ${Number(value) < 0 ? "text-red-300" : "text-slate-200"}`}>{formatNumber(value, 8)} {selectedAssetSummary.ticker}</div></div>)}
+        </div>}
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px] text-left text-sm">
             <thead className="bg-slate-900/70 text-[10px] uppercase tracking-[0.18em] text-slate-500"><tr><th className="px-4 py-3">Activo</th><th className="px-4 py-3">Plataforma</th><th className="px-4 py-3">Titular</th><th className="px-4 py-3 text-right">Cantidad</th><th className="px-4 py-3 text-right">Valor estimado</th><th className="px-4 py-3">Estado</th><th className="px-4 py-3"></th></tr></thead>
