@@ -135,7 +135,7 @@ export default function CustodyAuditView() {
       const isOwner = correction.type === "owner";
       const isMissingPlatform = !isOwner && correction.row.platform === "Sin plataforma";
       if (isMissingPlatform && correctionValue === "Sin plataforma") throw new Error("Elegí la plataforma donde está custodiado el saldo.");
-      if (isMissingPlatform && Number(correction.row.quantity) <= 0) throw new Error("No se puede asignar una plataforma a un saldo que no es positivo.");
+      if (isMissingPlatform && Number(correction.row.quantity) === 0) throw new Error("No se puede asignar una plataforma a un saldo en cero.");
       const path = isOwner
         ? "/api/portfolio/custody-owner-assignments"
         : isMissingPlatform
@@ -148,9 +148,9 @@ export default function CustodyAuditView() {
               transfer_date: new Date().toISOString().slice(0, 10),
               ticker: correction.row.ticker,
               owner: correction.row.owner === "Sin titular" ? "" : correction.row.owner,
-              from_broker: "Sin plataforma",
-              to_broker: correctionValue,
-              quantity: correction.row.quantity,
+              from_broker: Number(correction.row.quantity) > 0 ? "Sin plataforma" : correctionValue,
+              to_broker: Number(correction.row.quantity) > 0 ? correctionValue : "Sin plataforma",
+              quantity: Math.abs(Number(correction.row.quantity)),
               description: "Asignación de plataforma desde auditoría de custodia",
             }
           : { raw_broker: correction.row.platform, canonical_broker: correctionValue };
