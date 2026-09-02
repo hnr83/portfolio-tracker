@@ -84,11 +84,15 @@ function custodyBrokerSql(expression) {
 }
 
 function custodyResolvedBrokerSql(expression) {
-  return `COALESCE(
-    (SELECT ANY_VALUE(a.canonical_broker) FROM ${table('custody_broker_aliases')} a
-      WHERE LOWER(TRIM(a.raw_broker)) = LOWER(TRIM(${expression}))),
-    ${custodyBrokerSql(expression)}
-  )`;
+  return `CASE
+    WHEN ${expression} IS NULL OR TRIM(${expression}) = '' OR LOWER(TRIM(${expression})) = 'sin plataforma'
+      THEN 'Sin plataforma'
+    ELSE COALESCE(
+      (SELECT ANY_VALUE(a.canonical_broker) FROM ${table('custody_broker_aliases')} a
+        WHERE LOWER(TRIM(a.raw_broker)) = LOWER(TRIM(${expression}))),
+      ${custodyBrokerSql(expression)}
+    )
+  END`;
 }
 
 function custodyOpenMovementSql(alias = 'm') {
@@ -1119,6 +1123,7 @@ async function upsertCustodyBrokerAlias(req, res) {
     const rawBroker = String(req.body?.raw_broker || '').trim();
     const canonicalBroker = String(req.body?.canonical_broker || '').trim();
     if (!rawBroker || !canonicalBroker) return res.status(400).json({ error: 'El nombre original y el nombre definitivo son obligatorios.' });
+    if (rawBroker.toLowerCase() === 'sin plataforma') return res.status(400).json({ error: 'Una posición sin plataforma debe asignarse de forma individual.' });
     const id = crypto.randomUUID();
     await runQuery(`MERGE ${table('custody_broker_aliases')} target
       USING (SELECT @raw_broker AS raw_broker) source
