@@ -133,10 +133,27 @@ export default function CustodyAuditView() {
     try {
       setSaving(true); setFormError("");
       const isOwner = correction.type === "owner";
-      const path = isOwner ? "/api/portfolio/custody-owner-assignments" : "/api/portfolio/custody-broker-aliases";
+      const isMissingPlatform = !isOwner && correction.row.platform === "Sin plataforma";
+      if (isMissingPlatform && correctionValue === "Sin plataforma") throw new Error("Elegí la plataforma donde está custodiado el saldo.");
+      if (isMissingPlatform && Number(correction.row.quantity) <= 0) throw new Error("No se puede asignar una plataforma a un saldo que no es positivo.");
+      const path = isOwner
+        ? "/api/portfolio/custody-owner-assignments"
+        : isMissingPlatform
+          ? "/api/portfolio/custody-transfers"
+          : "/api/portfolio/custody-broker-aliases";
       const body = isOwner
         ? { ticker: correction.row.ticker, platform: correction.row.platform, owner: correctionValue }
-        : { raw_broker: correction.row.platform, canonical_broker: correctionValue };
+        : isMissingPlatform
+          ? {
+              transfer_date: new Date().toISOString().slice(0, 10),
+              ticker: correction.row.ticker,
+              owner: correction.row.owner === "Sin titular" ? "" : correction.row.owner,
+              from_broker: "Sin plataforma",
+              to_broker: correctionValue,
+              quantity: correction.row.quantity,
+              description: "Asignación de plataforma desde auditoría de custodia",
+            }
+          : { raw_broker: correction.row.platform, canonical_broker: correctionValue };
       await readJson(await apiFetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }));
       invalidateCache("custody:");
       setCorrection(null);
@@ -229,7 +246,7 @@ export default function CustodyAuditView() {
         <label className="text-sm text-slate-400 sm:col-span-2">Nota<input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Opcional" className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-white" /></label>
       </div><div className="mt-6 flex justify-end gap-3"><button type="button" onClick={() => setModalOpen(false)} className="rounded-xl border border-slate-700 px-4 py-2.5 text-sm text-slate-300">Cancelar</button><button type="submit" disabled={saving} className="rounded-xl bg-indigo-500 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50">{saving ? "Guardando…" : "Guardar transferencia"}</button></div></form></div>}
 
-      {correction && <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"><form onSubmit={saveCorrection} className="w-full max-w-md rounded-[28px] border border-slate-700 bg-slate-900 p-6 shadow-2xl"><div className="flex items-center justify-between"><h2 className="text-xl font-semibold text-white">{correction.type === "owner" ? "Asignar titular" : "Normalizar plataforma"}</h2><button type="button" onClick={() => setCorrection(null)} className="text-2xl text-slate-400">×</button></div><p className="mt-2 text-sm text-slate-400">{correction.type === "owner" ? `${correction.row.ticker} · ${correction.row.platform}` : `Reemplazar “${correction.row.platform}” en toda la auditoría`}</p>{formError && <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">{formError}</div>}<label className="mt-5 block text-sm text-slate-400">{correction.type === "owner" ? "Titular" : "Nombre definitivo"}<input autoFocus required list={correction.type === "owner" ? "custody-owners" : "correction-platforms"} value={correctionValue} onChange={(event) => setCorrectionValue(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-white" /><datalist id="custody-owners"><option value="Horacio" /><option value="Vale" /></datalist><datalist id="correction-platforms">{PLATFORMS.filter((platform) => platform !== "Sin plataforma").map((platform) => <option key={platform} value={platform} />)}</datalist></label><div className="mt-6 flex justify-end gap-3"><button type="button" onClick={() => setCorrection(null)} className="rounded-xl border border-slate-700 px-4 py-2.5 text-sm text-slate-300">Cancelar</button><button type="submit" disabled={saving} className="rounded-xl bg-indigo-500 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50">{saving ? "Guardando…" : "Guardar"}</button></div></form></div>}
+      {correction && <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"><form onSubmit={saveCorrection} className="w-full max-w-md rounded-[28px] border border-slate-700 bg-slate-900 p-6 shadow-2xl"><div className="flex items-center justify-between"><h2 className="text-xl font-semibold text-white">{correction.type === "owner" ? "Asignar titular" : correction.row.platform === "Sin plataforma" ? "Asignar plataforma" : "Normalizar plataforma"}</h2><button type="button" onClick={() => setCorrection(null)} className="text-2xl text-slate-400">×</button></div><p className="mt-2 text-sm text-slate-400">{correction.type === "owner" ? `${correction.row.ticker} · ${correction.row.platform}` : correction.row.platform === "Sin plataforma" ? `${correction.row.ticker} · ${correction.row.owner} · ${formatNumber(correction.row.quantity, 8)}` : `Reemplazar “${correction.row.platform}” en toda la auditoría`}</p>{formError && <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">{formError}</div>}<label className="mt-5 block text-sm text-slate-400">{correction.type === "owner" ? "Titular" : correction.row.platform === "Sin plataforma" ? "Plataforma" : "Nombre definitivo"}<input autoFocus required list={correction.type === "owner" ? "custody-owners" : "correction-platforms"} value={correctionValue} onChange={(event) => setCorrectionValue(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-white" /><datalist id="custody-owners"><option value="Horacio" /><option value="Vale" /></datalist><datalist id="correction-platforms">{PLATFORMS.filter((platform) => platform !== "Sin plataforma").map((platform) => <option key={platform} value={platform} />)}</datalist></label><div className="mt-6 flex justify-end gap-3"><button type="button" onClick={() => setCorrection(null)} className="rounded-xl border border-slate-700 px-4 py-2.5 text-sm text-slate-300">Cancelar</button><button type="submit" disabled={saving} className="rounded-xl bg-indigo-500 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50">{saving ? "Guardando…" : "Guardar"}</button></div></form></div>}
     </div>
   );
 }
