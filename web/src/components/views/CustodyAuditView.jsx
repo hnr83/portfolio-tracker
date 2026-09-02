@@ -61,23 +61,39 @@ export default function CustodyAuditView() {
 
   useEffect(() => { load(); }, [load]);
 
-  const rows = useMemo(() => (data.rows || []).filter((row) => {
+  const searchMatchedRows = useMemo(() => (data.rows || []).filter((row) => {
     const term = search.trim().toLowerCase();
     const matches = !term || [row.ticker, row.owner, row.platform].some((value) => String(value || "").toLowerCase().includes(term));
-    return matches && (!onlyReview || row.status !== "OK");
-  }), [data.rows, search, onlyReview]);
+    return matches;
+  }), [data.rows, search]);
 
-  const selectedAssetSummary = useMemo(() => {
-    const ticker = search.trim().toUpperCase();
-    if (!ticker) return null;
-    const assetRows = (data.rows || []).filter((row) => String(row.ticker || "").toUpperCase() === ticker);
-    if (!assetRows.length) return null;
-    const expected = Number(assetRows[0].expected_quantity || 0);
-    const positive = assetRows.reduce((sum, row) => sum + Math.max(Number(row.quantity || 0), 0), 0);
-    const negative = assetRows.reduce((sum, row) => sum + Math.min(Number(row.quantity || 0), 0), 0);
-    const net = positive + negative;
-    return { ticker, expected, positive, negative, net, difference: expected - net };
-  }, [data.rows, search]);
+  const rows = useMemo(() => searchMatchedRows.filter((row) => !onlyReview || row.status !== "OK"), [searchMatchedRows, onlyReview]);
+
+  const filteredSummary = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term || !searchMatchedRows.length) return null;
+
+    const exactOwnerMatch = searchMatchedRows.some((row) => String(row.owner || "").toLowerCase() === term);
+    const tickers = [...new Set(searchMatchedRows.map((row) => row.ticker).filter(Boolean))];
+
+    if (!exactOwnerMatch && tickers.length === 1) {
+      const ticker = tickers[0];
+      const assetRows = (data.rows || []).filter((row) => row.ticker === ticker);
+      const expected = Number(assetRows[0]?.expected_quantity || 0);
+      const positive = assetRows.reduce((sum, row) => sum + Math.max(Number(row.quantity || 0), 0), 0);
+      const negative = assetRows.reduce((sum, row) => sum + Math.min(Number(row.quantity || 0), 0), 0);
+      const net = positive + negative;
+      return { type: "asset", ticker, expected, positive, negative, net, difference: expected - net };
+    }
+
+    return {
+      type: "group",
+      marketValue: searchMatchedRows.reduce((sum, row) => sum + Number(row.market_value_usd || 0), 0),
+      assets: tickers.length,
+      platforms: new Set(searchMatchedRows.map((row) => row.platform).filter(Boolean)).size,
+      positions: searchMatchedRows.length,
+    };
+  }, [data.rows, search, searchMatchedRows]);
 
   function openTransfer(row = null) {
     setForm({ ...EMPTY_TRANSFER, ticker: row?.ticker || "", owner: row?.owner === "Sin titular" ? "" : row?.owner || "Horacio", from_broker: row?.platform || "", quantity: row?.quantity > 0 ? String(row.quantity) : "" });
@@ -166,14 +182,22 @@ export default function CustodyAuditView() {
           <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar activo, plataforma o titular…" className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-white outline-none focus:border-indigo-500" />
           <label className="flex items-center gap-2 text-sm text-slate-300"><input type="checkbox" checked={onlyReview} onChange={(event) => setOnlyReview(event.target.checked)} className="accent-indigo-500" /> Mostrar solo inconsistencias</label>
         </div>
-        {selectedAssetSummary && <div className="grid grid-cols-2 gap-px border-b border-slate-800 bg-slate-800 md:grid-cols-5">
+        {filteredSummary?.type === "asset" && <div className="grid grid-cols-2 gap-px border-b border-slate-800 bg-slate-800 md:grid-cols-5">
           {[
-            ["Esperado", selectedAssetSummary.expected],
-            ["Saldos positivos", selectedAssetSummary.positive],
-            ["Saldos negativos", selectedAssetSummary.negative],
-            ["Neto distribuido", selectedAssetSummary.net],
-            ["Diferencia", selectedAssetSummary.difference],
-          ].map(([label, value]) => <div key={label} className="bg-slate-950 px-4 py-3"><div className="text-[9px] uppercase tracking-[0.16em] text-slate-500">{label}</div><div className={`mt-1 text-sm font-medium tabular-nums ${Number(value) < 0 ? "text-red-300" : "text-slate-200"}`}>{formatNumber(value, 8)} {selectedAssetSummary.ticker}</div></div>)}
+            ["Esperado", filteredSummary.expected],
+            ["Saldos positivos", filteredSummary.positive],
+            ["Saldos negativos", filteredSummary.negative],
+            ["Neto distribuido", filteredSummary.net],
+            ["Diferencia", filteredSummary.difference],
+          ].map(([label, value]) => <div key={label} className="bg-slate-950 px-4 py-3"><div className="text-[9px] uppercase tracking-[0.16em] text-slate-500">{label}</div><div className={`mt-1 text-sm font-medium tabular-nums ${Number(value) < 0 ? "text-red-300" : "text-slate-200"}`}>{formatNumber(value, 8)} {filteredSummary.ticker}</div></div>)}
+        </div>}
+        {filteredSummary?.type === "group" && <div className="grid grid-cols-2 gap-px border-b border-slate-800 bg-slate-800 lg:grid-cols-4">
+          {[
+            ["Valor estimado", formatCurrency(filteredSummary.marketValue, "USD")],
+            ["Activos", formatNumber(filteredSummary.assets, 0)],
+            ["Plataformas", formatNumber(filteredSummary.platforms, 0)],
+            ["Posiciones", formatNumber(filteredSummary.positions, 0)],
+          ].map(([label, value]) => <div key={label} className="bg-slate-950 px-4 py-3"><div className="text-[9px] uppercase tracking-[0.16em] text-slate-500">{label}</div><div className="mt-1 text-sm font-medium tabular-nums text-slate-200">{value}</div></div>)}
         </div>}
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px] text-left text-sm">
