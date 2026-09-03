@@ -708,10 +708,11 @@ function validateBingxTradeForSync(row) {
 async function getExistingTradingTradeKeys() {
   const query = `
     SELECT
+      trade_id,
       instrument,
       contract_type,
       direction,
-      CAST(closed_at AS STRING) AS closed_at
+      FORMAT_DATE('%F', DATE(closed_at)) AS closed_at
     FROM ${table('trading_trades_raw')}
     WHERE LOWER(exchange) IN ('bingx', 'binx')
       AND contract_type IN ('USD_MONEDA', 'M_MONEDA')
@@ -719,16 +720,7 @@ async function getExistingTradingTradeKeys() {
 
   const existingRows = await runQuery(query);
 
-  return new Set(
-    (existingRows || []).map((r) =>
-      [
-        String(r.instrument || "").toUpperCase(),
-        String(r.contract_type || "").toUpperCase(),
-        String(r.direction || "").toUpperCase(),
-        String(r.closed_at || ""),
-      ].join("|")
-    )
-  );
+  return new Set((existingRows || []).flatMap(buildTradeIdentityKeys));
 }
 
 function buildLogicalTradeKey(row) {
@@ -738,6 +730,16 @@ function buildLogicalTradeKey(row) {
     String(row.direction || "").toUpperCase(),
     String(row.closed_at || ""),
   ].join("|");
+}
+
+function buildTradeIdentityKeys(row) {
+  const keys = [`LOGICAL|${buildLogicalTradeKey(row)}`];
+  if (row.trade_id) keys.push(`ID|${String(row.trade_id)}`);
+  return keys;
+}
+
+function tradeAlreadyExists(existingKeys, row) {
+  return buildTradeIdentityKeys(row).some((key) => existingKeys.has(key));
 }
 
 async function getBingxSyncPreview(req, res) {
@@ -841,11 +843,11 @@ async function getBingxSyncPreview(req, res) {
     const existingKeys = await getExistingTradingTradeKeys();
 
     const rowsToInsert = validRows.filter(
-      (r) => !existingKeys.has(buildLogicalTradeKey(r))
+      (r) => !tradeAlreadyExists(existingKeys, r)
     );
 
     const alreadyExists = validRows.filter((r) =>
-      existingKeys.has(buildLogicalTradeKey(r))
+      tradeAlreadyExists(existingKeys, r)
     );
 
     const skippedRows = validatedRows.filter((r) => !r.sync_valid);
