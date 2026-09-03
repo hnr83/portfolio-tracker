@@ -709,11 +709,12 @@ async function getExistingTradingTradeKeys() {
   const query = `
     SELECT
       instrument,
+      contract_type,
       direction,
       CAST(closed_at AS STRING) AS closed_at
     FROM ${table('trading_trades_raw')}
     WHERE LOWER(exchange) IN ('bingx', 'binx')
-      AND contract_type = 'USD_MONEDA'
+      AND contract_type IN ('USD_MONEDA', 'M_MONEDA')
   `;
 
   const existingRows = await runQuery(query);
@@ -722,6 +723,7 @@ async function getExistingTradingTradeKeys() {
     (existingRows || []).map((r) =>
       [
         String(r.instrument || "").toUpperCase(),
+        String(r.contract_type || "").toUpperCase(),
         String(r.direction || "").toUpperCase(),
         String(r.closed_at || ""),
       ].join("|")
@@ -732,6 +734,7 @@ async function getExistingTradingTradeKeys() {
 function buildLogicalTradeKey(row) {
   return [
     String(row.instrument || "").toUpperCase(),
+    String(row.contract_type || "").toUpperCase(),
     String(row.direction || "").toUpperCase(),
     String(row.closed_at || ""),
   ].join("|");
