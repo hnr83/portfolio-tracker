@@ -19,8 +19,8 @@ function sleep(ms) {
 }
 
 function toDateString(ms) {
-  // Keep the same date convention currently used by tradingController.
-  const adjusted = new Date(Number(ms) + 3 * 60 * 60 * 1000);
+  // Match the Argentina dates persisted by bingxFinalSyncController BEFORE deduplication.
+  const adjusted = new Date(Number(ms) - 3 * 60 * 60 * 1000);
   return adjusted.toISOString().split("T")[0];
 }
 
@@ -57,17 +57,28 @@ function buildLogicalTradeKey(row) {
 async function getExistingCoinMKeys() {
   const query = `
     SELECT
+      trade_id,
       instrument,
       contract_type,
       direction,
-      CAST(closed_at AS STRING) AS closed_at
+      FORMAT_DATE('%F', DATE(closed_at)) AS closed_at
     FROM ${table("trading_trades_raw")}
     WHERE LOWER(exchange) IN ('bingx', 'binx')
       AND contract_type = 'M_MONEDA'
   `;
 
   const rows = await runQuery(query);
-  return new Set((rows || []).map(buildLogicalTradeKey));
+  return new Set((rows || []).flatMap(buildCoinMIdentityKeys));
+}
+
+function buildCoinMIdentityKeys(row) {
+  const keys = [`LOGICAL|${buildLogicalTradeKey(row)}`];
+  if (row.trade_id) keys.push(`ID|${String(row.trade_id)}`);
+  return keys;
+}
+
+function coinMAlreadyRecorded(existingKeys, row) {
+  return buildCoinMIdentityKeys(row).some((key) => existingKeys.has(key));
 }
 
 async function callUsdtMPreview(query) {
@@ -349,10 +360,10 @@ async function buildCombinedPreview(query = {}) {
     (r) => r.sync_valid && Math.abs(Number(r.pnl_qty || 0)) > 0.0000000001
   );
   const coinMRowsToInsert = validCoinMRows.filter(
-    (r) => !existingCoinMKeys.has(buildLogicalTradeKey(r))
+    (r) => !coinMAlreadyRecorded(existingCoinMKeys, r)
   );
   const coinMAlreadyExists = validCoinMRows.filter((r) =>
-    existingCoinMKeys.has(buildLogicalTradeKey(r))
+    coinMAlreadyRecorded(existingCoinMKeys, r)
   );
   const coinMSkipped = coinMRows.filter((r) => !r.sync_valid);
 
