@@ -67,44 +67,25 @@ async function getScenarioComparison(req, res) {
     const annualReturn = Number(scenario.annual_return_pct || 0);
     const monthlyContribution = Number(scenario.monthly_contribution_usd || 0);
     const dailyRate = Math.pow(1 + annualReturn / 100, 1 / 365) - 1;
-    const monthlyRate = Math.pow(1 + annualReturn / 100, 1 / 12) - 1;
 
-    const [realSnapshots, monthlyPerformance] = await Promise.all([
+    const [realSnapshots, dailyFlows] = await Promise.all([
       runQuery(`SELECT snapshot_date,CAST(investments_usd AS FLOAT64) AS real_value_usd FROM ${table("portfolio_snapshots")} WHERE snapshot_date >= @scenarioDate ORDER BY snapshot_date ASC`, { scenarioDate }),
-      runQuery(`SELECT month_date,start_date,end_date,CAST(net_asset_flow_usd AS FLOAT64) AS net_asset_flow_usd,CAST(adjusted_performance_pct AS FLOAT64) AS adjusted_performance_pct FROM ${table("vw_portfolio_calendar_month_performance_adjusted")} WHERE end_date >= @scenarioDate ORDER BY month_date ASC`, { scenarioDate }),
+      runQuery(`SELECT fecha AS flow_date, SUM(CASE WHEN movement_type = 'BUY_ASSET' THEN ABS(SAFE_CAST(net_amount AS FLOAT64)) ELSE -ABS(SAFE_CAST(net_amount AS FLOAT64)) END) AS net_flow_usd FROM ${table("movements")} WHERE fecha > @scenarioDate AND category = 'PORTFOLIO' AND movement_type IN ('BUY_ASSET', 'SELL_ASSET') GROUP BY fecha ORDER BY fecha`, { scenarioDate }),
     ]);
 
     const snapshots = realSnapshots
       .map((r) => ({ date: unwrapDate(r.snapshot_date), value: Number(r.real_value_usd || 0) }))
       .filter((r) => r.date && r.date >= scenarioDate);
 
-    const completePeriods = monthlyPerformance
-      .map((r) => ({ startDate: unwrapDate(r.start_date), endDate: unwrapDate(r.end_date), netFlow: Number(r.net_asset_flow_usd || 0), performancePct: Number(r.adjusted_performance_pct || 0) }))
-      .filter((r) => r.startDate && r.startDate >= scenarioDate);
-
-    function monthlyActualsThrough(date) {
-      let contributions = 0, twrFactor = 1, count = 0;
-      for (const row of completePeriods) {
-        if (row.endDate && row.endDate <= date) {
-          contributions += row.netFlow;
-          twrFactor *= 1 + row.performancePct / 100;
-          count += 1;
-        }
-      }
-      return {
-        completePeriods: count,
-        real_contributions_usd: contributions,
-        real_performance_pct: count ? (twrFactor - 1) * 100 : 0,
-        plan_contributions_usd: count * monthlyContribution,
-        plan_performance_pct: count ? (Math.pow(1 + monthlyRate, count) - 1) * 100 : 0,
-      };
-    }
+    const flows = dailyFlows.map((r) => ({ date: unwrapDate(r.flow_date), value: Number(r.net_flow_usd || 0) }));
 
     const today = buenosAiresDate();
     const snapshotByDate = new Map(snapshots.map((row) => [row.date, row.value]));
     const actualDates = snapshots.map((row) => row.date).filter((date) => date > scenarioDate && date <= today);
     const endDate = actualDates[actualDates.length - 1] || scenarioDate;
     const planByDate = new Map([[scenarioDate, frozenBaseline]]);
+    const plannedContributionsByDate = new Map([[scenarioDate, 0]]);
+    let plannedContributions = 0;
     let planValue = frozenBaseline;
     let cursor = utcDate(scenarioDate);
     const totalDays = Math.max(0, dateDiffDays(scenarioDate, endDate));
@@ -113,8 +94,9 @@ async function getScenarioComparison(req, res) {
       cursor = addUtcDays(cursor, 1);
       const date = cursor.toISOString().slice(0, 10);
       planValue *= 1 + dailyRate;
-      if (isMonthlyAnniversary(date, scenarioDate)) planValue += monthlyContribution;
+      if (isMonthlyAnniversary(date, scenarioDate)) { planValue += monthlyContribution; plannedContributions += monthlyContribution; }
       planByDate.set(date, planValue);
+      plannedContributionsByDate.set(date, plannedContributions);
     }
 
     const series = [{
@@ -128,18 +110,30 @@ async function getScenarioComparison(req, res) {
       real_contributions_usd: 0,
     }];
 
+    let previousDate = scenarioDate;
+    let previousValue = frozenBaseline;
+    let realContributions = 0;
+    let realFactor = 1;
+    let validPerformance = frozenBaseline > 0;
     for (const date of actualDates) {
-      const monthly = monthlyActualsThrough(date);
+      const netFlow = flows.filter((r) => r.date > previousDate && r.date <= date).reduce((sum, r) => sum + r.value, 0);
+      const currentValue = snapshotByDate.get(date);
+      realContributions += netFlow;
+      if (previousValue > 0 && Number.isFinite(currentValue) && Number.isFinite(netFlow)) {
+        realFactor *= (currentValue - netFlow) / previousValue;
+      } else validPerformance = false;
       series.push({
         date,
-        month_index: monthly.completePeriods,
+        month_index: (utcDate(date).getUTCFullYear() - utcDate(scenarioDate).getUTCFullYear()) * 12 + utcDate(date).getUTCMonth() - utcDate(scenarioDate).getUTCMonth(),
         plan_value_usd: planByDate.get(date) ?? frozenBaseline,
         real_value_usd: snapshotByDate.get(date) ?? null,
-        plan_performance_pct: monthly.plan_performance_pct,
-        real_performance_pct: monthly.real_performance_pct,
-        plan_contributions_usd: monthly.plan_contributions_usd,
-        real_contributions_usd: monthly.real_contributions_usd,
+        plan_performance_pct: (Math.pow(1 + dailyRate, dateDiffDays(scenarioDate, date)) - 1) * 100,
+        real_performance_pct: validPerformance ? (realFactor - 1) * 100 : null,
+        plan_contributions_usd: plannedContributionsByDate.get(date),
+        real_contributions_usd: realContributions,
       });
+      previousDate = date;
+      previousValue = currentValue;
     }
 
     const latest = series[series.length - 1] || null;
@@ -170,12 +164,13 @@ async function getScenarioComparison(req, res) {
       },
       methodology: {
         portfolio_value: "Daily portfolio_snapshots.investments_usd compared with a daily plan grown from the frozen baseline using the saved annual return; monthly contributions are applied on each scenario-date anniversary",
-        performance: "Compounded adjusted monthly performance (TWR-style), shown only through complete periods",
-        contributions: "Accumulated net_asset_flow_usd from complete adjusted monthly periods after scenario date",
+        performance: "Compounded snapshot-interval returns: (end value - net asset flow) / start value; end-of-interval flow assumption, not exact intraday TWR",
+        contributions: "Net PORTFOLIO purchases minus sales after the baseline date; plan contributions on monthly anniversaries",
         portfolio_frequency: "daily",
-        performance_frequency: "monthly_complete_periods",
-        contributions_frequency: "monthly_complete_periods",
-        partial_first_month_included: false,
+        performance_frequency: "snapshot_intervals",
+        contributions_frequency: "snapshot_intervals",
+        partial_first_month_included: true,
+        baseline_day_flows_included: false,
       },
       summary,
       series,
