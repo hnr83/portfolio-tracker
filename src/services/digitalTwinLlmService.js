@@ -42,6 +42,15 @@ REGLAS DE COBERTURA:
 - Priorizá entender POR QUÉ decide de una forma antes que pedir umbrales numéricos.
 - Los ejemplos del usuario son evidencia para inferir principios, NO una lista exhaustiva de reglas.
 
+SEPARÁ IDENTIDAD DE ESTADO ACTUAL:
+- El Investor Model debe describir rasgos relativamente persistentes de cómo decide, no copiar el snapshot actual del portfolio o del Planner como si fueran parte permanente de su identidad.
+- Objetivos, horizonte, aportes mensuales, pesos actuales, liquidez actual y nombres de activos pueden mencionarse sólo como contexto actual o ejemplos, nunca como reglas permanentes salvo que el usuario haya dicho explícitamente que lo son.
+- No escribas cosas como "ejecuta DCA mensual de US$X" si X proviene del Planner actual. Preferí formulaciones como "invierte sistemáticamente el ahorro periódico disponible".
+- No infieras una preferencia estratégica por mantener caja a partir de la liquidez actual. Si el usuario dijo que prefiere invertir el ahorro mensual y no esperar oportunidades en cash, reflejalo explícitamente.
+- Las posiciones actuales (por ejemplo BTC, TSLA, GOOGL, MELI) pueden ilustrar tesis de alta convicción, pero el principio debe expresarse de forma general para que siga siendo válido si la cartera cambia.
+- Los porcentajes mencionados por el usuario como ejemplos de magnitud (por ejemplo 90% de concentración) NO son thresholds automáticos.
+- Si una idea es circunstancial, ponela en notes como "contexto actual" en lugar de convertirla en conviction o rule.
+
 REGLAS DE ESTILO:
 - No hagas preguntas tipo formulario de broker ni listas largas de opciones.
 - No exijas porcentajes o límites si el usuario no decide naturalmente así.
