@@ -61,6 +61,7 @@ function buildEconomicExposures(investments, portfolioTotal) {
 }
 
 export default function DigitalInvestmentTwinView({ summary, positions = [], investments = [] }) {
+  const [activeTab, setActiveTab] = useState("chat");
   const [savedScenarios, setSavedScenarios] = useState([]);
   const [referenceScenarioId, setReferenceScenarioId] = useState(() => window.localStorage.getItem(REFERENCE_SCENARIO_KEY) || "");
   const [referenceScenario, setReferenceScenario] = useState(null);
@@ -70,7 +71,7 @@ export default function DigitalInvestmentTwinView({ summary, positions = [], inv
 
   useEffect(() => {
     let cancelled = false;
-    async function loadScenarios() {
+    (async () => {
       try {
         setPlannerLoading(true);
         setPlannerError("");
@@ -84,8 +85,7 @@ export default function DigitalInvestmentTwinView({ summary, positions = [], inv
       } finally {
         if (!cancelled) setPlannerLoading(false);
       }
-    }
-    loadScenarios();
+    })();
     return () => { cancelled = true; };
   }, []);
 
@@ -95,7 +95,7 @@ export default function DigitalInvestmentTwinView({ summary, positions = [], inv
       return;
     }
     let cancelled = false;
-    async function loadReferenceScenario() {
+    (async () => {
       try {
         setPlannerError("");
         const response = await apiFetch(`/api/planner/scenarios/${referenceScenarioId}`);
@@ -115,8 +115,7 @@ export default function DigitalInvestmentTwinView({ summary, positions = [], inv
         console.error("Error loading Twin reference scenario:", error);
         if (!cancelled) setPlannerError("No se pudo cargar el escenario de referencia.");
       }
-    }
-    loadReferenceScenario();
+    })();
     return () => { cancelled = true; };
   }, [referenceScenarioId]);
 
@@ -144,10 +143,10 @@ export default function DigitalInvestmentTwinView({ summary, positions = [], inv
       investableLiquidity,
       cryptoWeight: pct(crypto, portfolioTotal),
       liquidityWeight: pct(investableLiquidity, portfolioTotal),
+      investmentsWeight: Math.max(0, 100 - pct(crypto, portfolioTotal) - pct(investableLiquidity, portfolioTotal)),
       topExposures,
       topWeight: topExposures[0]?.weight || 0,
       topTicker: topExposures[0]?.ticker || "",
-      positionsCount: positions.filter((p) => Number(p.market_value_usd || 0) !== 0).length,
     };
   }, [summary, positions, investments]);
 
@@ -157,9 +156,6 @@ export default function DigitalInvestmentTwinView({ summary, positions = [], inv
       id: referenceScenario.id,
       name: referenceScenario.name || "Escenario sin nombre",
       date: referenceScenario.scenario_date?.value || referenceScenario.scenario_date || null,
-      description: referenceScenario.description || "",
-      initialCapitalUsd: Number(referenceScenario.initial_capital_usd || 0),
-      initialContributionsUsd: Number(referenceScenario.initial_contributions_usd || 0),
       monthlyContributionUsd: Number(referenceScenario.monthly_contribution_usd || 0),
       years: Number(referenceScenario.years || 0),
       fireGoalUsd: Number(referenceScenario.fire_goal_usd || 0),
@@ -169,176 +165,97 @@ export default function DigitalInvestmentTwinView({ summary, positions = [], inv
   }, [referenceScenario]);
 
   const handleProfileChange = useCallback((profile) => setInvestorProfile(profile), []);
-  const declaredFields = [
-    investorProfile?.style,
-    investorProfile?.concentration_tolerance,
-    investorProfile?.drawdown_tolerance,
-    investorProfile?.liquidity_preference,
-    investorProfile?.implementation_style,
-  ].filter(Boolean).length;
-  const investorModelReady = declaredFields > 0;
-
-  const pillars = [
-    {
-      label: "Quién soy",
-      value: investorProfile?.style || "Por definir",
-      detail: investorModelReady ? `${declaredFields}/5 dimensiones declaradas · comportamiento observado por separado.` : "Definí tus preferencias sin convertirlas en un cuestionario de riesgo rígido.",
-    },
-    {
-      label: "Dónde estoy",
-      value: formatCurrency(context.portfolioTotal, "USD"),
-      detail: `${context.positionsCount} posiciones · Crypto ${formatPortfolioPercent(context.cryptoWeight)} · Liquidez ${formatPortfolioPercent(context.liquidityWeight)}`,
-    },
-    {
-      label: "A dónde voy",
-      value: plannerContext?.name || "Sin referencia",
-      detail: plannerContext ? `${formatCurrency(plannerContext.monthlyContributionUsd, "USD")}/mes · ${plannerContext.years} años · objetivo ${formatCurrency(plannerContext.fireGoalUsd, "USD")}` : "Elegí qué escenario guardado de Planner debe usar el Twin como referencia.",
-    },
-    {
-      label: "Cómo cambio",
-      value: "Sin historial aún",
-      detail: "La memoria de decisiones permitirá detectar cambios de postura, contradicciones y aprendizaje.",
-    },
-  ];
+  const profileSummary = investorProfile?.investor_narrative?.trim() || "Todavía estamos construyendo tu forma de invertir.";
 
   return (
-    <section className="space-y-6">
-      <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Digital Investment Twin</h1>
-            <span className="rounded-full border border-indigo-400/20 bg-indigo-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-indigo-300">PoC</span>
+    <section className="space-y-4">
+      <header className="rounded-[24px] border border-slate-800/70 bg-slate-950/45 px-5 py-4 sm:px-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500/25 to-violet-500/10 text-xl text-indigo-300">✦</div>
+            <div>
+              <div className="flex items-center gap-2"><h1 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">Digital Investment Twin</h1><span className="rounded-full border border-indigo-400/20 bg-indigo-500/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-indigo-300">PoC</span></div>
+              <p className="mt-0.5 text-xs text-slate-500">Tu contexto. Mejores decisiones.</p>
+            </div>
           </div>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">Un modelo dinámico de tu forma de invertir: quién sos, dónde estás, a dónde vas y cómo está cambiando tu manera de decidir.</p>
+          <nav className="flex gap-1 rounded-xl border border-slate-800/70 bg-slate-950/60 p-1">
+            {[['chat','Chat'],['insights','Insights'],['profile','Tu perfil'],['tracking','Seguimiento']].map(([id,label]) => (
+              <button key={id} type="button" onClick={() => setActiveTab(id)} className={`rounded-lg px-3 py-2 text-xs transition ${activeTab === id ? 'bg-indigo-500/15 text-indigo-200' : 'text-slate-500 hover:text-slate-300'}`}>{label}</button>
+            ))}
+          </nav>
         </div>
-        <div className="rounded-2xl border border-emerald-500/15 bg-emerald-500/[0.06] px-4 py-3 text-xs text-emerald-300">Objetivo de costo IA: &lt; USD 10 / mes</div>
       </header>
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {pillars.map((pillar) => (
-          <article key={pillar.label} className="rounded-[22px] border border-slate-800/80 bg-slate-950/55 p-5">
-            <div className="text-[10px] font-medium uppercase tracking-[0.2em] text-slate-500">{pillar.label}</div>
-            <div className="mt-3 text-base font-semibold text-slate-100">{pillar.value}</div>
-            <p className="mt-2 text-xs leading-5 text-slate-500">{pillar.detail}</p>
-          </article>
-        ))}
-      </div>
-
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(340px,0.8fr)]">
-        <article className="rounded-[26px] border border-slate-800/80 bg-slate-950/55 p-5 sm:p-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="text-sm font-semibold text-white">Consultá a tu Twin</div>
-              <div className="mt-1 text-xs text-slate-500">Portfolio real + escenario de referencia + Investor Model forman la base del contexto.</div>
-            </div>
-            <span className="w-fit rounded-full border border-emerald-400/15 bg-emerald-400/[0.06] px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-emerald-300">Context builder · activo</span>
-          </div>
-
-          <div className="mt-6 rounded-[22px] border border-slate-800 bg-[#020617] p-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Escenario de referencia</div>
-                <p className="mt-2 text-xs leading-5 text-slate-400">El Twin usa este escenario para interpretar hacia dónde querés ir. Guardar o abrir otro escenario en Planner no cambia esta selección.</p>
-              </div>
-              <select value={referenceScenarioId} onChange={handleReferenceScenarioChange} disabled={plannerLoading} className="min-w-[240px] rounded-xl border border-slate-700/70 bg-slate-950 px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-indigo-500">
-                <option value="">{plannerLoading ? "Cargando escenarios..." : "Elegir escenario..."}</option>
-                {savedScenarios.map((scenario) => <option key={scenario.id} value={scenario.id}>{scenario.name || "Escenario sin nombre"}</option>)}
-              </select>
-            </div>
-            {plannerError && <div className="mt-3 text-xs text-amber-300">{plannerError}</div>}
-            {plannerContext && (
-              <div className="mt-4 grid gap-3 sm:grid-cols-4">
-                <Metric label="Aporte mensual" value={formatCurrency(plannerContext.monthlyContributionUsd, "USD")} />
-                <Metric label="Horizonte" value={`${plannerContext.years} años`} />
-                <Metric label="Retorno esperado" value={formatPortfolioPercent(plannerContext.annualReturnPct)} />
-                <Metric label="Objetivo" value={formatCurrency(plannerContext.fireGoalUsd, "USD")} />
-              </div>
-            )}
-          </div>
-
-          <div className="mt-4 rounded-[22px] border border-indigo-500/15 bg-indigo-500/[0.05] p-5">
-            <div className="flex items-center gap-2 text-xs font-medium text-indigo-300"><span className="h-2 w-2 rounded-full bg-indigo-400" /> Contexto determinístico</div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              <Metric label="Portfolio" value={formatCurrency(context.portfolioTotal, "USD")} />
-              <Metric label="Crypto" value={`${formatCurrency(context.crypto, "USD")} · ${formatPortfolioPercent(context.cryptoWeight)}`} />
-              <Metric label="Liquidez" value={`${formatCurrency(context.investableLiquidity, "USD")} · ${formatPortfolioPercent(context.liquidityWeight)}`} />
-            </div>
-            <p className="mt-4 text-xs leading-5 text-slate-400">Portfolio Tracker calcula los hechos. El modelo recibirá sólo el contexto necesario para razonar sobre una decisión.</p>
-          </div>
-
-          <InvestorModelPanel
-            observed={{
-              topTicker: context.topTicker,
-              topWeight: context.topWeight,
-              cryptoWeight: context.cryptoWeight,
-              liquidityWeight: context.liquidityWeight,
-              scenarioName: plannerContext?.name || "",
-            }}
-            onProfileChange={handleProfileChange}
-          />
-
-          <div className="mt-5 flex gap-3">
-            <input disabled placeholder="Escribí una decisión para analizar..." className="min-w-0 flex-1 rounded-2xl border border-slate-800 bg-[#020617] px-4 py-3 text-sm text-slate-500 outline-none" />
-            <button disabled type="button" className="rounded-2xl bg-gradient-to-r from-indigo-500 to-blue-500 px-5 py-3 text-sm font-medium text-white opacity-50">Analizar</button>
-          </div>
-        </article>
-
-        <aside className="space-y-5">
-          <article className="rounded-[26px] border border-slate-800/80 bg-slate-950/55 p-5">
-            <div className="text-sm font-semibold text-white">Estado del Twin</div>
-            <div className="mt-4 space-y-4 text-xs">
-              <Status label="Portfolio context" value="Validado" ok />
-              <Status label="Planner context" value={plannerContext ? "Validado" : "Elegir referencia"} ok={Boolean(plannerContext)} />
-              <Status label="Investor model" value={investorModelReady ? "Conectado" : "Completar"} ok={investorModelReady} />
-              <Status label="Decision memory" value="Siguiente" />
-              <Status label="LLM" value="Pendiente" />
-            </div>
-          </article>
-
-          <article className="rounded-[26px] border border-slate-800/80 bg-slate-950/55 p-5">
-            <div className="flex items-center justify-between"><div className="text-sm font-semibold text-white">Contexto real</div><span className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Ahora</span></div>
-            <div className="mt-4 space-y-3 text-xs">
-              <Row label="Liquidez total" value={formatCurrency(context.investableLiquidity, "USD")} />
-              <Row label="USDT" value={formatCurrency(context.usdt, "USD")} />
-              <Row label="Crypto sin stablecoins" value={formatCurrency(context.crypto, "USD")} />
-              <Row label="Mayor concentración económica" value={formatPortfolioPercent(context.topWeight)} />
-            </div>
-            {context.topExposures.length > 0 && (
-              <div className="mt-5 border-t border-slate-800 pt-4">
-                <div className="mb-3 text-[10px] uppercase tracking-[0.18em] text-slate-500">Principales exposiciones económicas</div>
-                <div className="space-y-2">
-                  {context.topExposures.map((holding) => (
-                    <div key={holding.ticker} className="flex items-start justify-between gap-4 text-xs">
-                      <div className="min-w-0">
-                        <div className="font-medium text-slate-300">{holding.ticker}</div>
-                        {holding.instrumentCount > 1 && <div className="mt-0.5 truncate text-[10px] text-slate-600">{holding.instrumentCount} instrumentos · {holding.instruments.join(" + ")}</div>}
-                      </div>
-                      <span className="shrink-0 tabular-nums text-slate-500">{formatCurrency(holding.value, "USD")} · {formatPortfolioPercent(holding.weight)}</span>
-                    </div>
-                  ))}
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_330px]">
+        <main className="min-w-0">
+          {activeTab === "chat" && (
+            <div className="flex min-h-[660px] flex-col rounded-[24px] border border-slate-800/70 bg-slate-950/45">
+              <div className="border-b border-slate-800/70 px-5 py-4"><div className="text-sm font-semibold text-white">Consultá a tu Twin</div><div className="mt-1 text-xs text-slate-500">Portfolio + Planner + Investor Model</div></div>
+              <div className="flex-1 space-y-4 p-5">
+                <div className="ml-auto max-w-[72%] rounded-2xl rounded-br-md border border-slate-800 bg-slate-900/70 px-4 py-3 text-sm leading-6 text-slate-300">Tengo una decisión de inversión. Quiero que la analices usando mi cartera, mi plan y mi forma de invertir.</div>
+                <div className="max-w-[88%] rounded-2xl rounded-bl-md border border-indigo-500/15 bg-indigo-500/[0.05] p-4">
+                  <div className="flex items-center gap-2 text-xs font-medium text-indigo-300"><span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-500/15">✦</span>Análisis basado en tu Digital Investment Twin</div>
+                  <p className="mt-3 text-sm leading-6 text-slate-300">La estructura ya está lista para responder con tu contexto real. Falta conectar el motor LLM; cuando lo hagamos, esta será la conversación principal del producto.</p>
+                  <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                    <MiniMetric label="Portfolio" value={formatCurrency(context.portfolioTotal, "USD")} />
+                    <MiniMetric label="Plan" value={plannerContext?.name || "Sin referencia"} />
+                    <MiniMetric label="Perfil" value={investorProfile?.style || (investorProfile?.investor_narrative ? "Narrativa activa" : "Por construir")} />
+                  </div>
                 </div>
               </div>
-            )}
-          </article>
+              <div className="border-t border-slate-800/70 p-4">
+                <div className="flex gap-2"><input disabled placeholder="Preguntame sobre tu portfolio, el mercado o tu plan..." className="min-w-0 flex-1 rounded-xl border border-slate-800 bg-[#020617] px-4 py-3 text-sm text-slate-500 outline-none" /><button disabled className="rounded-xl bg-indigo-500 px-4 text-white opacity-40">➤</button></div>
+                <div className="mt-3 flex flex-wrap gap-2">{["¿Qué harías con mi liquidez?","Revisá mi concentración","¿Voy bien contra mi plan?","Analizá BTC"].map((q) => <span key={q} className="rounded-full border border-slate-800 px-3 py-1.5 text-[10px] text-slate-500">{q}</span>)}</div>
+              </div>
+            </div>
+          )}
 
-          <article className="rounded-[26px] border border-slate-800/80 bg-slate-950/55 p-5">
-            <div className="text-sm font-semibold text-white">Principio de diseño</div>
-            <p className="mt-3 text-xs leading-5 text-slate-400">Los números los calcula Portfolio Tracker. El LLM interpreta, compara, desafía y explica; no inventa el estado de la cartera.</p>
-          </article>
+          {activeTab === "profile" && (
+            <InvestorModelPanel observed={{ topTicker: context.topTicker, topWeight: context.topWeight, cryptoWeight: context.cryptoWeight, liquidityWeight: context.liquidityWeight, scenarioName: plannerContext?.name || "" }} onProfileChange={handleProfileChange} />
+          )}
+
+          {activeTab === "insights" && (
+            <div className="rounded-[24px] border border-slate-800/70 bg-slate-950/45 p-5"><div className="text-sm font-semibold text-white">Insights actuales</div><div className="mt-4 grid gap-3 sm:grid-cols-3"><InsightCard title="Concentración" value={`${context.topTicker || '-'} · ${formatPortfolioPercent(context.topWeight)}`} text="Mayor exposición económica actual." /><InsightCard title="Crypto" value={formatPortfolioPercent(context.cryptoWeight)} text="Exposición crypto sin stablecoins." /><InsightCard title="Liquidez" value={formatPortfolioPercent(context.liquidityWeight)} text="Capital disponible sobre el patrimonio total." /></div></div>
+          )}
+
+          {activeTab === "tracking" && (
+            <div className="rounded-[24px] border border-slate-800/70 bg-slate-950/45 p-8 text-center"><div className="text-sm font-semibold text-white">Seguimiento</div><p className="mx-auto mt-2 max-w-lg text-xs leading-5 text-slate-500">Acá vamos a registrar decisiones, cambios de tesis y cómo evoluciona tu forma de invertir. Todavía no hay memoria de decisiones activa.</p></div>
+          )}
+        </main>
+
+        <aside className="space-y-4">
+          <section className="rounded-[20px] border border-slate-800/70 bg-slate-950/50 p-4">
+            <div className="flex items-center justify-between"><div className="text-sm font-semibold text-white">Tu Portfolio <span className="text-slate-500">(actual)</span></div><span className="text-[10px] text-slate-600">Ahora</span></div>
+            <div className="mt-3 text-2xl font-semibold text-white">{formatCurrency(context.portfolioTotal, "USD")}</div>
+            <div className="mt-4 space-y-2.5"><PortfolioRow label="Crypto" value={formatPortfolioPercent(context.cryptoWeight)} /><PortfolioRow label="Liquidez" value={formatPortfolioPercent(context.liquidityWeight)} /><PortfolioRow label="Resto inversiones" value={formatPortfolioPercent(context.investmentsWeight)} /></div>
+            <div className="mt-4 rounded-xl border border-emerald-500/15 bg-emerald-500/[0.05] p-3"><div className="text-[10px] uppercase tracking-[0.12em] text-slate-500">Disponible para invertir</div><div className="mt-1 text-base font-semibold text-emerald-300">{formatCurrency(context.investableLiquidity, "USD")}</div><div className="text-[10px] text-slate-600">incluye USDT {formatCurrency(context.usdt, "USD")}</div></div>
+          </section>
+
+          <section className="rounded-[20px] border border-slate-800/70 bg-slate-950/50 p-4">
+            <div className="flex items-center justify-between"><div className="text-sm font-semibold text-white">Tu perfil <span className="text-slate-500">(Digital Twin)</span></div><button onClick={() => setActiveTab("profile")} className="text-[10px] text-indigo-300">Ver / Editar →</button></div>
+            <p className="mt-3 line-clamp-4 text-xs leading-5 text-slate-400">{profileSummary}</p>
+            <div className="mt-4 space-y-2.5"><ProfileRow label="Estilo" value={investorProfile?.style || "Por definir"} /><ProfileRow label="Concentración" value={investorProfile?.concentration_tolerance || "Por definir"} /><ProfileRow label="Implementación" value={investorProfile?.implementation_style || "Por definir"} /></div>
+          </section>
+
+          <section className="rounded-[20px] border border-slate-800/70 bg-slate-950/50 p-4">
+            <div className="text-sm font-semibold text-white">Plan de referencia</div>
+            <select value={referenceScenarioId} onChange={handleReferenceScenarioChange} disabled={plannerLoading} className="mt-3 w-full rounded-xl border border-slate-800 bg-[#020617] px-3 py-2.5 text-xs text-slate-300 outline-none focus:border-indigo-500"><option value="">{plannerLoading ? "Cargando..." : "Elegir escenario..."}</option>{savedScenarios.map((scenario) => <option key={scenario.id} value={scenario.id}>{scenario.name || "Escenario sin nombre"}</option>)}</select>
+            {plannerError && <div className="mt-2 text-[10px] text-amber-300">{plannerError}</div>}
+            {plannerContext && <div className="mt-3 grid grid-cols-2 gap-2"><TinyStat label="Aporte" value={`${formatCurrency(plannerContext.monthlyContributionUsd, "USD")}/mes`} /><TinyStat label="Horizonte" value={`${plannerContext.years} años`} /><TinyStat label="Retorno" value={formatPortfolioPercent(plannerContext.annualReturnPct)} /><TinyStat label="Objetivo" value={formatCurrency(plannerContext.fireGoalUsd, "USD")} /></div>}
+          </section>
+
+          <section className="rounded-[20px] border border-slate-800/70 bg-slate-950/50 p-4">
+            <div className="flex items-center justify-between"><div className="text-sm font-semibold text-white">Insights recientes</div><button onClick={() => setActiveTab("insights")} className="text-[10px] text-indigo-300">Ver todos →</button></div>
+            <div className="mt-3 space-y-2 text-xs leading-5 text-slate-500"><div>• {context.topTicker || "-"} es tu mayor exposición económica ({formatPortfolioPercent(context.topWeight)}).</div><div>• Crypto representa {formatPortfolioPercent(context.cryptoWeight)} del patrimonio.</div><div>• Tenés {formatPortfolioPercent(context.liquidityWeight)} en liquidez disponible.</div></div>
+          </section>
         </aside>
       </div>
     </section>
   );
 }
 
-function Metric({ label, value }) {
-  return <div className="rounded-xl border border-slate-800/80 bg-slate-950/50 p-3"><div className="text-[10px] uppercase tracking-[0.12em] text-slate-500">{label}</div><div className="mt-2 text-sm font-semibold text-white">{value}</div></div>;
-}
-
-function Row({ label, value }) {
-  return <div className="flex justify-between gap-4"><span className="text-slate-500">{label}</span><span className="tabular-nums text-slate-200">{value}</span></div>;
-}
-
-function Status({ label, value, ok = false }) {
-  return <div className="flex items-center justify-between"><span className="text-slate-500">{label}</span><span className={ok ? "text-emerald-300" : "text-amber-300"}>{value}</span></div>;
-}
+function MiniMetric({ label, value }) { return <div className="rounded-xl border border-slate-800/70 bg-slate-950/45 p-3"><div className="text-[9px] uppercase tracking-[0.14em] text-slate-600">{label}</div><div className="mt-1 truncate text-xs font-medium text-slate-200">{value}</div></div>; }
+function PortfolioRow({ label, value }) { return <div className="flex items-center justify-between text-xs"><span className="text-slate-500">{label}</span><span className="font-medium text-slate-300">{value}</span></div>; }
+function ProfileRow({ label, value }) { return <div className="flex items-start justify-between gap-3 text-xs"><span className="text-slate-500">{label}</span><span className="text-right text-slate-300">{value}</span></div>; }
+function TinyStat({ label, value }) { return <div className="rounded-lg border border-slate-800/70 p-2"><div className="text-[9px] uppercase text-slate-600">{label}</div><div className="mt-1 truncate text-[11px] font-medium text-slate-300">{value}</div></div>; }
+function InsightCard({ title, value, text }) { return <div className="rounded-2xl border border-slate-800/70 bg-slate-950/40 p-4"><div className="text-[10px] uppercase tracking-[0.14em] text-slate-600">{title}</div><div className="mt-2 text-lg font-semibold text-white">{value}</div><p className="mt-2 text-xs leading-5 text-slate-500">{text}</p></div>; }
