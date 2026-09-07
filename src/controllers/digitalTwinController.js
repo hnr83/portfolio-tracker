@@ -15,9 +15,12 @@ async function ensureDigitalTwinTables() {
       implementation_style STRING,
       convictions_json STRING,
       rules_json STRING,
-      notes STRING
+      notes STRING,
+      investor_narrative STRING
     )
   `);
+  // Existing PoC tables may predate the narrative field.
+  await runQuery(`ALTER TABLE ${table("digital_twin_investor_profile")} ADD COLUMN IF NOT EXISTS investor_narrative STRING`);
 }
 
 function parseJsonArray(value) {
@@ -43,16 +46,14 @@ function normalizeProfile(row = {}) {
     convictions: parseJsonArray(row.convictions_json),
     rules: parseJsonArray(row.rules_json),
     notes: row.notes || "",
+    investor_narrative: row.investor_narrative || "",
   };
 }
 
 async function getInvestorProfile(req, res) {
   try {
     await ensureDigitalTwinTables();
-    const rows = await runQuery(
-      `SELECT * FROM ${table("digital_twin_investor_profile")} WHERE id = @id LIMIT 1`,
-      { id: PROFILE_ID }
-    );
+    const rows = await runQuery(`SELECT * FROM ${table("digital_twin_investor_profile")} WHERE id = @id LIMIT 1`, { id: PROFILE_ID });
     res.json(rows.length ? normalizeProfile(rows[0]) : normalizeProfile());
   } catch (error) {
     console.error("Error fetching Digital Twin investor profile:", error);
@@ -74,48 +75,30 @@ async function saveInvestorProfile(req, res) {
       convictionsJson: JSON.stringify(parseJsonArray(body.convictions)),
       rulesJson: JSON.stringify(parseJsonArray(body.rules)),
       notes: String(body.notes || "").trim(),
+      investorNarrative: String(body.investor_narrative || "").trim(),
     };
 
     await runQuery(`
       MERGE ${table("digital_twin_investor_profile")} target
-      USING (
-        SELECT
-          @id AS id,
-          CURRENT_TIMESTAMP() AS updated_at,
-          @style AS style,
-          @concentrationTolerance AS concentration_tolerance,
-          @drawdownTolerance AS drawdown_tolerance,
-          @liquidityPreference AS liquidity_preference,
-          @implementationStyle AS implementation_style,
-          @convictionsJson AS convictions_json,
-          @rulesJson AS rules_json,
-          @notes AS notes
-      ) source
+      USING (SELECT @id AS id, CURRENT_TIMESTAMP() AS updated_at, @style AS style,
+        @concentrationTolerance AS concentration_tolerance, @drawdownTolerance AS drawdown_tolerance,
+        @liquidityPreference AS liquidity_preference, @implementationStyle AS implementation_style,
+        @convictionsJson AS convictions_json, @rulesJson AS rules_json, @notes AS notes,
+        @investorNarrative AS investor_narrative) source
       ON target.id = source.id
-      WHEN MATCHED THEN UPDATE SET
-        updated_at = source.updated_at,
-        style = source.style,
-        concentration_tolerance = source.concentration_tolerance,
-        drawdown_tolerance = source.drawdown_tolerance,
-        liquidity_preference = source.liquidity_preference,
-        implementation_style = source.implementation_style,
-        convictions_json = source.convictions_json,
-        rules_json = source.rules_json,
-        notes = source.notes
-      WHEN NOT MATCHED THEN INSERT (
-        id, updated_at, style, concentration_tolerance, drawdown_tolerance,
-        liquidity_preference, implementation_style, convictions_json, rules_json, notes
-      ) VALUES (
-        source.id, source.updated_at, source.style, source.concentration_tolerance,
+      WHEN MATCHED THEN UPDATE SET updated_at = source.updated_at, style = source.style,
+        concentration_tolerance = source.concentration_tolerance, drawdown_tolerance = source.drawdown_tolerance,
+        liquidity_preference = source.liquidity_preference, implementation_style = source.implementation_style,
+        convictions_json = source.convictions_json, rules_json = source.rules_json, notes = source.notes,
+        investor_narrative = source.investor_narrative
+      WHEN NOT MATCHED THEN INSERT (id, updated_at, style, concentration_tolerance, drawdown_tolerance,
+        liquidity_preference, implementation_style, convictions_json, rules_json, notes, investor_narrative)
+      VALUES (source.id, source.updated_at, source.style, source.concentration_tolerance,
         source.drawdown_tolerance, source.liquidity_preference, source.implementation_style,
-        source.convictions_json, source.rules_json, source.notes
-      )
+        source.convictions_json, source.rules_json, source.notes, source.investor_narrative)
     `, profile);
 
-    const rows = await runQuery(
-      `SELECT * FROM ${table("digital_twin_investor_profile")} WHERE id = @id LIMIT 1`,
-      { id: PROFILE_ID }
-    );
+    const rows = await runQuery(`SELECT * FROM ${table("digital_twin_investor_profile")} WHERE id = @id LIMIT 1`, { id: PROFILE_ID });
     res.json(normalizeProfile(rows[0] || profile));
   } catch (error) {
     console.error("Error saving Digital Twin investor profile:", error);
