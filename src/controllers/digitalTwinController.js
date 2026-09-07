@@ -167,6 +167,24 @@ async function guidedInvestorInterview(req, res) {
     const body = req.body || {};
     const messages = normalizeMessages(body.messages);
     const context = body.context && typeof body.context === "object" ? body.context : {};
+
+    if (messages.length === 0) {
+      const existing = await loadInterviewSession();
+      if ((existing.status === "active" || existing.status === "proposal") && existing.messages.length > 0) {
+        return res.json({
+          phase: existing.status === "proposal" ? "proposal" : "question",
+          message: "Sesión recuperada",
+          question: existing.status === "active" ? existing.messages[existing.messages.length - 1]?.content || "" : "",
+          proposal: existing.proposal || null,
+          restored: true,
+          messages: existing.messages,
+          usage: existing.usage || null,
+          model: existing.model || null,
+          responseId: existing.response_id || null,
+        });
+      }
+    }
+
     const currentProfile = await loadProfile();
     const result = await runGuidedInterview({ messages, context, currentProfile });
     await persistInterviewSession({ messages, context, result });
