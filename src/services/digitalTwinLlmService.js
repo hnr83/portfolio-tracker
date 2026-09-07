@@ -41,26 +41,40 @@ REGLAS DE ESTILO:
 - Separá preferencias declaradas de conducta observada y señalá mentalmente posibles tensiones entre ambas para explorarlas después.
 - No cambies el perfil silenciosamente.
 
-Después de suficiente información (normalmente 4 a 6 respuestas sustantivas Y con cobertura de varias dimensiones), devolvé una propuesta de perfil para confirmar. No propongas el perfil sólo porque alcanzaste un número de turnos si la conversación quedó concentrada en una única dimensión.
-
-Respondé SIEMPRE JSON válido, sin markdown, con este formato:
-{
-  "phase": "question" | "proposal",
-  "message": "texto breve en español rioplatense",
-  "question": "pregunta si phase=question, sino vacío",
-  "proposal": null | {
-    "investor_narrative": "narrativa rica en primera persona, 120-220 palabras",
-    "style": "Crecimiento|Balanceado|Preservación|",
-    "concentration_tolerance": "Baja|Media|Alta|Alta con convicción|",
-    "drawdown_tolerance": "Baja|Media|Alta|",
-    "liquidity_preference": "Baja|Media|Alta|Oportunista|",
-    "implementation_style": "DCA|Híbrida · DCA + oportunista|Entradas oportunistas|Concentrado por tesis|",
-    "convictions": ["..."],
-    "rules": ["..."],
-    "notes": "matices relevantes"
-  }
-}`;
+Después de suficiente información (normalmente 4 a 6 respuestas sustantivas Y con cobertura de varias dimensiones), devolvé una propuesta de perfil para confirmar. No propongas el perfil sólo porque alcanzaste un número de turnos si la conversación quedó concentrada en una única dimensión.`;
 }
+
+const RESPONSE_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    phase: { type: "string", enum: ["question", "proposal"] },
+    message: { type: "string" },
+    question: { type: "string" },
+    proposal: {
+      anyOf: [
+        { type: "null" },
+        {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            investor_narrative: { type: "string" },
+            style: { type: "string", enum: ["Crecimiento", "Balanceado", "Preservación", ""] },
+            concentration_tolerance: { type: "string", enum: ["Baja", "Media", "Alta", "Alta con convicción", ""] },
+            drawdown_tolerance: { type: "string", enum: ["Baja", "Media", "Alta", ""] },
+            liquidity_preference: { type: "string", enum: ["Baja", "Media", "Alta", "Oportunista", ""] },
+            implementation_style: { type: "string", enum: ["DCA", "Híbrida · DCA + oportunista", "Entradas oportunistas", "Concentrado por tesis", ""] },
+            convictions: { type: "array", items: { type: "string" } },
+            rules: { type: "array", items: { type: "string" } },
+            notes: { type: "string" },
+          },
+          required: ["investor_narrative", "style", "concentration_tolerance", "drawdown_tolerance", "liquidity_preference", "implementation_style", "convictions", "rules", "notes"],
+        },
+      ],
+    },
+  },
+  required: ["phase", "message", "question", "proposal"],
+};
 
 async function runGuidedInterview({ messages = [], context = {}, currentProfile = null }) {
   if (!process.env.OPENAI_API_KEY) {
@@ -76,8 +90,11 @@ async function runGuidedInterview({ messages = [], context = {}, currentProfile 
     model: DEFAULT_MODEL,
     instructions: buildInstructions(),
     input,
-    max_output_tokens: 900,
-    text: { verbosity: "low" },
+    max_output_tokens: 1200,
+    text: {
+      verbosity: "low",
+      format: { type: "json_schema", name: "investor_interview_turn", strict: true, schema: RESPONSE_SCHEMA },
+    },
     store: false,
   }, {
     headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
