@@ -8,6 +8,7 @@ import HoldingsView from "./components/views/HoldingsView";
 import DashboardView from "./components/views/DashboardView";
 import TradingView from "./components/views/TradingView";
 import DecisionMaker from "./components/views/DecisionMaker";
+import DigitalInvestmentTwinView from "./components/views/DigitalInvestmentTwinView";
 import SortableHeader from "./components/shared/SortableHeader";
 import SectionShell from "./components/layout/SectionShell";
 import FilterToolbar from "./components/layout/FilterToolbar";
@@ -195,6 +196,7 @@ function AppContent() {
           {activeView === "transactions" && <TransactionsView selectedAssetMovements={selectedAssetMovements} setSelectedAssetMovements={setSelectedAssetMovements} filteredAndSortedMovements={filteredAndSortedMovements} movementSearch={movementSearch} setMovementSearch={setMovementSearch} movementCategoryFilter={movementCategoryFilter} setMovementCategoryFilter={setMovementCategoryFilter} movementSort={movementSort} setMovementSort={setMovementSort} formatNumber={formatNumber} formatCurrency={formatCurrency} SortableHeader={SortableHeader} FilterToolbar={FilterToolbar} SectionShell={SectionShell} marketData={marketData} />}
           {activeView === "performance" && <PerformanceView />}
           {activeView === "planner" && <PlannerView summary={summary} positions={positions} />}
+          {activeView === "digital-twin" && <DigitalInvestmentTwinView summary={summary} positions={positions} investments={investments} />}
           {activeView === "market" && <MarketView marketSearch={marketSearch} setMarketSearch={setMarketSearch} marketTypeFilter={marketTypeFilter} setMarketTypeFilter={setMarketTypeFilter} marketSort={marketSort} setMarketSort={setMarketSort} formatCurrency={formatCurrency} formatPercent={formatPercent} SortableHeader={SortableHeader} FilterToolbar={FilterToolbar} SectionShell={SectionShell} />}
           {activeView === "history" && <HistoryView />}
           {activeView === "capital" && <CapitalView summary={summary} positions={positions} />}
