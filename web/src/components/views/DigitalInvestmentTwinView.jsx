@@ -4,7 +4,6 @@ import { apiFetch } from "../../utils/api";
 
 const REFERENCE_SCENARIO_KEY = "digital-twin-reference-scenario-id";
 const KNOWN_CRYPTO_TICKERS = new Set(["BTC", "ETH", "SOL", "RON"]);
-const STABLECOIN_TICKERS = new Set(["USDT", "USDC", "DAI"]);
 
 function tickerOf(row) {
   return String(row?.normalized_ticker || row?.ticker || "").toUpperCase().trim();
@@ -25,19 +24,10 @@ function parseAssets(raw) {
   }
 }
 
-function cryptoValueFromRows(positions, investments) {
-  const byTicker = new Map();
-  [...positions, ...investments].forEach((row) => {
-    const ticker = tickerOf(row);
-    if (!ticker || STABLECOIN_TICKERS.has(ticker)) return;
-    const isCrypto = row?.category === "CRYPTO" || KNOWN_CRYPTO_TICKERS.has(ticker);
-    if (!isCrypto) return;
-    const value = Number(row?.market_value_usd || 0);
-    if (!Number.isFinite(value) || value <= 0) return;
-    // positions e investments pueden representar el mismo activo; usamos la vista agregada mayor para no duplicarlo.
-    byTicker.set(ticker, Math.max(byTicker.get(ticker) || 0, value));
-  });
-  return Array.from(byTicker.values()).reduce((sum, value) => sum + value, 0);
+function cryptoValueFromInvestments(investments) {
+  return investments
+    .filter((row) => KNOWN_CRYPTO_TICKERS.has(tickerOf(row)))
+    .reduce((sum, row) => sum + Number(row?.market_value_usd || 0), 0);
 }
 
 export default function DigitalInvestmentTwinView({ summary, positions = [], investments = [] }) {
@@ -118,7 +108,11 @@ export default function DigitalInvestmentTwinView({ summary, positions = [], inv
       .filter((p) => tickerOf(p) === "USDT")
       .reduce((sum, p) => sum + Number(p.market_value_usd || 0), 0);
     const investableLiquidity = cash + usdt;
-    const crypto = cryptoValueFromRows(positions, investments);
+
+    // En este portfolio la categoría CRYPTO de positions representa USDT.
+    // BTC/ETH/SOL/RON forman parte de investments, por lo que la exposición crypto
+    // se calcula exclusivamente desde esa fuente para no confundir liquidez con riesgo crypto.
+    const crypto = cryptoValueFromInvestments(investments);
 
     const holdings = investments
       .map((item) => ({ ticker: tickerOf(item), value: Number(item.market_value_usd || 0) }))
