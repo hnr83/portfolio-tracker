@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { formatCurrency, formatPortfolioPercent } from "../../utils/formatters";
 import { apiFetch } from "../../utils/api";
+import InvestorModelPanel from "./digital-twin/InvestorModelPanel";
 
 const REFERENCE_SCENARIO_KEY = "digital-twin-reference-scenario-id";
 const KNOWN_CRYPTO_TICKERS = new Set(["BTC", "ETH", "SOL", "RON"]);
@@ -38,23 +39,16 @@ function cryptoValueFromInvestments(investments) {
 
 function buildEconomicExposures(investments, portfolioTotal) {
   const grouped = new Map();
-
   investments.forEach((item) => {
     const exposure = economicExposureTicker(item);
     const instrument = tickerOf(item);
     const value = Number(item.market_value_usd || 0);
     if (!exposure || !Number.isFinite(value) || value <= 0) return;
-
-    const current = grouped.get(exposure) || {
-      ticker: exposure,
-      value: 0,
-      instruments: new Set(),
-    };
+    const current = grouped.get(exposure) || { ticker: exposure, value: 0, instruments: new Set() };
     current.value += value;
     if (instrument) current.instruments.add(instrument);
     grouped.set(exposure, current);
   });
-
   return Array.from(grouped.values())
     .map((item) => ({
       ticker: item.ticker,
@@ -68,12 +62,11 @@ function buildEconomicExposures(investments, portfolioTotal) {
 
 export default function DigitalInvestmentTwinView({ summary, positions = [], investments = [] }) {
   const [savedScenarios, setSavedScenarios] = useState([]);
-  const [referenceScenarioId, setReferenceScenarioId] = useState(
-    () => window.localStorage.getItem(REFERENCE_SCENARIO_KEY) || ""
-  );
+  const [referenceScenarioId, setReferenceScenarioId] = useState(() => window.localStorage.getItem(REFERENCE_SCENARIO_KEY) || "");
   const [referenceScenario, setReferenceScenario] = useState(null);
   const [plannerLoading, setPlannerLoading] = useState(true);
   const [plannerError, setPlannerError] = useState("");
+  const [investorProfile, setInvestorProfile] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -137,25 +130,12 @@ export default function DigitalInvestmentTwinView({ summary, positions = [], inv
 
   const context = useMemo(() => {
     const portfolioTotal = Number(summary?.total_with_trading_usd || summary?.total_market_usd || 0);
-    const cash = positions
-      .filter((p) => ["CASH", "FX"].includes(p.category))
-      .reduce((sum, p) => sum + Number(p.market_value_usd || 0), 0);
-    const usdt = positions
-      .filter((p) => tickerOf(p) === "USDT")
-      .reduce((sum, p) => sum + Number(p.market_value_usd || 0), 0);
+    const cash = positions.filter((p) => ["CASH", "FX"].includes(p.category)).reduce((sum, p) => sum + Number(p.market_value_usd || 0), 0);
+    const usdt = positions.filter((p) => tickerOf(p) === "USDT").reduce((sum, p) => sum + Number(p.market_value_usd || 0), 0);
     const investableLiquidity = cash + usdt;
-
-    // En este portfolio la categoría CRYPTO de positions representa USDT.
-    // BTC/ETH/SOL/RON forman parte de investments, por lo que la exposición crypto
-    // se calcula exclusivamente desde esa fuente para no confundir liquidez con riesgo crypto.
     const crypto = cryptoValueFromInvestments(investments);
-
-    // Para riesgo/concentración el Twin agrupa instrumentos que representan la misma
-    // exposición económica (por ejemplo TSLA + BCBA:TSLA, GOOGL + su CEDEAR, MELI + CEDEAR).
-    // Conservamos el detalle de instrumentos para trazabilidad, pero el ranking usa el underlying.
     const economicExposures = buildEconomicExposures(investments, portfolioTotal);
     const topExposures = economicExposures.slice(0, 5);
-
     return {
       portfolioTotal,
       crypto,
@@ -166,6 +146,7 @@ export default function DigitalInvestmentTwinView({ summary, positions = [], inv
       liquidityWeight: pct(investableLiquidity, portfolioTotal),
       topExposures,
       topWeight: topExposures[0]?.weight || 0,
+      topTicker: topExposures[0]?.ticker || "",
       positionsCount: positions.filter((p) => Number(p.market_value_usd || 0) !== 0).length,
     };
   }, [summary, positions, investments]);
@@ -187,11 +168,21 @@ export default function DigitalInvestmentTwinView({ summary, positions = [], inv
     };
   }, [referenceScenario]);
 
+  const handleProfileChange = useCallback((profile) => setInvestorProfile(profile), []);
+  const declaredFields = [
+    investorProfile?.style,
+    investorProfile?.concentration_tolerance,
+    investorProfile?.drawdown_tolerance,
+    investorProfile?.liquidity_preference,
+    investorProfile?.implementation_style,
+  ].filter(Boolean).length;
+  const investorModelReady = declaredFields > 0;
+
   const pillars = [
     {
       label: "Quién soy",
-      value: "Por aprender",
-      detail: "Preferencias, convicciones, tolerancia y estilo de decisión. Se construirá con memoria explícita y decisiones reales.",
+      value: investorProfile?.style || "Por definir",
+      detail: investorModelReady ? `${declaredFields}/5 dimensiones declaradas · comportamiento observado por separado.` : "Definí tus preferencias sin convertirlas en un cuestionario de riesgo rígido.",
     },
     {
       label: "Dónde estoy",
@@ -201,9 +192,7 @@ export default function DigitalInvestmentTwinView({ summary, positions = [], inv
     {
       label: "A dónde voy",
       value: plannerContext?.name || "Sin referencia",
-      detail: plannerContext
-        ? `${formatCurrency(plannerContext.monthlyContributionUsd, "USD")}/mes · ${plannerContext.years} años · objetivo ${formatCurrency(plannerContext.fireGoalUsd, "USD")}`
-        : "Elegí qué escenario guardado de Planner debe usar el Twin como referencia.",
+      detail: plannerContext ? `${formatCurrency(plannerContext.monthlyContributionUsd, "USD")}/mes · ${plannerContext.years} años · objetivo ${formatCurrency(plannerContext.fireGoalUsd, "USD")}` : "Elegí qué escenario guardado de Planner debe usar el Twin como referencia.",
     },
     {
       label: "Cómo cambio",
@@ -240,7 +229,7 @@ export default function DigitalInvestmentTwinView({ summary, positions = [], inv
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="text-sm font-semibold text-white">Consultá a tu Twin</div>
-              <div className="mt-1 text-xs text-slate-500">Portfolio real + escenario de referencia de Planner forman ahora la base del contexto.</div>
+              <div className="mt-1 text-xs text-slate-500">Portfolio real + escenario de referencia + Investor Model forman la base del contexto.</div>
             </div>
             <span className="w-fit rounded-full border border-emerald-400/15 bg-emerald-400/[0.06] px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-emerald-300">Context builder · activo</span>
           </div>
@@ -274,8 +263,19 @@ export default function DigitalInvestmentTwinView({ summary, positions = [], inv
               <Metric label="Crypto" value={`${formatCurrency(context.crypto, "USD")} · ${formatPortfolioPercent(context.cryptoWeight)}`} />
               <Metric label="Liquidez" value={`${formatCurrency(context.investableLiquidity, "USD")} · ${formatPortfolioPercent(context.liquidityWeight)}`} />
             </div>
-            <p className="mt-4 text-xs leading-5 text-slate-400">Todavía no enviamos esto a un LLM. Portfolio Tracker calcula los hechos; el modelo recibirá sólo el contexto necesario para razonar sobre una decisión.</p>
+            <p className="mt-4 text-xs leading-5 text-slate-400">Portfolio Tracker calcula los hechos. El modelo recibirá sólo el contexto necesario para razonar sobre una decisión.</p>
           </div>
+
+          <InvestorModelPanel
+            observed={{
+              topTicker: context.topTicker,
+              topWeight: context.topWeight,
+              cryptoWeight: context.cryptoWeight,
+              liquidityWeight: context.liquidityWeight,
+              scenarioName: plannerContext?.name || "",
+            }}
+            onProfileChange={handleProfileChange}
+          />
 
           <div className="mt-5 flex gap-3">
             <input disabled placeholder="Escribí una decisión para analizar..." className="min-w-0 flex-1 rounded-2xl border border-slate-800 bg-[#020617] px-4 py-3 text-sm text-slate-500 outline-none" />
@@ -287,10 +287,10 @@ export default function DigitalInvestmentTwinView({ summary, positions = [], inv
           <article className="rounded-[26px] border border-slate-800/80 bg-slate-950/55 p-5">
             <div className="text-sm font-semibold text-white">Estado del Twin</div>
             <div className="mt-4 space-y-4 text-xs">
-              <Status label="Portfolio context" value="Conectado" ok />
-              <Status label="Planner context" value={plannerContext ? "Conectado" : "Elegir referencia"} ok={Boolean(plannerContext)} />
-              <Status label="Investor model" value="Siguiente" />
-              <Status label="Decision memory" value="Pendiente" />
+              <Status label="Portfolio context" value="Validado" ok />
+              <Status label="Planner context" value={plannerContext ? "Validado" : "Elegir referencia"} ok={Boolean(plannerContext)} />
+              <Status label="Investor model" value={investorModelReady ? "Conectado" : "Completar"} ok={investorModelReady} />
+              <Status label="Decision memory" value="Siguiente" />
               <Status label="LLM" value="Pendiente" />
             </div>
           </article>
@@ -311,9 +311,7 @@ export default function DigitalInvestmentTwinView({ summary, positions = [], inv
                     <div key={holding.ticker} className="flex items-start justify-between gap-4 text-xs">
                       <div className="min-w-0">
                         <div className="font-medium text-slate-300">{holding.ticker}</div>
-                        {holding.instrumentCount > 1 && (
-                          <div className="mt-0.5 truncate text-[10px] text-slate-600">{holding.instrumentCount} instrumentos · {holding.instruments.join(" + ")}</div>
-                        )}
+                        {holding.instrumentCount > 1 && <div className="mt-0.5 truncate text-[10px] text-slate-600">{holding.instrumentCount} instrumentos · {holding.instruments.join(" + ")}</div>}
                       </div>
                       <span className="shrink-0 tabular-nums text-slate-500">{formatCurrency(holding.value, "USD")} · {formatPortfolioPercent(holding.weight)}</span>
                     </div>
