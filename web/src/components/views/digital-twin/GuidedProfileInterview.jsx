@@ -3,6 +3,7 @@ import { apiFetch } from "../../../utils/api";
 
 export default function GuidedProfileInterview({ context, onProposal }) {
   const [messages, setMessages] = useState([]);
+  const [sessionId, setSessionId] = useState(null);
   const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(true);
@@ -18,6 +19,7 @@ export default function GuidedProfileInterview({ context, onProposal }) {
         const data = await response.json();
         if (!response.ok) throw new Error(data?.error || `HTTP ${response.status}`);
         if (cancelled) return;
+        setSessionId(data.id || data.session_id || null);
         if (Array.isArray(data.messages) && data.messages.length > 0) setMessages(data.messages);
         if (data.proposal) setProposal(data.proposal);
       } catch (err) {
@@ -34,20 +36,16 @@ export default function GuidedProfileInterview({ context, onProposal }) {
     try {
       const response = await apiFetch("/api/digital-twin/investor-profile/interview", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: nextMessages, context }),
+        body: JSON.stringify({ session_id: sessionId, messages: nextMessages, context }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data?.code === "OPENAI_NOT_CONFIGURED" ? "Falta configurar OPENAI_API_KEY en el backend." : data?.error || `HTTP ${response.status}`);
-
-      if (data.restored && Array.isArray(data.messages)) {
-        setMessages(data.messages);
-        if (data.proposal) setProposal(data.proposal);
-        return;
+      setSessionId(data.session_id || data.id || sessionId);
+      if (Array.isArray(data.messages) && data.messages.length) setMessages(data.messages);
+      else {
+        const assistantText = data.question || data.message || "";
+        setMessages(assistantText ? [...nextMessages, { role: "assistant", content: assistantText }] : nextMessages);
       }
-
-      const assistantText = data.question || data.message || "";
-      const withAssistant = assistantText ? [...nextMessages, { role: "assistant", content: assistantText }] : nextMessages;
-      setMessages(withAssistant);
       if (data.phase === "proposal" && data.proposal) setProposal(data.proposal);
     } catch (err) { setError(err.message || "No se pudo continuar la conversación."); }
     finally { setLoading(false); }
