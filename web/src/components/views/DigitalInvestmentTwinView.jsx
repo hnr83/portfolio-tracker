@@ -9,6 +9,12 @@ function tickerOf(row) {
   return String(row?.normalized_ticker || row?.ticker || "").toUpperCase().trim();
 }
 
+function economicExposureTicker(row) {
+  const underlying = String(row?.underlying_ticker || "").toUpperCase().trim();
+  if (underlying) return underlying.replace(/^(BCBA|BATS):/, "");
+  return tickerOf(row).replace(/^(BCBA|BATS):/, "");
+}
+
 function pct(part, total) {
   if (!total) return 0;
   return (Number(part || 0) / Number(total || 0)) * 100;
@@ -26,8 +32,38 @@ function parseAssets(raw) {
 
 function cryptoValueFromInvestments(investments) {
   return investments
-    .filter((row) => KNOWN_CRYPTO_TICKERS.has(tickerOf(row)))
+    .filter((row) => KNOWN_CRYPTO_TICKERS.has(economicExposureTicker(row)))
     .reduce((sum, row) => sum + Number(row?.market_value_usd || 0), 0);
+}
+
+function buildEconomicExposures(investments, portfolioTotal) {
+  const grouped = new Map();
+
+  investments.forEach((item) => {
+    const exposure = economicExposureTicker(item);
+    const instrument = tickerOf(item);
+    const value = Number(item.market_value_usd || 0);
+    if (!exposure || !Number.isFinite(value) || value <= 0) return;
+
+    const current = grouped.get(exposure) || {
+      ticker: exposure,
+      value: 0,
+      instruments: new Set(),
+    };
+    current.value += value;
+    if (instrument) current.instruments.add(instrument);
+    grouped.set(exposure, current);
+  });
+
+  return Array.from(grouped.values())
+    .map((item) => ({
+      ticker: item.ticker,
+      value: item.value,
+      weight: pct(item.value, portfolioTotal),
+      instrumentCount: item.instruments.size,
+      instruments: Array.from(item.instruments),
+    }))
+    .sort((a, b) => b.value - a.value);
 }
 
 export default function DigitalInvestmentTwinView({ summary, positions = [], investments = [] }) {
@@ -114,14 +150,11 @@ export default function DigitalInvestmentTwinView({ summary, positions = [], inv
     // se calcula exclusivamente desde esa fuente para no confundir liquidez con riesgo crypto.
     const crypto = cryptoValueFromInvestments(investments);
 
-    const holdings = investments
-      .map((item) => ({ ticker: tickerOf(item), value: Number(item.market_value_usd || 0) }))
-      .filter((item) => item.ticker && item.value > 0)
-      .sort((a, b) => b.value - a.value);
-    const topHoldings = holdings.slice(0, 5).map((item) => ({
-      ...item,
-      weight: pct(item.value, portfolioTotal),
-    }));
+    // Para riesgo/concentración el Twin agrupa instrumentos que representan la misma
+    // exposición económica (por ejemplo TSLA + BCBA:TSLA, GOOGL + su CEDEAR, MELI + CEDEAR).
+    // Conservamos el detalle de instrumentos para trazabilidad, pero el ranking usa el underlying.
+    const economicExposures = buildEconomicExposures(investments, portfolioTotal);
+    const topExposures = economicExposures.slice(0, 5);
 
     return {
       portfolioTotal,
@@ -131,8 +164,8 @@ export default function DigitalInvestmentTwinView({ summary, positions = [], inv
       investableLiquidity,
       cryptoWeight: pct(crypto, portfolioTotal),
       liquidityWeight: pct(investableLiquidity, portfolioTotal),
-      topHoldings,
-      topWeight: topHoldings[0]?.weight || 0,
+      topExposures,
+      topWeight: topExposures[0]?.weight || 0,
       positionsCount: positions.filter((p) => Number(p.market_value_usd || 0) !== 0).length,
     };
   }, [summary, positions, investments]);
@@ -268,16 +301,21 @@ export default function DigitalInvestmentTwinView({ summary, positions = [], inv
               <Row label="Liquidez total" value={formatCurrency(context.investableLiquidity, "USD")} />
               <Row label="USDT" value={formatCurrency(context.usdt, "USD")} />
               <Row label="Crypto sin stablecoins" value={formatCurrency(context.crypto, "USD")} />
-              <Row label="Mayor concentración" value={formatPortfolioPercent(context.topWeight)} />
+              <Row label="Mayor concentración económica" value={formatPortfolioPercent(context.topWeight)} />
             </div>
-            {context.topHoldings.length > 0 && (
+            {context.topExposures.length > 0 && (
               <div className="mt-5 border-t border-slate-800 pt-4">
-                <div className="mb-3 text-[10px] uppercase tracking-[0.18em] text-slate-500">Principales posiciones</div>
+                <div className="mb-3 text-[10px] uppercase tracking-[0.18em] text-slate-500">Principales exposiciones económicas</div>
                 <div className="space-y-2">
-                  {context.topHoldings.map((holding) => (
-                    <div key={holding.ticker} className="flex items-center justify-between gap-4 text-xs">
-                      <span className="font-medium text-slate-300">{holding.ticker}</span>
-                      <span className="tabular-nums text-slate-500">{formatCurrency(holding.value, "USD")} · {formatPortfolioPercent(holding.weight)}</span>
+                  {context.topExposures.map((holding) => (
+                    <div key={holding.ticker} className="flex items-start justify-between gap-4 text-xs">
+                      <div className="min-w-0">
+                        <div className="font-medium text-slate-300">{holding.ticker}</div>
+                        {holding.instrumentCount > 1 && (
+                          <div className="mt-0.5 truncate text-[10px] text-slate-600">{holding.instrumentCount} instrumentos · {holding.instruments.join(" + ")}</div>
+                        )}
+                      </div>
+                      <span className="shrink-0 tabular-nums text-slate-500">{formatCurrency(holding.value, "USD")} · {formatPortfolioPercent(holding.weight)}</span>
                     </div>
                   ))}
                 </div>
