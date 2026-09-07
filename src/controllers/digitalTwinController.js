@@ -4,25 +4,6 @@ const { table } = require("../utils/bigqueryHelper");
 
 const PROFILE_ID = "default";
 
-async function ensureDigitalTwinTables() {
-  await runQuery(`
-    CREATE TABLE IF NOT EXISTS ${table("digital_twin_investor_profile")} (
-      id STRING NOT NULL,
-      updated_at TIMESTAMP NOT NULL,
-      style STRING,
-      concentration_tolerance STRING,
-      drawdown_tolerance STRING,
-      liquidity_preference STRING,
-      implementation_style STRING,
-      convictions_json STRING,
-      rules_json STRING,
-      notes STRING,
-      investor_narrative STRING
-    )
-  `);
-  await runQuery(`ALTER TABLE ${table("digital_twin_investor_profile")} ADD COLUMN IF NOT EXISTS investor_narrative STRING`);
-}
-
 function parseJsonArray(value) {
   if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean);
   if (typeof value !== "string" || !value.trim()) return [];
@@ -40,7 +21,6 @@ function normalizeProfile(row = {}) {
 }
 
 async function loadProfile() {
-  await ensureDigitalTwinTables();
   const rows = await runQuery(`SELECT * FROM ${table("digital_twin_investor_profile")} WHERE id = @id LIMIT 1`, { id: PROFILE_ID });
   return rows.length ? normalizeProfile(rows[0]) : normalizeProfile();
 }
@@ -52,7 +32,6 @@ async function getInvestorProfile(req, res) {
 
 async function saveInvestorProfile(req, res) {
   try {
-    await ensureDigitalTwinTables();
     const body = req.body || {};
     const profile = {
       id: PROFILE_ID, style: String(body.style || "").trim(), concentrationTolerance: String(body.concentration_tolerance || "").trim(),
