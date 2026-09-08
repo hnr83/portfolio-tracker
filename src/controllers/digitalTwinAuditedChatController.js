@@ -57,7 +57,7 @@ async function trackUsage(result, messageCount) {
         reasoningTokens: Number(usage.output_tokens_details?.reasoning_tokens) || 0,
         webSearchCalls: Number(result?.tools?.webSearchCalls) || 0,
         responseId: String(result?.responseId || ""),
-        metadataJson: JSON.stringify({ message_count: messageCount, pipeline: "per_asset_research_v2" })
+        metadataJson: JSON.stringify({ message_count: messageCount, pipeline: "bounded_research_v3" })
       }
     );
   } catch (error) {
@@ -87,22 +87,39 @@ async function auditedDecisionChat(req, res) {
       return res.json(result);
     }
 
-    const audited = await auditAndReviseDecision({
-      draft: result.answer,
-      evidenceMatrix: result.evidenceMatrix,
-      currentProfile: profile,
-      context,
-      plan: result.preflight || {}
-    });
+    let finalResult = result;
+    try {
+      const audited = await auditAndReviseDecision({
+        draft: result.answer,
+        evidenceMatrix: result.evidenceMatrix,
+        currentProfile: profile,
+        context,
+        plan: result.preflight || {}
+      });
 
-    const finalResult = {
-      ...result,
-      answer: audited.answer,
-      epistemicAudit: audited.audit,
-      usage: mergeUsage(result.usage, audited.usage),
-      apiRequests: (Number(result.apiRequests) || 0) + (Number(audited.apiRequests) || 0),
-      responseId: audited.responseId || result.responseId
-    };
+      finalResult = {
+        ...result,
+        answer: audited.answer,
+        epistemicAudit: audited.audit,
+        usage: mergeUsage(result.usage, audited.usage),
+        apiRequests: (Number(result.apiRequests) || 0) + (Number(audited.apiRequests) || 0),
+        responseId: audited.responseId || result.responseId
+      };
+    } catch (auditError) {
+      console.warn("Digital Twin epistemic audit failed; returning unaudited draft", {
+        message: auditError?.message,
+        code: auditError?.code,
+        status: auditError?.response?.status
+      });
+      finalResult = {
+        ...result,
+        epistemicAudit: {
+          skipped: true,
+          reason: "audit_failed",
+          message: "La respuesta se devolvió sin revisión epistemológica porque la auditoría falló."
+        }
+      };
+    }
 
     await trackUsage(finalResult, messages.length);
     return res.json(finalResult);
