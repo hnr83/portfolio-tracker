@@ -1,5 +1,6 @@
 const axios = require("axios");
 const { runSolDecision } = require("./digitalTwinSolDecision");
+const { selectRelevantDecisionMemory } = require("./digitalTwinMemoryRetrievalService");
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const RESEARCH_MODEL = process.env.DIGITAL_TWIN_RESEARCH_MODEL || process.env.DIGITAL_TWIN_MODEL || "gpt-5-mini";
@@ -180,7 +181,7 @@ async function researchBatch(plan){
   }
 }
 
-function decisionContext(context, plan) {
+function decisionContext(context, plan, memoryItems=[]) {
   const decisionType = plan?.decisionType || "other";
   const plannerRelevant = decisionType === "allocation" || decisionType === "plan_progress";
   const base = compactDecisionContext(context, { includePlanner: plannerRelevant });
@@ -189,7 +190,11 @@ function decisionContext(context, plan) {
     currentInvestableCashUsd: plan?.allocationAmountUsd == null ? null : plan.allocationAmountUsd,
     plannerSemantics: plannerRelevant
       ? "Planner values are scenario assumptions only; they are not current cash unless currentInvestableCashUsd is explicitly present."
-      : "Planner omitted because it is not material to this decision."
+      : "Planner omitted because it is not material to this decision.",
+    decisionMemory: {
+      semantics: "historical_decisions_are_context_not_preferences_or_current_policy",
+      items: (memoryItems||[]).slice(0,3).map(x=>({id:x.id,question:x.question,answer:x.answer,createdAt:x.createdAt,relevanceReason:x.relevanceReason}))
+    }
   };
 }
 
@@ -197,14 +202,16 @@ async function runDecisionPipeline({messages=[],context={},currentProfile={}}){
   if(!process.env.OPENAI_API_KEY){const error=new Error("OPENAI_API_KEY is not configured");error.code="OPENAI_NOT_CONFIGURED";throw error;}
   const openAllocation=looksLikeOpenAllocation(messages);
   const amount=openAllocation?explicitUsdAmount(messages):null;
-  if(openAllocation&&amount==null)return{answer:"¿Cuánto tenés disponible para invertir este mes?",preflight:{decisionType:"allocation",researchAssets:[],allocationAmountUsd:null},evidenceMatrix:null,usage:null,usageStages:[],apiRequests:0,model:null,responseId:null,tools:{webSearchCalls:0,outputTypes:[]},pipeline:"hybrid_sol_v1"};
+  if(openAllocation&&amount==null)return{answer:"¿Cuánto tenés disponible para invertir este mes?",preflight:{decisionType:"allocation",researchAssets:[],allocationAmountUsd:null},evidenceMatrix:null,decisionMemory:[],usage:null,usageStages:[],apiRequests:0,model:null,responseId:null,tools:{webSearchCalls:0,outputTypes:[]},pipeline:"hybrid_sol_v1"};
 
+  const memory=await selectRelevantDecisionMemory({messages,context,currentProfile});
   const {plan,attempt:preflightAttempt}=await runPreflight({messages,context,currentProfile,amount});
   const research=await researchBatch(plan);
-  const contextForDecision=decisionContext(context, plan);
+  const contextForDecision=decisionContext(context, plan, memory.items);
   const decision=await runSolDecision({messages,context:contextForDecision,currentProfile,preflight:plan,evidenceMatrix:research.matrix});
 
   const usageStages=[
+    memory.usageStage,
     stageUsage("preflight",preflightAttempt,0),
     stageUsage("research",research.attempt,research.tools?.webSearchCalls||0),
     decision?.usage ? {stage:"decision",model:decision.model,apiRequests:1,webSearchCalls:0,usage:decision.usage} : null
@@ -216,6 +223,8 @@ async function runDecisionPipeline({messages=[],context={},currentProfile={}}){
     answer:decision.answer,
     preflight:plan,
     evidenceMatrix:research.matrix,
+    decisionMemory:memory.items,
+    memoryCandidateCount:memory.candidateCount,
     usage,
     usageStages,
     apiRequests,
