@@ -36,8 +36,9 @@ async function ensurePolicyTable() {
 }
 
 function normalizeAsset(value = "") {
-  const asset = String(value).trim().toUpperCase();
-  return /^[A-Z0-9.-]{2,12}$/.test(asset) ? asset : null;
+  const raw = String(value).trim();
+  if (!raw || raw !== raw.toUpperCase()) return null;
+  return /^[A-Z0-9.-]{2,12}$/.test(raw) ? raw : null;
 }
 
 function parseAmount(raw) {
@@ -74,14 +75,14 @@ function extractPolicyUpdates(message = "") {
     updates.push(update);
   };
 
-  const pauseRegex = /\b(?:paus[eé]|pause|detuve|cancel[eé])\b[^.!?\n]{0,60}?\b(?:dca|bot)?\s*(?:de\s+)?([A-Z]{2,10})\b/gi;
+  const pauseRegex = /\b(?:paus[eé]|pause|detuve|cancel[eé])\b[^.!?\n]{0,60}?\b(?:dca|bot)?\s*(?:de\s+)?([A-Za-z0-9.-]{2,12})\b/gi;
   let match;
   while ((match = pauseRegex.exec(text))) {
     const asset = normalizeAsset(match[1]);
     if (asset) push({ asset, strategy: "DCA", amount_usd: null, frequency: null, status: "paused" });
   }
 
-  const assetRegex = /\b([A-Z]{2,10})\b([^.!?\n]{0,100})/gi;
+  const assetRegex = /\b([A-Za-z0-9.-]{2,12})\b([^.!?\n]{0,100})/g;
   while ((match = assetRegex.exec(text))) {
     const asset = normalizeAsset(match[1]);
     if (!asset) continue;
