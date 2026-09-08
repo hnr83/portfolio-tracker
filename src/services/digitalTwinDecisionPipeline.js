@@ -48,6 +48,43 @@ function compactProfile(profile = {}) {
     drawdown_tolerance: profile.drawdown_tolerance, liquidity_preference: profile.liquidity_preference,
     implementation_style: profile.implementation_style, convictions: profile.convictions, rules: profile.rules });
 }
+function portfolioRows(context = {}) {
+  const p = context?.portfolio || {};
+  if (Array.isArray(p.exposures) && p.exposures.length) return p.exposures;
+  if (Array.isArray(p.topExposures) && p.topExposures.length) return p.topExposures;
+  return [];
+}
+function assetId(row = {}) {
+  return String(row?.ticker || row?.asset || row?.symbol || row?.name || "").trim();
+}
+function firstFinite(...values) {
+  for (const value of values) {
+    const n = Number(value);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+function portfolioUniverse(context = {}) {
+  const seen = new Set();
+  const rows = [];
+  for (const row of portfolioRows(context)) {
+    const asset = assetId(row);
+    if (!asset) continue;
+    const key = asset.toUpperCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const item = { asset };
+    const weightPct = firstFinite(row?.weightPct, row?.weight_pct, row?.portfolioWeightPct, row?.portfolio_weight_pct, row?.weight);
+    const valueUsd = firstFinite(row?.valueUsd, row?.value_usd, row?.marketValueUsd, row?.market_value_usd, row?.marketValue, row?.market_value);
+    const category = row?.category || row?.assetClass || row?.asset_class || row?.type || null;
+    if (weightPct != null) item.weightPct = weightPct;
+    if (valueUsd != null) item.valueUsd = valueUsd;
+    if (category) item.category = String(category).slice(0, 80);
+    rows.push(item);
+  }
+  return rows;
+}
+function portfolioAssetIds(context = {}) { return portfolioUniverse(context).map(x => x.asset); }
 function compactDecisionContext(context = {}) {
   const p = context?.portfolio || {};
   const planner = context?.planner || {};
@@ -110,17 +147,32 @@ const RESEARCH_SCHEMA = {
   required: ["assets", "limitation"]
 };
 
+function normalizeResearchAssets(assets = [], context = {}) {
+  const ids = portfolioAssetIds(context);
+  const canonical = new Map(ids.map(id => [id.toUpperCase(), id]));
+  const out = [];
+  const seen = new Set();
+  for (const raw of assets || []) {
+    const key = String(raw || "").trim().toUpperCase();
+    const match = canonical.get(key);
+    if (!match || seen.has(key)) continue;
+    seen.add(key);
+    out.push(match);
+    if (out.length >= MAX_RESEARCH_ASSETS) break;
+  }
+  return out;
+}
 function fallbackAssets(context = {}) {
-  const rows = context?.portfolio?.topExposures || context?.portfolio?.exposures || [];
-  return rows.map(x => String(x?.ticker || x?.asset || x?.symbol || x?.name || "").trim()).filter(Boolean).slice(0, MAX_RESEARCH_ASSETS);
+  return portfolioAssetIds(context).slice(0, MAX_RESEARCH_ASSETS);
 }
 async function runPreflight({ messages, context, currentProfile, amount }) {
   const recent = (messages || []).slice(-3).map(m => `${m.role}: ${String(m.content || "").slice(0, 700)}`).join("\n");
-  const input = `Monto: ${amount == null ? "no informado" : `USD ${amount}`}\nPerfil: ${JSON.stringify(compactProfile(currentProfile))}\nCartera/plan: ${JSON.stringify(compactDecisionContext(context))}\nConsulta: ${recent}`;
+  const universe = portfolioUniverse(context);
+  const input = `Monto: ${amount == null ? "no informado" : `USD ${amount}`}\nPerfil: ${JSON.stringify(compactProfile(currentProfile))}\nCartera/plan agregado: ${JSON.stringify(compactDecisionContext(context))}\nUNIVERSO COMPLETO DE CARTERA (screening obligatorio, ${universe.length} activos): ${JSON.stringify(universe)}\nConsulta: ${recent}`;
   const body = {
     model: DEFAULT_MODEL,
     reasoning: { effort: "low" },
-    instructions: `Planificá la decisión, sin responderla ni investigar. Elegí como máximo ${MAX_RESEARCH_ASSETS} activos cuya información pública ACTUAL pueda cambiar materialmente la respuesta. Elegirlos no significa preferirlos. No hagas ranking. Devolvé una sola pregunta de research que permita comparar tesis/fundamentales y valuación actual. Planner no es target ni el peso actual es preferencia.`,
+    instructions: `Planificá la decisión, sin responderla ni investigar. Antes de elegir research, recorré TODOS los activos del UNIVERSO COMPLETO DE CARTERA provisto. Ese universo es exhaustivo para esta etapa. Elegí como máximo ${MAX_RESEARCH_ASSETS} activos DEL UNIVERSO ACTUAL cuya información pública reciente podría cambiar materialmente la respuesta. No propongas activos externos en este preflight y no uses el shortlist como ranking: sólo define dónde vale pagar research profundo. Considerá peso/contexto determinístico y el Investor Model, pero el peso actual no es preferencia ni prueba de atractivo. Devolvé una sola pregunta de research que ayude a comparar tesis/fundamentales y valuación de los seleccionados. Planner no es target.`,
     input, max_output_tokens: 1200,
     text: { verbosity: "low", format: { type: "json_schema", name: "twin_preflight", strict: true, schema: PREFLIGHT_SCHEMA } }, store: false
   };
@@ -129,10 +181,12 @@ async function runPreflight({ messages, context, currentProfile, amount }) {
     data = await post(body, 60000);
     if (truncated(data)) throw new Error("PREFLIGHT_TRUNCATED");
     const parsed = parseJson(outputText(data));
-    return { plan: { ...parsed, researchAssets: (parsed.researchAssets || []).slice(0, MAX_RESEARCH_ASSETS), allocationAmountUsd: amount }, attempts: [data] };
+    let researchAssets = normalizeResearchAssets(parsed.researchAssets, context);
+    if (!researchAssets.length) researchAssets = fallbackAssets(context);
+    return { plan: { ...parsed, researchAssets, portfolioUniverseAssets: portfolioAssetIds(context), screenedPortfolioCount: universe.length, allocationAmountUsd: amount }, attempts: [data] };
   } catch (error) {
     console.warn("Digital Twin preflight unavailable; using deterministic fallback", { message: error?.message, usage: data?.usage });
-    return { plan: { decisionType: looksLikeOpenAllocation(messages) ? "allocation" : "other", researchAssets: fallbackAssets(context), researchQuestion: "Comparar tesis/fundamentales y valuación actual con evidencia reciente.", allocationAmountUsd: amount, preflightFallback: true }, attempts: data ? [data] : [] };
+    return { plan: { decisionType: looksLikeOpenAllocation(messages) ? "allocation" : "other", researchAssets: fallbackAssets(context), researchQuestion: "Comparar tesis/fundamentales y valuación actual con evidencia reciente.", portfolioUniverseAssets: portfolioAssetIds(context), screenedPortfolioCount: universe.length, allocationAmountUsd: amount, preflightFallback: true }, attempts: data ? [data] : [] };
   }
 }
 
@@ -149,12 +203,12 @@ async function researchBatch(plan) {
   const requested = (plan?.researchAssets || []).slice(0, MAX_RESEARCH_ASSETS);
   const cached = requested.map(getCached).filter(Boolean);
   const missing = requested.filter(asset => !getCached(asset));
-  if (!missing.length) return { matrix: { assets: cached, limitation: "", cacheHits: cached.map(x => x.asset) }, attempts: [], tools: { webSearchCalls: 0, outputTypes: [] } };
+  if (!missing.length) return { matrix: { assets: cached, limitation: "", requestedAssets: requested, cacheHits: cached.map(x => x.asset) }, attempts: [], tools: { webSearchCalls: 0, outputTypes: [] } };
 
   const body = {
     model: DEFAULT_MODEL,
     reasoning: { effort: "low" },
-    instructions: `Investigá sólo estos activos: ${missing.join(", ")}. Una única pasada de web search. No recomiendes ni asignes capital. Para cada activo devolvé: estado de tesis, valuación actual, máximo 3 hechos discriminantes, calidad y una limitación. Sé extremadamente compacto. Priorizá fuentes primarias y fuentes financieras sólidas. Para cripto, ATH/distancia sólo es contexto y no prueba baratura. Para acciones, preferí múltiplos, crecimiento, FCF/márgenes/expectativas. Si no alcanza la evidencia, marcá unknown. No sigas buscando para completar todos los campos.`,
+    instructions: `Investigá sólo estos activos de la cartera: ${missing.join(", ")}. Una única pasada de web search. No recomiendes ni asignes capital. Para cada activo devolvé: estado de tesis, valuación actual, máximo 3 hechos discriminantes, calidad y una limitación. Sé extremadamente compacto. Priorizá fuentes primarias y fuentes financieras sólidas. Para cripto, ATH/distancia sólo es contexto y no prueba baratura. Para acciones, preferí múltiplos, crecimiento, FCF/márgenes/expectativas. Si no alcanza la evidencia, marcá unknown. No sigas buscando para completar todos los campos.`,
     input: `Pregunta comparativa: ${String(plan?.researchQuestion || "").slice(0, 700)}`,
     tools: WEB_TOOLS, tool_choice: "auto", max_output_tokens: 1800,
     text: { verbosity: "low", format: { type: "json_schema", name: "twin_compact_research", strict: true, schema: RESEARCH_SCHEMA } }, store: false
@@ -164,25 +218,31 @@ async function researchBatch(plan) {
     data = await post(body, 120000);
     if (truncated(data)) throw new Error("RESEARCH_TRUNCATED");
     const parsed = parseJson(outputText(data));
-    (parsed.assets || []).forEach(putCached);
-    return { matrix: { assets: [...cached, ...(parsed.assets || [])], limitation: parsed.limitation || "", cacheHits: cached.map(x => x.asset) }, attempts: [data], tools: summarizeTools(data) };
+    const allowed = new Set(requested.map(cacheKey));
+    const safeAssets = (parsed.assets || []).filter(item => allowed.has(cacheKey(item?.asset)));
+    safeAssets.forEach(putCached);
+    const covered = new Set([...cached, ...safeAssets].map(x => cacheKey(x?.asset)));
+    const uncoveredAssets = requested.filter(asset => !covered.has(cacheKey(asset)));
+    return { matrix: { assets: [...cached, ...safeAssets], limitation: parsed.limitation || "", requestedAssets: requested, uncoveredAssets, cacheHits: cached.map(x => x.asset) }, attempts: [data], tools: summarizeTools(data) };
   } catch (error) {
     console.warn("Digital Twin compact research unavailable; continuing without inventing evidence", { message: error?.message, status: data?.status, reason: data?.incomplete_details?.reason, usage: data?.usage });
-    return { matrix: { assets: cached, limitation: "La investigación externa quedó incompleta. No hay evidencia nueva suficiente para desempatar activos no cubiertos.", cacheHits: cached.map(x => x.asset) }, attempts: data ? [data] : [], tools: data ? summarizeTools(data) : { webSearchCalls: 0, outputTypes: [] } };
+    return { matrix: { assets: cached, limitation: "La investigación externa quedó incompleta. No hay evidencia nueva suficiente para desempatar activos no cubiertos.", requestedAssets: requested, uncoveredAssets: missing, cacheHits: cached.map(x => x.asset) }, attempts: data ? [data] : [], tools: data ? summarizeTools(data) : { webSearchCalls: 0, outputTypes: [] } };
   }
 }
 
 async function draftDecision({ plan, matrix, currentProfile, context, messages }) {
   const recent = (messages || []).slice(-3).map(m => `${m.role}: ${String(m.content || "").slice(0, 900)}`).join("\n");
-  const input = `Perfil: ${JSON.stringify(compactProfile(currentProfile))}\nContexto: ${JSON.stringify(compactDecisionContext(context))}\nPlan: ${JSON.stringify(compact(plan))}\nEvidencia: ${JSON.stringify(matrix)}\nConsulta: ${recent}`;
+  const universe = portfolioUniverse(context);
+  const compactPlan = compact({ decisionType: plan?.decisionType, allocationAmountUsd: plan?.allocationAmountUsd, researchAssets: plan?.researchAssets, researchQuestion: plan?.researchQuestion, screenedPortfolioCount: plan?.screenedPortfolioCount });
+  const input = `Perfil: ${JSON.stringify(compactProfile(currentProfile))}\nContexto agregado: ${JSON.stringify(compactDecisionContext(context))}\nUNIVERSO COMPLETO SCREENEADO: ${JSON.stringify(universe)}\nPlan: ${JSON.stringify(compactPlan)}\nEvidencia profunda: ${JSON.stringify(matrix)}\nConsulta: ${recent}`;
   const data = await post({
     model: DEFAULT_MODEL,
     reasoning: { effort: "medium" },
-    instructions: `Sos el Digital Investment Twin. Respondé desde el Investor Model, datos personales determinísticos y evidencia explícita. No uses web ni inventes hechos. La investigación puede cubrir sólo parte de la cartera: no fabriques ranking de lo no investigado. Dato, inferencia y preferencia no son lo mismo. Una diferencia entre activos sólo puede mover ranking/asignación si la evidencia o una preferencia confirmada la sostienen; si no, admití empate/incertidumbre. Diversificación, concentración y distancia al ATH describen contexto pero no son por sí solas prueba de atractivo. Planner no es target. Si el research falló, igual respondé con lo que sí se sabe y marcá lo indeterminado. Para allocation: conclusión, evidencia/cobertura, ranking sólo si está justificado, asignación separando evidencia de criterio práctico, y qué cambiaría la decisión. Español rioplatense, directo, máximo 450 palabras.`,
+    instructions: `Sos el Digital Investment Twin. Respondé desde el Investor Model, datos personales determinísticos y evidencia explícita. El UNIVERSO COMPLETO SCREENEADO contiene todos los activos actuales; el shortlist de research es sólo una selección de dónde profundizar, NO el universo de inversión ni un ranking. No uses web ni inventes hechos. Un activo no investigado es indeterminado, no inferior. Dato, inferencia y preferencia no son lo mismo. Una diferencia entre activos sólo puede mover ranking/asignación si evidencia comparable o una preferencia confirmada la sostienen; si no, admití incertidumbre. No conviertas cobertura en señal. No introduzcas activos externos en la recomendación de asignación en esta etapa; el descubrimiento de oportunidades externas será una fase separada posterior al screening de cartera. Diversificación, concentración y distancia al ATH describen contexto pero no prueban atractivo. Planner no es target. Para allocation: conclusión, cobertura del screening completo, research profundo, ranking sólo si está justificado, asignación separando evidencia de criterio práctico, y qué cambiaría la decisión. Español rioplatense, directo, máximo 450 palabras.`,
     input, max_output_tokens: 2800, text: { verbosity: "low" }, store: false
   }, 120000);
   let answer = outputText(data);
-  if (!answer && truncated(data)) answer = "La evidencia actual no alcanza para justificar una asignación precisa sin inventar supuestos. Puedo distinguir qué está confirmado y qué falta investigar, pero no fabricar un ganador.";
+  if (!answer && truncated(data)) answer = "La evidencia actual no alcanza para justificar una asignación precisa sin inventar supuestos. La cartera completa fue considerada para el screening, pero el research profundo no alcanza para fabricar un ganador.";
   if (!answer) throw new Error("Digital Twin returned an empty decision response");
   return { answer, attempts: [data], data };
 }
