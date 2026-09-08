@@ -74,11 +74,20 @@ function portfolioUniverse(context = {}) {
   return rows;
 }
 function portfolioAssetIds(context = {}) { return portfolioUniverse(context).map(x => x.asset); }
-function compactDecisionContext(context = {}) {
+function compactDecisionContext(context = {}, { includePlanner = true } = {}) {
   const p = context?.portfolio || {}; const planner = context?.planner || {};
-  return compact({ portfolio: { totalValueUsd: p.totalValueUsd, cryptoExposurePct: p.cryptoExposurePct, liquidityPct: p.liquidityPct,
-    topExposures: p.topExposures || p.exposures }, planner: { scenarioName: planner.scenarioName, horizonYears: planner.horizonYears,
-    expectedReturnPct: planner.expectedReturnPct, fireGoalUsd: planner.fireGoalUsd } });
+  const result = { portfolio: { totalValueUsd: p.totalValueUsd, cryptoExposurePct: p.cryptoExposurePct, liquidityPct: p.liquidityPct,
+    topExposures: p.topExposures || p.exposures } };
+  if (includePlanner) {
+    result.planner = {
+      semantics: "planning_scenario_only_not_current_cash",
+      scenarioName: planner.scenarioName,
+      horizonYears: planner.horizonYears,
+      expectedReturnPct: planner.expectedReturnPct,
+      fireGoalUsd: planner.fireGoalUsd
+    };
+  }
+  return compact(result);
 }
 function userText(messages = []) { return (messages || []).filter(m=>m?.role==="user").map(m=>String(m.content||"")).join("\n"); }
 function looksLikeOpenAllocation(messages = []) {
@@ -123,8 +132,8 @@ function fallbackAssets(context={}) { return portfolioAssetIds(context).slice(0,
 
 async function runPreflight({messages,context,currentProfile,amount}) {
   const recent=(messages||[]).slice(-3).map(m=>`${m.role}: ${String(m.content||"").slice(0,700)}`).join("\n"); const universe=portfolioUniverse(context);
-  const input=`Monto: ${amount==null?"no informado":`USD ${amount}`}\nPerfil: ${JSON.stringify(compactProfile(currentProfile))}\nCartera/plan agregado: ${JSON.stringify(compactDecisionContext(context))}\nUNIVERSO COMPLETO DE CARTERA (screening obligatorio, ${universe.length} activos): ${JSON.stringify(universe)}\nConsulta: ${recent}`;
-  const body={model:RESEARCH_MODEL,reasoning:{effort:"low"},instructions:`Planificá la decisión, sin responderla ni investigar. Hacé un screening EXPLÍCITO de TODOS los activos del universo. screenedAssets debe contener exactamente un registro por activo, con research_now o defer y razón breve basada sólo en cartera, consulta e Investor Model; no inventes fundamentales actuales. Elegí máximo ${MAX_RESEARCH_ASSETS} activos actuales para research profundo y sólo entre research_now. No propongas externos. Screening no es ranking ni evaluación fundamental. IMPORTANTE: peso, valor, tamaño o ser una posición principal son ESTADO ACTUAL, no evidencia de atractivo ni preferencia; sólo pueden justificar que un activo sea material para revisar, nunca que sea mejor/peor compra. La razón de research_now/defer debe expresar relevancia para investigar, no atractivo esperado. Planner no es target.`,input,max_output_tokens:1600,text:{verbosity:"low",format:{type:"json_schema",name:"twin_preflight",strict:true,schema:PREFLIGHT_SCHEMA}},store:false};
+  const input=`Monto actual confirmado por el usuario: ${amount==null?"no informado":`USD ${amount}`}\nPerfil: ${JSON.stringify(compactProfile(currentProfile))}\nCartera/plan agregado: ${JSON.stringify(compactDecisionContext(context))}\nUNIVERSO COMPLETO DE CARTERA (screening obligatorio, ${universe.length} activos): ${JSON.stringify(universe)}\nConsulta: ${recent}`;
+  const body={model:RESEARCH_MODEL,reasoning:{effort:"low"},instructions:`Planificá la decisión, sin responderla ni investigar. Hacé un screening EXPLÍCITO de TODOS los activos del universo. screenedAssets debe contener exactamente un registro por activo, con research_now o defer y razón breve basada sólo en cartera, consulta e Investor Model; no inventes fundamentales actuales. Elegí máximo ${MAX_RESEARCH_ASSETS} activos actuales para research profundo y sólo entre research_now. No propongas externos. Screening no es ranking ni evaluación fundamental. IMPORTANTE: peso, valor, tamaño o ser una posición principal son ESTADO ACTUAL, no evidencia de atractivo ni preferencia; sólo pueden justificar que un activo sea material para revisar, nunca que sea mejor/peor compra. La razón de research_now/defer debe expresar relevancia para investigar, no atractivo esperado. Planner es un escenario de planificación, no efectivo disponible ni target de asignación.`,input,max_output_tokens:1600,text:{verbosity:"low",format:{type:"json_schema",name:"twin_preflight",strict:true,schema:PREFLIGHT_SCHEMA}},store:false};
   let data;
   try {
     data=await post(body,60000);
@@ -171,6 +180,19 @@ async function researchBatch(plan){
   }
 }
 
+function decisionContext(context, plan) {
+  const decisionType = plan?.decisionType || "other";
+  const plannerRelevant = decisionType === "allocation" || decisionType === "plan_progress";
+  const base = compactDecisionContext(context, { includePlanner: plannerRelevant });
+  return {
+    ...base,
+    currentInvestableCashUsd: plan?.allocationAmountUsd == null ? null : plan.allocationAmountUsd,
+    plannerSemantics: plannerRelevant
+      ? "Planner values are scenario assumptions only; they are not current cash unless currentInvestableCashUsd is explicitly present."
+      : "Planner omitted because it is not material to this decision."
+  };
+}
+
 async function runDecisionPipeline({messages=[],context={},currentProfile={}}){
   if(!process.env.OPENAI_API_KEY){const error=new Error("OPENAI_API_KEY is not configured");error.code="OPENAI_NOT_CONFIGURED";throw error;}
   const openAllocation=looksLikeOpenAllocation(messages);
@@ -179,7 +201,8 @@ async function runDecisionPipeline({messages=[],context={},currentProfile={}}){
 
   const {plan,attempt:preflightAttempt}=await runPreflight({messages,context,currentProfile,amount});
   const research=await researchBatch(plan);
-  const decision=await runSolDecision({messages,context,currentProfile,preflight:plan,evidenceMatrix:research.matrix});
+  const contextForDecision=decisionContext(context, plan);
+  const decision=await runSolDecision({messages,context:contextForDecision,currentProfile,preflight:plan,evidenceMatrix:research.matrix});
 
   const usageStages=[
     stageUsage("preflight",preflightAttempt,0),
