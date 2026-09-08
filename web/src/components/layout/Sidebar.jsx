@@ -36,15 +36,15 @@ export default function Sidebar({ summary, activeView, setActiveView, setSelecte
       <nav className="mt-6 space-y-1.5">
         <DesktopItem view="dashboard" label="Portfolio Jubilación" bold />
         <DesktopItem view="holdings" label="Holdings" />
-        <DesktopItem view="custody" label="Custodia" />
-        <DesktopItem view="market" label="Mercado" />
+        <DesktopItem view="performance" label="Performance" />
         <DesktopItem view="history" label="Histórico" />
+        <DesktopItem view="market" label="Mercado" />
         <DesktopItem view="capital" label="Capital" />
         <div onClick={() => { setSelectedAssetMovements(null); handleNavigate("transactions"); }} className={navClass("transactions")}><div className="flex items-center gap-3"><span className={dotClass("transactions")} /><span className="text-sm">Transacciones</span></div></div>
+        <DesktopItem view="custody" label="Custodia" />
         <DesktopItem view="trading" label="Trading" />
-        <DesktopItem view="performance" label="Performance" />
         <DesktopItem view="planner" label="Planner" />
-        <DesktopItem view="digital-twin" label="Digital Investment Twin" badge="PoC" />
+        <DesktopItem view="digital-twin" label="Digital Investment Twin" badge="Beta" />
         <DesktopItem view="decision-maker" label="Decision Maker" />
       </nav>
       <div className="mt-auto border-t border-slate-800 pt-6"><div className="flex items-center gap-3">{authUser?.picture ? <img src={authUser.picture} alt={authUser?.name || "Usuario"} className="h-9 w-9 rounded-full border border-slate-700" /> : <div className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-sm text-slate-300">{authUser?.email?.[0]?.toUpperCase() || "U"}</div>}<div className="min-w-0 flex-1"><div className="truncate text-sm font-medium text-slate-200">{authUser?.name || "Usuario"}</div><div className="truncate text-xs text-slate-500">{authUser?.email || ""}</div></div></div><button type="button" onClick={onLogout} className="mt-4 w-full rounded-xl border border-slate-700 px-3 py-2 text-sm text-slate-300 transition hover:bg-slate-800 hover:text-white">Cerrar sesión</button></div>
@@ -59,13 +59,13 @@ export default function Sidebar({ summary, activeView, setActiveView, setSelecte
     </nav>
 
     {showMoreMenu && <><div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm xl:hidden" onClick={() => setShowMoreMenu(false)} /><div className="fixed bottom-28 left-3 right-3 z-[70] rounded-[30px] border border-slate-700/70 bg-[#020617]/98 p-4 shadow-[0_20px_70px_rgba(0,0,0,0.65)] backdrop-blur-xl xl:hidden"><div className="mb-4 text-sm font-semibold text-white">Más opciones</div><div className="space-y-2">
-      <MoreButton view="capital" label="Capital" icon="$" />
       <MoreButton view="holdings" label="Holdings" icon="◫" />
-      <MoreButton view="custody" label="Custodia" icon="⌂" />
-      <MoreButton view="transactions" label="Transacciones" icon="⇄" onBefore={() => setSelectedAssetMovements(null)} />
       <MoreButton view="performance" label="Performance" icon="▥" />
+      <MoreButton view="capital" label="Capital" icon="$" />
+      <MoreButton view="transactions" label="Transacciones" icon="⇄" onBefore={() => setSelectedAssetMovements(null)} />
+      <MoreButton view="custody" label="Custodia" icon="⌂" />
       <MoreButton view="planner" label="Planner" icon="📈" />
-      <MoreButton view="digital-twin" label="Digital Investment Twin · PoC" icon="✦" />
+      <MoreButton view="digital-twin" label="Digital Investment Twin · Beta" icon="✦" />
       <MoreButton view="decision-maker" label="Decision Maker" icon="🎯" />
       <button type="button" onClick={() => { setShowMoreMenu(false); onLogout(); }} className="w-full rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-medium text-red-300">Cerrar sesión</button>
       <div className="pt-2 text-center text-[11px] leading-5 text-slate-500"><div>Portfolio Jubilación · v{APP_VERSION}</div><div>{APP_BUILD_DATE}</div><div className="uppercase tracking-[0.12em]">{APP_COMMIT}</div></div>
