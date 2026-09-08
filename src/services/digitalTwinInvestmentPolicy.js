@@ -1,172 +1,123 @@
 const crypto = require("crypto");
+const axios = require("axios");
 const bigquery = require("../config/bigQuery");
 const { runQuery } = require("./bigQueryService");
 const { table } = require("../utils/bigqueryHelper");
 
+const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
+const POLICY_MODEL = process.env.DIGITAL_TWIN_POLICY_MODEL || process.env.DIGITAL_TWIN_RESEARCH_MODEL || "gpt-5-mini";
 const POLICY_TABLE = "digital_twin_investment_policy";
 let policyTableReadyPromise = null;
 
-async function ensurePolicyTable() {
-  if (!policyTableReadyPromise) {
-    policyTableReadyPromise = (async () => {
-      const dataset = bigquery.dataset(process.env.BIGQUERY_DATASET_ID);
-      const policyTable = dataset.table(POLICY_TABLE);
-      const [exists] = await policyTable.exists();
-      if (!exists) {
-        await dataset.createTable(POLICY_TABLE, {
-          schema: [
-            { name: "id", type: "STRING", mode: "REQUIRED" },
-            { name: "asset", type: "STRING", mode: "REQUIRED" },
-            { name: "strategy", type: "STRING" },
-            { name: "amount_usd", type: "FLOAT" },
-            { name: "frequency", type: "STRING" },
-            { name: "status", type: "STRING" },
-            { name: "source", type: "STRING" },
-            { name: "source_message", type: "STRING" },
-            { name: "created_at", type: "TIMESTAMP" }
-          ]
-        });
-      }
-    })().catch(error => {
-      policyTableReadyPromise = null;
-      throw error;
-    });
+const POLICY_SCHEMA = {
+  type: "object", additionalProperties: false,
+  properties: {
+    updates: { type: "array", maxItems: 10, items: {
+      type: "object", additionalProperties: false,
+      properties: {
+        asset: { type: "string" }, strategy: { type: "string" },
+        amountUsd: { type: ["number", "null"] },
+        frequency: { type: ["string", "null"], enum: ["daily", "weekly", "monthly", "other", null] },
+        status: { type: "string", enum: ["active", "paused", "stopped"] }
+      },
+      required: ["asset", "strategy", "amountUsd", "frequency", "status"]
+    }},
+    needsDecision: { type: "boolean" },
+    acknowledgement: { type: "string" }
+  },
+  required: ["updates", "needsDecision", "acknowledgement"]
+};
+
+function outputText(response) {
+  if (response?.output_text) return response.output_text;
+  const parts = [];
+  for (const item of response?.output || []) for (const content of item?.content || []) {
+    if (content?.type === "output_text" && content?.text) parts.push(content.text);
   }
+  return parts.join("\n").trim();
+}
+function parseJson(text) { return JSON.parse(String(text || "").trim().replace(/^```json\s*/i, "").replace(/```$/i, "").trim()); }
+
+async function ensurePolicyTable() {
+  if (!policyTableReadyPromise) policyTableReadyPromise = (async () => {
+    const dataset = bigquery.dataset(process.env.BIGQUERY_DATASET_ID), policyTable = dataset.table(POLICY_TABLE);
+    const [exists] = await policyTable.exists();
+    if (!exists) await dataset.createTable(POLICY_TABLE, { schema: [
+      { name: "id", type: "STRING", mode: "REQUIRED" }, { name: "asset", type: "STRING", mode: "REQUIRED" },
+      { name: "strategy", type: "STRING" }, { name: "amount_usd", type: "FLOAT" }, { name: "frequency", type: "STRING" },
+      { name: "status", type: "STRING" }, { name: "source", type: "STRING" }, { name: "source_message", type: "STRING" },
+      { name: "created_at", type: "TIMESTAMP" }
+    ]});
+  })().catch(error => { policyTableReadyPromise = null; throw error; });
   return policyTableReadyPromise;
 }
 
-function normalizeAsset(value = "") {
-  const raw = String(value).trim();
-  if (!raw || raw !== raw.toUpperCase()) return null;
-  return /^[A-Z0-9.-]{2,12}$/.test(raw) ? raw : null;
-}
-
-function parseAmount(raw) {
-  if (raw == null) return null;
-  const normalized = String(raw).replace(/\s/g, "").replace(/\./g, "").replace(",", ".");
-  const value = Number(normalized);
-  return Number.isFinite(value) && value > 0 ? value : null;
-}
-
-function normalizeFrequency(text = "") {
-  const value = String(text).toLowerCase();
-  if (/diari[oa]|por\s+d[ií]a|cada\s+d[ií]a/.test(value)) return "daily";
-  if (/semanal|por\s+semana|cada\s+semana/.test(value)) return "weekly";
-  if (/mensual|por\s+mes|cada\s+mes/.test(value)) return "monthly";
-  return null;
-}
-
-function isDefiniteChange(text = "") {
-  return /\b(baj[eé]|sub[ií]|cambi[eé]|ajust[eé]|dej[eé]|puse|pas[eé]|ahora|est[aá]\s+en|queda|qued[oó]|compr[oa]|paus[eé]|pause|detuve|cancel[eé]|reactiv[eé]|activ[eé]|reinici[eé])\b/i.test(text)
-    && !/\b(capaz|quiz[aá]s|tal\s+vez|estoy\s+pensando|pensar[ií]a|podr[ií]a|quiero\s+evaluar|convendr[ií]a)\b/i.test(text);
-}
-
-function extractPolicyUpdates(message = "") {
-  const text = String(message || "").trim();
-  if (!text || !isDefiniteChange(text)) return [];
-
-  const updates = [];
-  const seen = new Set();
-  const push = update => {
-    if (!update?.asset) return;
-    const key = `${update.asset}:${update.status || "active"}:${update.amount_usd ?? ""}:${update.frequency || ""}`;
-    if (seen.has(key)) return;
-    seen.add(key);
-    updates.push(update);
+function normalizeUpdate(update = {}) {
+  const asset = String(update.asset || "").trim().toUpperCase();
+  if (!/^[A-Z0-9.-]{2,20}$/.test(asset)) return null;
+  const amount = update.amountUsd == null ? null : Number(update.amountUsd);
+  return {
+    asset,
+    strategy: String(update.strategy || "DCA").trim().slice(0, 40) || "DCA",
+    amount_usd: Number.isFinite(amount) && amount > 0 ? amount : null,
+    frequency: ["daily", "weekly", "monthly", "other"].includes(update.frequency) ? update.frequency : null,
+    status: ["active", "paused", "stopped"].includes(update.status) ? update.status : "active"
   };
+}
 
-  const pauseRegex = /\b(?:paus[eé]|pause|detuve|cancel[eé])\b\s+(?:(?:el|la)\s+)?(?:(?:dca|bot)\s+(?:de\s+)?)?([A-Za-z0-9.-]{2,12})\b/gi;
-  let match;
-  while ((match = pauseRegex.exec(text))) {
-    const asset = normalizeAsset(match[1]);
-    if (asset) push({ asset, strategy: "DCA", amount_usd: null, frequency: null, status: "paused" });
-  }
+async function extractPolicyIntent(messages = []) {
+  const lastUser = [...messages].reverse().find(message => message?.role === "user");
+  const text = String(lastUser?.content || "").trim();
+  if (!text) return { updates: [], needsDecision: false, acknowledgement: "", usageStage: null };
+  if (!process.env.OPENAI_API_KEY) { const error = new Error("OPENAI_API_KEY is not configured"); error.code = "OPENAI_NOT_CONFIGURED"; throw error; }
 
-  const assetRegex = /\b([A-Za-z0-9.-]{2,12})\b([^.!?\n]{0,100})/g;
-  while ((match = assetRegex.exec(text))) {
-    const asset = normalizeAsset(match[1]);
-    if (!asset) continue;
-    const clause = match[2] || "";
-    const frequency = normalizeFrequency(clause);
-    if (!frequency) continue;
-    const amounts = [...clause.matchAll(/(?:us\$|usd|u\$s|\$)?\s*([0-9][0-9.,]*)/gi)]
-      .map(x => parseAmount(x[1]))
-      .filter(Number.isFinite);
-    if (!amounts.length) continue;
-    push({ asset, strategy: "DCA", amount_usd: amounts.at(-1), frequency, status: "active" });
-  }
+  const data = (await axios.post(OPENAI_RESPONSES_URL, {
+    model: POLICY_MODEL,
+    reasoning: { effort: "low" },
+    instructions: `Extraé estado operativo de inversión del ÚLTIMO mensaje del usuario. No asesores. Una update sólo existe si el usuario afirma un cambio o estado ACTUAL/YA EJECUTADO con suficiente certeza (ej. "bajé BTC a 100 por día", "BTC está en 150 diarios", "pausé ETH"). Intenciones, hipótesis o consultas ("capaz", "quiero", "debería", "¿qué te parece?") NO son updates salvo que el mismo mensaje también confirme inequívocamente un cambio ya hecho. No infieras montos, frecuencia, activo ni status faltantes. needsDecision=true si además pide opinión/análisis/recomendación; false si sólo informa estado. acknowledgement: confirmación breve en español sólo de los cambios extraídos, sin consejo.`,
+    input: text,
+    max_output_tokens: 500,
+    text: { verbosity: "low", format: { type: "json_schema", name: "investment_policy_intent", strict: true, schema: POLICY_SCHEMA } },
+    store: false
+  }, { headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" }, timeout: 30000 })).data;
 
-  return updates.slice(0, 10);
+  const parsed = parseJson(outputText(data));
+  return {
+    updates: (parsed.updates || []).map(normalizeUpdate).filter(Boolean),
+    needsDecision: Boolean(parsed.needsDecision),
+    acknowledgement: String(parsed.acknowledgement || "").slice(0, 500),
+    usageStage: { stage: "policy_intent", model: data?.model || POLICY_MODEL, apiRequests: 1, webSearchCalls: 0, usage: data?.usage || null }
+  };
 }
 
 async function appendPolicyUpdate(update, sourceMessage) {
   await ensurePolicyTable();
   const source = String(sourceMessage || "").slice(0, 1000);
-  const previous = await runQuery(
-    `SELECT strategy,amount_usd,frequency,status,source_message
-     FROM ${table(POLICY_TABLE)}
-     WHERE asset=@asset
-     ORDER BY created_at DESC,id DESC
-     LIMIT 1`,
-    { asset: update.asset }
-  );
+  const previous = await runQuery(`SELECT strategy,amount_usd,frequency,status FROM ${table(POLICY_TABLE)} WHERE asset=@asset ORDER BY created_at DESC,id DESC LIMIT 1`, { asset: update.asset });
   const last = previous[0];
-  const sameState = last
-    && String(last.strategy || "DCA") === String(update.strategy || "DCA")
+  const sameState = last && String(last.strategy || "DCA") === String(update.strategy || "DCA")
     && (last.amount_usd == null ? null : Number(last.amount_usd)) === (update.amount_usd == null ? null : Number(update.amount_usd))
-    && (last.frequency || null) === (update.frequency || null)
-    && String(last.status || "active") === String(update.status || "active")
-    && String(last.source_message || "") === source;
+    && (last.frequency || null) === (update.frequency || null) && String(last.status || "active") === String(update.status || "active");
   if (sameState) return false;
-
-  await runQuery(
-    `INSERT INTO ${table(POLICY_TABLE)} (id,asset,strategy,amount_usd,frequency,status,source,source_message,created_at)
-     VALUES(@id,@asset,@strategy,@amountUsd,@frequency,@status,'twin_chat',@sourceMessage,CURRENT_TIMESTAMP())`,
-    {
-      id: crypto.randomUUID(),
-      asset: update.asset,
-      strategy: update.strategy || "DCA",
-      amountUsd: update.amount_usd == null ? null : Number(update.amount_usd),
-      frequency: update.frequency || null,
-      status: update.status || "active",
-      sourceMessage: source
-    }
-  );
+  await runQuery(`INSERT INTO ${table(POLICY_TABLE)} (id,asset,strategy,amount_usd,frequency,status,source,source_message,created_at) VALUES(@id,@asset,@strategy,@amountUsd,@frequency,@status,'twin_chat',@sourceMessage,CURRENT_TIMESTAMP())`, {
+    id: crypto.randomUUID(), asset: update.asset, strategy: update.strategy || "DCA", amountUsd: update.amount_usd,
+    frequency: update.frequency, status: update.status || "active", sourceMessage: source
+  });
   return true;
 }
 
-async function applyPolicyUpdatesFromMessages(messages = []) {
-  const lastUser = [...(messages || [])].reverse().find(message => message?.role === "user");
-  if (!lastUser?.content) return [];
-  const candidates = extractPolicyUpdates(lastUser.content);
+async function interpretAndApplyPolicy(messages = []) {
+  const intent = await extractPolicyIntent(messages);
+  const lastUser = [...messages].reverse().find(message => message?.role === "user");
   const applied = [];
-  for (const update of candidates) {
-    if (await appendPolicyUpdate(update, lastUser.content)) applied.push(update);
-  }
-  return applied;
+  for (const update of intent.updates) if (await appendPolicyUpdate(update, lastUser?.content)) applied.push(update);
+  return { ...intent, updates: applied };
 }
 
 async function loadCurrentInvestmentPolicy() {
   await ensurePolicyTable();
-  const rows = await runQuery(
-    `SELECT asset,strategy,amount_usd,frequency,status,source,created_at
-     FROM ${table(POLICY_TABLE)}
-     QUALIFY ROW_NUMBER() OVER (PARTITION BY asset ORDER BY created_at DESC, id DESC)=1
-     ORDER BY asset`
-  );
-  return rows.map(row => ({
-    asset: row.asset,
-    strategy: row.strategy || "DCA",
-    amountUsd: row.amount_usd == null ? null : Number(row.amount_usd),
-    frequency: row.frequency || null,
-    status: row.status || "active",
-    source: row.source || null,
-    updatedAt: row.created_at?.value || row.created_at || null
-  }));
+  const rows = await runQuery(`SELECT asset,strategy,amount_usd,frequency,status,source,created_at FROM ${table(POLICY_TABLE)} QUALIFY ROW_NUMBER() OVER (PARTITION BY asset ORDER BY created_at DESC,id DESC)=1 ORDER BY asset`);
+  return rows.map(row => ({ asset: row.asset, strategy: row.strategy || "DCA", amountUsd: row.amount_usd == null ? null : Number(row.amount_usd), frequency: row.frequency || null, status: row.status || "active", source: row.source || null, updatedAt: row.created_at?.value || row.created_at || null }));
 }
 
-module.exports = {
-  extractPolicyUpdates,
-  applyPolicyUpdatesFromMessages,
-  loadCurrentInvestmentPolicy
-};
+module.exports = { interpretAndApplyPolicy, loadCurrentInvestmentPolicy };
