@@ -1,31 +1,279 @@
 @import "tailwindcss";
 
 /* Hide scrollbar but keep scrolling */
-.scrollbar-hide {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+
+:root { background: #020617; }
+html { background: #020617; height: 100%; }
+body { background: #020617; min-height: 100%; margin: 0; }
+#root { background: #020617; min-height: 100vh; }
+
+/* Digital Investment Twin — visual system */
+.twin-shell {
+  --twin-line: rgba(148,163,184,.14);
+  --twin-line-strong: rgba(129,140,248,.28);
+  --twin-surface: rgba(8,15,32,.88);
+  --twin-surface-2: rgba(15,23,42,.72);
+  position: relative;
+  isolation: isolate;
+}
+.twin-shell::before {
+  content:"";
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  z-index:-1;
+  background:
+    radial-gradient(760px 430px at 16% 3%, rgba(79,70,229,.11), transparent 62%),
+    radial-gradient(660px 430px at 94% 14%, rgba(14,165,233,.055), transparent 66%),
+    linear-gradient(180deg,#020617 0%,#030817 48%,#020617 100%);
+}
+.twin-hero {
+  position:relative;
+  overflow:hidden;
+  background:linear-gradient(120deg,rgba(15,23,42,.94),rgba(8,12,29,.90) 62%,rgba(30,27,75,.40));
+  border:1px solid rgba(129,140,248,.20);
+  box-shadow:0 22px 60px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.035);
+}
+.twin-hero::after {
+  content:"";
+  position:absolute;
+  width:250px;
+  height:250px;
+  border-radius:999px;
+  right:-95px;
+  top:-155px;
+  background:rgba(99,102,241,.11);
+  pointer-events:none;
+}
+.twin-orb { position:absolute; border-radius:999px; pointer-events:none; filter:blur(8px); }
+.twin-orb-a { width:170px; height:170px; right:20px; top:-105px; background:rgba(99,102,241,.08); }
+.twin-orb-b { width:110px; height:110px; left:30%; bottom:-90px; background:rgba(14,165,233,.035); }
+
+.twin-mark {
+  width:38px;
+  height:38px;
+  border-radius:13px;
+  display:grid;
+  place-items:center;
+  flex:none;
+  color:#c7d2fe;
+  background:linear-gradient(145deg,rgba(99,102,241,.25),rgba(14,165,233,.09));
+  border:1px solid rgba(129,140,248,.24);
+  box-shadow:0 10px 26px rgba(79,70,229,.13),inset 0 1px 0 rgba(255,255,255,.06);
+}
+.twin-mark span { font-size:16px; text-shadow:0 0 18px rgba(129,140,248,.65); }
+.twin-badge {
+  padding:3px 7px;
+  border-radius:999px;
+  font-size:9px;
+  line-height:1;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:#a5b4fc;
+  background:rgba(99,102,241,.08);
+  border:1px solid rgba(129,140,248,.16);
 }
 
-.scrollbar-hide::-webkit-scrollbar {
-  display: none;
+.twin-nav {
+  background:rgba(15,23,42,.38);
+  border:1px solid rgba(100,116,139,.14);
+  padding:4px;
+  border-radius:14px;
+  backdrop-filter:blur(12px);
+}
+.twin-nav-item {
+  display:flex;
+  align-items:center;
+  gap:6px;
+  min-height:32px;
+  padding:0 11px;
+  border-radius:10px;
+  color:#64748b;
+  font-size:11px;
+  transition:all .18s ease;
+}
+.twin-nav-item:hover { color:#cbd5e1; background:rgba(255,255,255,.025); }
+.twin-nav-item.is-active {
+  color:#e0e7ff;
+  background:linear-gradient(135deg,rgba(79,70,229,.22),rgba(99,102,241,.10));
+  box-shadow:0 7px 20px rgba(79,70,229,.14),inset 0 1px 0 rgba(255,255,255,.045);
 }
 
-:root {
-  background: #020617;
+.twin-panel,
+.twin-side-card,
+.twin-policy-card,
+.twin-memory-card {
+  background:linear-gradient(145deg,rgba(11,18,36,.88),rgba(5,10,24,.82));
+  border:1px solid rgba(100,116,139,.18);
+  box-shadow:0 16px 42px rgba(0,0,0,.16),inset 0 1px 0 rgba(255,255,255,.02);
+}
+.twin-panel { border-radius:22px; }
+.twin-side-card { border-radius:18px; padding:17px; }
+.twin-side-card-highlight {
+  background:linear-gradient(145deg,rgba(16,24,48,.94),rgba(6,12,28,.88));
+  border-color:rgba(129,140,248,.18);
+}
+.twin-policy-card { border-radius:17px; padding:17px; }
+.twin-memory-card { border-radius:17px; padding:17px; }
+
+/* Chat is a working surface, not just another card */
+.twin-shell main > .twin-panel.flex {
+  position:relative;
+  background:linear-gradient(155deg,rgba(10,17,35,.96),rgba(5,10,25,.90));
+  box-shadow:0 22px 55px rgba(0,0,0,.20),inset 0 1px 0 rgba(255,255,255,.025);
+}
+.twin-shell main > .twin-panel.flex > .flex-1 {
+  background:
+    radial-gradient(420px 220px at 50% 40%,rgba(99,102,241,.045),transparent 72%),
+    linear-gradient(180deg,rgba(255,255,255,.006),transparent 22%);
 }
 
-html {
-  background: #020617;
-  height: 100%;
+.twin-eyebrow,
+.twin-section-label {
+  color:#64748b;
+  font-size:9px;
+  letter-spacing:.13em;
+  text-transform:uppercase;
+}
+.twin-section-label { font-weight:600; color:#94a3b8; letter-spacing:.07em; }
+.twin-icon-box,
+.twin-mini-icon {
+  display:grid;
+  place-items:center;
+  color:#a5b4fc;
+  background:rgba(99,102,241,.08);
+  border:1px solid rgba(129,140,248,.13);
+}
+.twin-icon-box { width:32px; height:32px; border-radius:10px; font-size:12px; }
+.twin-mini-icon { width:25px; height:25px; border-radius:8px; font-size:10px; }
+.twin-status {
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:6px 9px;
+  border-radius:999px;
+  border:1px solid rgba(52,211,153,.12);
+  background:rgba(16,185,129,.04);
+  color:#94a3b8;
+  font-size:10px;
+}
+.twin-status > span { width:6px; height:6px; border-radius:999px; background:#34d399; box-shadow:0 0 12px rgba(52,211,153,.5); }
+.twin-chip {
+  padding:6px 9px;
+  border-radius:999px;
+  border:1px solid rgba(100,116,139,.16);
+  background:rgba(255,255,255,.018);
+  color:#64748b;
+  font-size:10px;
 }
 
-body {
-  background: #020617;
-  min-height: 100%;
-  margin: 0;
+.twin-composer {
+  border:1px solid rgba(100,116,139,.20);
+  border-radius:17px;
+  background:rgba(15,23,42,.72);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.02),0 12px 35px rgba(0,0,0,.13);
+  transition:border-color .2s ease, box-shadow .2s ease;
+}
+.twin-composer:focus-within { border-color:rgba(129,140,248,.34); box-shadow:0 0 0 3px rgba(99,102,241,.055),0 12px 35px rgba(0,0,0,.13); }
+.twin-composer.is-loading { opacity:.72; }
+.twin-send,
+.twin-primary,
+.twin-secondary {
+  border:1px solid rgba(129,140,248,.20);
+  color:#e0e7ff;
+  background:linear-gradient(135deg,rgba(79,70,229,.26),rgba(99,102,241,.15));
+  transition:all .18s ease;
+}
+.twin-send { width:31px; height:31px; border-radius:10px; display:grid; place-items:center; font-size:11px; }
+.twin-send:disabled { opacity:.32; cursor:not-allowed; }
+.twin-primary { padding:8px 12px; border-radius:10px; font-size:11px; }
+.twin-secondary { padding:7px 10px; border-radius:9px; font-size:10px; }
+.twin-user-message {
+  border:1px solid rgba(129,140,248,.16);
+  background:linear-gradient(135deg,rgba(79,70,229,.20),rgba(30,41,59,.56));
+  border-radius:16px 16px 5px 16px;
+  padding:11px 14px;
+  color:#e2e8f0;
+  font-size:13px;
+  line-height:1.65;
+}
+.twin-avatar { width:29px; height:29px; border-radius:10px; display:grid; place-items:center; flex:none; color:#c7d2fe; background:rgba(99,102,241,.10); border:1px solid rgba(129,140,248,.14); font-size:11px; }
+.twin-thinking { border-radius:15px; border:1px solid rgba(129,140,248,.12); background:rgba(99,102,241,.035); }
+.twin-pulse { width:7px; height:7px; border-radius:999px; background:#818cf8; box-shadow:0 0 0 0 rgba(129,140,248,.45); animation:twinPulse 1.45s infinite; }
+@keyframes twinPulse { 70%{box-shadow:0 0 0 7px rgba(129,140,248,0)} 100%{box-shadow:0 0 0 0 rgba(129,140,248,0)} }
+
+.twin-policy-status,
+.twin-memory-tag {
+  display:inline-flex;
+  align-items:center;
+  border-radius:999px;
+  border:1px solid rgba(100,116,139,.14);
+  background:rgba(255,255,255,.018);
+  color:#64748b;
+  font-size:9px;
+  line-height:1;
+}
+.twin-policy-status { padding:5px 7px; }
+.twin-policy-status.is-active { color:#86efac; border-color:rgba(74,222,128,.13); background:rgba(34,197,94,.04); }
+.twin-memory-tag { padding:5px 8px; text-transform:uppercase; letter-spacing:.07em; }
+.twin-memory-tag.is-decision { color:#a5b4fc; border-color:rgba(129,140,248,.15); background:rgba(99,102,241,.05); }
+.twin-memory-tag.is-policy { color:#6ee7b7; border-color:rgba(52,211,153,.13); background:rgba(16,185,129,.04); }
+
+.twin-select {
+  appearance:none;
+  color:#cbd5e1;
+  background-color:rgba(15,23,42,.72);
+  border:1px solid rgba(100,116,139,.18);
+  border-radius:11px;
+  padding:9px 32px 9px 10px;
+  font-size:11px;
+  outline:none;
+}
+.twin-select:focus { border-color:rgba(129,140,248,.30); }
+
+/* Keep real asset artwork crisp inside Twin cards */
+.twin-shell img[title] {
+  box-shadow:0 4px 14px rgba(0,0,0,.18);
 }
 
-#root {
-  background: #020617;
-  min-height: 100vh;
+/* 13-inch / standard laptop: prioritize the decision surface. */
+@media (max-width: 1535px) {
+  .twin-shell > .grid {
+    grid-template-columns:minmax(0,1fr) !important;
+  }
+  .twin-shell aside {
+    display:grid;
+    grid-template-columns:1.05fr 1fr 1fr;
+    gap:14px;
+  }
+  .twin-shell aside > * { margin:0 !important; }
+  .twin-shell main > .twin-panel.flex { min-height:560px !important; }
+  .twin-shell main > .twin-panel.flex .flex-1 > .mx-auto { margin-top:24px !important; }
+  .twin-hero { padding-top:16px !important; padding-bottom:16px !important; }
+}
+
+@media (max-width: 1100px) {
+  .twin-shell aside { grid-template-columns:1fr 1fr; }
+  .twin-shell aside > :first-child { grid-column:1 / -1; }
+  .twin-nav-item { padding-left:9px; padding-right:9px; }
+}
+
+@media (max-width: 900px) {
+  .twin-nav { width:100%; overflow-x:auto; }
+  .twin-nav-item { flex:1; justify-content:center; white-space:nowrap; }
+  .twin-shell aside { grid-template-columns:1fr; }
+  .twin-shell aside > :first-child { grid-column:auto; }
+  .twin-shell main > .twin-panel.flex { min-height:520px !important; }
+}
+
+@media (max-width: 640px) {
+  .twin-hero { border-radius:22px !important; padding:14px !important; }
+  .twin-hero h1 { font-size:20px !important; }
+  .twin-shell main > .twin-panel.flex { min-height:500px !important; border-radius:18px; }
+  .twin-shell main > .twin-panel.flex > :first-child { padding:14px 16px !important; }
+  .twin-shell main > .twin-panel.flex .flex-1 { padding:18px 16px !important; }
+  .twin-shell main > .twin-panel.flex .flex-1 > .mx-auto { margin-top:8px !important; }
+  .twin-status { display:none; }
 }

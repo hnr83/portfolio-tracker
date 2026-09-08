@@ -19,7 +19,7 @@ export default function Sidebar({ summary, activeView, setActiveView, setSelecte
   const APP_VERSION = BUILD_INFO.version;
   const APP_BUILD_DATE = new Date(BUILD_INFO.buildDate).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
   const APP_COMMIT = BUILD_INFO.commit;
-  const DesktopItem = ({ view, label, bold }) => <div onClick={() => handleNavigate(view)} className={navClass(view)}><div className="flex items-center gap-3"><span className={dotClass(view)} /><span className={`text-sm ${bold ? "font-medium" : ""}`}>{label}</span></div></div>;
+  const DesktopItem = ({ view, label, bold, badge }) => <div onClick={() => handleNavigate(view)} className={navClass(view)}><div className="flex items-center gap-3"><span className={dotClass(view)} /><span className={`text-sm ${bold ? "font-medium" : ""}`}>{label}</span>{badge && <span className="ml-auto rounded-full border border-indigo-400/20 bg-indigo-500/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-indigo-300">{badge}</span>}</div></div>;
   const MoreButton = ({ view, label, icon, onBefore }) => <button type="button" onClick={() => { setShowMoreMenu(false); if (onBefore) onBefore(); handleNavigate(view); }} className="flex w-full items-center justify-between rounded-2xl border border-slate-700/70 bg-slate-900/60 px-4 py-3 text-left text-sm text-slate-200"><span>{label}</span><span>{icon}</span></button>;
 
   return <>
@@ -44,6 +44,7 @@ export default function Sidebar({ summary, activeView, setActiveView, setSelecte
         <DesktopItem view="trading" label="Trading" />
         <DesktopItem view="performance" label="Performance" />
         <DesktopItem view="planner" label="Planner" />
+        <DesktopItem view="digital-twin" label="Digital Investment Twin" badge="PoC" />
         <DesktopItem view="decision-maker" label="Decision Maker" />
       </nav>
       <div className="mt-auto border-t border-slate-800 pt-6"><div className="flex items-center gap-3">{authUser?.picture ? <img src={authUser.picture} alt={authUser?.name || "Usuario"} className="h-9 w-9 rounded-full border border-slate-700" /> : <div className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-sm text-slate-300">{authUser?.email?.[0]?.toUpperCase() || "U"}</div>}<div className="min-w-0 flex-1"><div className="truncate text-sm font-medium text-slate-200">{authUser?.name || "Usuario"}</div><div className="truncate text-xs text-slate-500">{authUser?.email || ""}</div></div></div><button type="button" onClick={onLogout} className="mt-4 w-full rounded-xl border border-slate-700 px-3 py-2 text-sm text-slate-300 transition hover:bg-slate-800 hover:text-white">Cerrar sesión</button></div>
@@ -64,6 +65,7 @@ export default function Sidebar({ summary, activeView, setActiveView, setSelecte
       <MoreButton view="transactions" label="Transacciones" icon="⇄" onBefore={() => setSelectedAssetMovements(null)} />
       <MoreButton view="performance" label="Performance" icon="▥" />
       <MoreButton view="planner" label="Planner" icon="📈" />
+      <MoreButton view="digital-twin" label="Digital Investment Twin · PoC" icon="✦" />
       <MoreButton view="decision-maker" label="Decision Maker" icon="🎯" />
       <button type="button" onClick={() => { setShowMoreMenu(false); onLogout(); }} className="w-full rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-medium text-red-300">Cerrar sesión</button>
       <div className="pt-2 text-center text-[11px] leading-5 text-slate-500"><div>Portfolio Jubilación · v{APP_VERSION}</div><div>{APP_BUILD_DATE}</div><div className="uppercase tracking-[0.12em]">{APP_COMMIT}</div></div>

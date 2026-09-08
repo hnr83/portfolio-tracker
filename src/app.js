@@ -9,6 +9,7 @@ const transactionRoutes = require("./routes/transactionRoutes");
 const tradingRoutes = require("./routes/tradingRoutes");
 const authRoutes = require("./routes/authRoutes");
 const plannerRoutes = require("./routes/plannerRoutes");
+const digitalTwinRoutes = require("./routes/digitalTwinRoutes");
 
 const { requireAuth } = require("./middlewares/authMiddleware");
 const { requireJobAuth } = require("./middlewares/jobAuthMiddleware");
@@ -46,6 +47,7 @@ app.get("/api/jobs/test2", requireAuth, (req, res) => {
 
 app.use("/api/portfolio", requireAuth, portfolioRoutes);
 app.use("/api/planner", requireAuth, plannerRoutes);
+app.use("/api/digital-twin", requireAuth, digitalTwinRoutes);
 app.use("/api/jobs", requireJobAuth, jobRoutes);
 app.use("/api/transactions", requireAuth, transactionRoutes);
 app.use("/api/trading", requireAuth, tradingRoutes);
