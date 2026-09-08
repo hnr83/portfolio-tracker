@@ -74,8 +74,6 @@ function extractPolicyUpdates(message = "") {
     updates.push(update);
   };
 
-  // Explicit pauses/stops. Amount/frequency are intentionally left null: the event means
-  // "inactive now", while previous rows preserve the historical schedule.
   const pauseRegex = /\b(?:paus[eé]|pause|detuve|cancel[eé])\b[^.!?\n]{0,60}?\b(?:dca|bot)?\s*(?:de\s+)?([A-Z]{2,10})\b/gi;
   let match;
   while ((match = pauseRegex.exec(text))) {
@@ -83,8 +81,6 @@ function extractPolicyUpdates(message = "") {
     if (asset) push({ asset, strategy: "DCA", amount_usd: null, frequency: null, status: "paused" });
   }
 
-  // Clear active schedules: "BTC 150 diarios", "ETH compra USD 250 por semana",
-  // "bajé el bot de BTC de 150 a 100 diarios" (last amount in the clause wins).
   const assetRegex = /\b([A-Z]{2,10})\b([^.!?\n]{0,100})/gi;
   while ((match = assetRegex.exec(text))) {
     const asset = normalizeAsset(match[1]);
@@ -104,6 +100,24 @@ function extractPolicyUpdates(message = "") {
 
 async function appendPolicyUpdate(update, sourceMessage) {
   await ensurePolicyTable();
+  const source = String(sourceMessage || "").slice(0, 1000);
+  const previous = await runQuery(
+    `SELECT strategy,amount_usd,frequency,status,source_message
+     FROM ${table(POLICY_TABLE)}
+     WHERE asset=@asset
+     ORDER BY created_at DESC,id DESC
+     LIMIT 1`,
+    { asset: update.asset }
+  );
+  const last = previous[0];
+  const sameState = last
+    && String(last.strategy || "DCA") === String(update.strategy || "DCA")
+    && (last.amount_usd == null ? null : Number(last.amount_usd)) === (update.amount_usd == null ? null : Number(update.amount_usd))
+    && (last.frequency || null) === (update.frequency || null)
+    && String(last.status || "active") === String(update.status || "active")
+    && String(last.source_message || "") === source;
+  if (sameState) return false;
+
   await runQuery(
     `INSERT INTO ${table(POLICY_TABLE)} (id,asset,strategy,amount_usd,frequency,status,source,source_message,created_at)
      VALUES(@id,@asset,@strategy,@amountUsd,@frequency,@status,'twin_chat',@sourceMessage,CURRENT_TIMESTAMP())`,
@@ -114,17 +128,21 @@ async function appendPolicyUpdate(update, sourceMessage) {
       amountUsd: update.amount_usd == null ? null : Number(update.amount_usd),
       frequency: update.frequency || null,
       status: update.status || "active",
-      sourceMessage: String(sourceMessage || "").slice(0, 1000)
+      sourceMessage: source
     }
   );
+  return true;
 }
 
 async function applyPolicyUpdatesFromMessages(messages = []) {
   const lastUser = [...(messages || [])].reverse().find(message => message?.role === "user");
   if (!lastUser?.content) return [];
-  const updates = extractPolicyUpdates(lastUser.content);
-  for (const update of updates) await appendPolicyUpdate(update, lastUser.content);
-  return updates;
+  const candidates = extractPolicyUpdates(lastUser.content);
+  const applied = [];
+  for (const update of candidates) {
+    if (await appendPolicyUpdate(update, lastUser.content)) applied.push(update);
+  }
+  return applied;
 }
 
 async function loadCurrentInvestmentPolicy() {
