@@ -15,6 +15,16 @@ function estimateStageCost(stage={}){const rates=pricingForModel(stage.model);if
 function usageBreakdown(stages=[]){const enriched=stages.filter(Boolean).map(stage=>({stage:stage.stage,model:stage.model,api_requests:Number(stage.apiRequests)||0,input_tokens:Number(stage.usage?.input_tokens)||0,cached_tokens:Number(stage.usage?.input_tokens_details?.cached_tokens)||0,output_tokens:Number(stage.usage?.output_tokens)||0,reasoning_tokens:Number(stage.usage?.output_tokens_details?.reasoning_tokens)||0,total_tokens:Number(stage.usage?.total_tokens)||0,web_search_calls:Number(stage.webSearchCalls)||0,estimated_cost_usd:estimateStageCost(stage)}));const costs=enriched.map(x=>x.estimated_cost_usd).filter(Number.isFinite);return{stages:enriched,estimatedTotalCostUsd:costs.length===enriched.length?costs.reduce((a,b)=>a+b,0):null}}
 function mergeUsageStages(policyStage,resultStages=[]){return [policyStage,...(resultStages||[])].filter(Boolean)}
 function mergeUsage(stages=[]){const usages=stages.map(x=>x?.usage).filter(Boolean),sum=k=>usages.reduce((a,x)=>a+(Number(x?.[k])||0),0);return{input_tokens:sum("input_tokens"),output_tokens:sum("output_tokens"),total_tokens:sum("total_tokens"),input_tokens_details:{cached_tokens:usages.reduce((a,x)=>a+(Number(x?.input_tokens_details?.cached_tokens)||0),0)},output_tokens_details:{reasoning_tokens:usages.reduce((a,x)=>a+(Number(x?.output_tokens_details?.reasoning_tokens)||0),0)}}}
+function formatPolicyUpdate(update={}){
+  if(update.status==="paused")return `${update.asset}: DCA pausado`;
+  if(update.status==="stopped")return `${update.asset}: DCA detenido`;
+  const amount=Number(update.amount_usd);
+  const amountLabel=Number.isFinite(amount)?`US$${amount.toLocaleString("en-US",{maximumFractionDigits:2})}`:"monto actualizado";
+  const frequency=update.frequency==="daily"?"diarios":update.frequency==="weekly"?"semanales":update.frequency==="monthly"?"mensuales":"";
+  const strategy=String(update.strategy||"DCA").toUpperCase()==="DCA"?"":"";
+  return `${update.asset} a ${amountLabel}${frequency?` ${frequency}`:""}${strategy}`;
+}
+function policyUpdateAnswer(updates=[]){return `Registrado: ${updates.map(formatPolicyUpdate).join(" · ")}.`;}
 async function trackUsage(result,messageCount,stagesOverride=null){try{const stages=stagesOverride||result?.usageStages||[],usage=stagesOverride?mergeUsage(stages):(result?.usage||{}),breakdown=usageBreakdown(stages);await runQuery(`INSERT INTO ${table("digital_twin_usage")} (id,operation_type,source,model,api_requests,input_tokens,output_tokens,total_tokens,cached_tokens,reasoning_tokens,web_search_calls,cost_usd,cost_source,response_id,metadata_json,created_at) VALUES(@id,'decision','digital_twin',@model,@apiRequests,@inputTokens,@outputTokens,@totalTokens,@cachedTokens,@reasoningTokens,@webSearchCalls,@costUsd,@costSource,@responseId,@metadataJson,CURRENT_TIMESTAMP())`,{id:crypto.randomUUID(),model:String(result?.model||stages.at(-1)?.model||""),apiRequests:stages.reduce((a,x)=>a+(Number(x?.apiRequests)||0),0),inputTokens:Number(usage.input_tokens)||0,outputTokens:Number(usage.output_tokens)||0,totalTokens:Number(usage.total_tokens)||0,cachedTokens:Number(usage.input_tokens_details?.cached_tokens)||0,reasoningTokens:Number(usage.output_tokens_details?.reasoning_tokens)||0,webSearchCalls:stages.reduce((a,x)=>a+(Number(x?.webSearchCalls)||0),0),costUsd:breakdown.estimatedTotalCostUsd,costSource:breakdown.estimatedTotalCostUsd==null?null:COST_SOURCE,responseId:String(result?.responseId||""),metadataJson:JSON.stringify({message_count:messageCount,pipeline:result?.pipeline||"hybrid_sol_v1",usage_stages:breakdown.stages})})}catch(error){console.error("Error tracking Digital Twin usage (non-blocking):",{message:error?.message,code:error?.code})}}
 
 async function auditedDecisionChat(req,res){try{
@@ -25,7 +35,7 @@ async function auditedDecisionChat(req,res){try{
   const policyIntent=await interpretAndApplyPolicy(messages);
   const currentInvestmentPolicy=await loadCurrentInvestmentPolicy();
   if(policyIntent.updates.length&&!policyIntent.needsDecision){
-    const result={answer:policyIntent.acknowledgement||"Actualicé tu Current Investment Policy.",model:policyIntent.usageStage?.model||null,responseId:null,pipeline:"policy_intent_only"};
+    const result={answer:policyUpdateAnswer(policyIntent.updates),model:policyIntent.usageStage?.model||null,responseId:null,pipeline:"policy_intent_only"};
     await trackUsage(result,messages.length,[policyIntent.usageStage]);
     return res.json({...result,currentInvestmentPolicy,investmentPolicyUpdates:policyIntent.updates,usage:policyIntent.usageStage?.usage||null,usageStages:[policyIntent.usageStage],apiRequests:1,tools:{webSearchCalls:0,outputTypes:[]}});
   }
