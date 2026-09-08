@@ -47,7 +47,9 @@ function compactProfile(profile = {}) {
     implementation_style: profile.implementation_style, convictions: profile.convictions, rules: profile.rules });
 }
 function compactPlan(plan = {}) {
-  return compact({ decisionType: plan.decisionType, allocationAmountUsd: plan.allocationAmountUsd, researchAssets: plan.researchAssets, researchQuestion: plan.researchQuestion, screenedPortfolioCount: plan.screenedPortfolioCount });
+  return compact({ decisionType: plan.decisionType, allocationAmountUsd: plan.allocationAmountUsd, screenedAssets: plan.screenedAssets,
+    screeningComplete: plan.screeningComplete, researchAssets: plan.researchAssets, researchQuestion: plan.researchQuestion,
+    screenedPortfolioCount: plan.screenedPortfolioCount });
 }
 function portfolioRows(context = {}) {
   const p = context?.portfolio || {};
@@ -85,27 +87,29 @@ async function post(body, timeout = 90000) {
 }
 
 async function auditDecision({ draft, evidenceMatrix, currentProfile, context, plan }) {
-  const input = `Perfil: ${JSON.stringify(compactProfile(currentProfile))}\nCartera actual COMPLETA: ${JSON.stringify(compactContext(context))}\nPlan: ${JSON.stringify(compactPlan(plan))}\nEvidencia: ${JSON.stringify(compact(evidenceMatrix || {}))}\nBorrador: ${String(draft || "").slice(0,7000)}`;
+  const input = `Perfil: ${JSON.stringify(compactProfile(currentProfile))}\nCartera actual COMPLETA: ${JSON.stringify(compactContext(context))}\nPlan y screening: ${JSON.stringify(compactPlan(plan))}\nEvidencia profunda: ${JSON.stringify(compact(evidenceMatrix || {}))}\nBorrador: ${String(draft || "").slice(0,7000)}`;
   const data = await post({
     model: DEFAULT_MODEL,
     reasoning: { effort: "low" },
-    instructions: `Auditá epistemológicamente el borrador sin investigar, sin decidir de nuevo y sin crear metodología nueva. Revisá COMO MÁXIMO 6 claims que puedan cambiar conclusión, ranking o asignación. Clasificá cada uno como fact, evidence_based_inference, confirmed_preference, assumption o unknown. Una inferencia sólo puede mover la decisión si tiene evidencia explícita y un puente lógico válido. assumption/unknown no pueden moverla silenciosamente. Si A>B no está materialmente respaldado, registrá la comparación como no resuelta y permití empate.
+    instructions: `Auditá epistemológicamente el borrador sin investigar, sin decidir de nuevo y sin crear metodología nueva. Revisá COMO MÁXIMO 6 claims que puedan cambiar conclusión, ranking o asignación. Clasificá cada uno como fact, evidence_based_inference, confirmed_preference, assumption o unknown. Una inferencia sólo puede mover la decisión si tiene evidencia explícita y un puente lógico válido. assumption/unknown no pueden moverla silenciosamente. Si A>B no está materialmente respaldado, registrá la comparación como no resuelta.
 
-UNIVERSO DE CARTERA: portfolioAssets es la lista completa de activos actuales, no sólo las exposiciones principales. El shortlist researchAssets existe sólo para decidir dónde profundizar después de haber screenado toda la cartera; no es el universo de inversión ni un ranking. Si el borrador actúa como si sólo existieran los activos investigados, o introduce un activo externo como si hubiese formado parte del screening de cartera, needsRevision=true. En esta etapa de allocation, un activo externo no debe desplazar activos actuales: el descubrimiento externo es una fase separada posterior.
+SCREENING COMPLETO: portfolioAssets es la lista completa de activos actuales. screenedAssets debe mostrar explícitamente que cada activo fue revisado y por qué quedó research_now o defer. screeningComplete=true sólo es válido si existe un screenedAssets para cada activo. Si el borrador afirma que 'screening completo' ocurrió pero la lista no está completa, needsRevision=true. El screening sólo prueba que el activo fue considerado para prioridad de research; NO prueba que sus fundamentales actuales hayan sido evaluados.
 
-REGLA DE DEGRADACIÓN: cuando una conclusión sea más fuerte o precisa que la evidencia, REDUCÍ su fuerza/precisión hasta el nivel que la evidencia permite. No intentes conservarla fabricando análisis adicional. Evidencia heterogénea de activos distintos no implica por sí sola una escala común suficiente para ordenar A>B>C. Si el puente comparativo no está explícitamente soportado, degradá el ranking, no sólo los porcentajes.
+REGLA DE DEGRADACIÓN: cuando una conclusión sea más fuerte o precisa que la evidencia, REDUCÍ su fuerza/precisión hasta el nivel que la evidencia permite. Evidencia heterogénea de activos distintos no implica por sí sola una escala común suficiente para ordenar A>B>C. Si el puente comparativo no está explícitamente soportado, degradá el ranking, no sólo los porcentajes.
 
-COBERTURA NO ES EVIDENCIA: que un activo haya sido investigado y otro no, o que uno tenga quality=medium/high mientras otro no tenga evidencia, NO permite preferir el cubierto. Un activo sin cobertura es UNKNOWN/NO EVALUABLE, no inferior. Research coverage determina qué puede evaluarse, no el ranking relativo. Un fallo o incompletitud del research jamás puede convertirse en señal de inversión.
+COBERTURA NO ES EVIDENCIA: que un activo haya sido investigado y otro no, o que uno tenga quality=medium/high mientras otro no tenga evidencia, NO permite preferir el cubierto. Un activo sin cobertura es UNKNOWN/NO EVALUABLE, no inferior. Research coverage determina qué puede evaluarse, no el ranking relativo.
 
-PREFERENCIA VS IMPLEMENTACIÓN: una preferencia general confirmada no autoriza inventar una implementación específica. DCA no implica por sí solo 4 tramos semanales, frecuencia concreta ni split concreto. Si el borrador agrega detalles sin soporte explícito, pedí quitarlos o etiquetarlos como ejemplo opcional.
+PROVENIENCIA NUMÉRICA: cualquier número presentado como HECHO, probabilidad, forecast, escenario, métrica, dato de research o threshold debe estar explícitamente presente en Perfil, Cartera, Plan/screening o Evidencia profunda. Si no aparece allí, el número es unsupported y needsRevision=true. No aceptes que el borrador diga 'datos del research' si ese campo o número no existe realmente en evidenceMatrix. El research schema actual contiene thesis, valuation, keyFacts, quality y limitation; NO contiene probabilidades 12m. Por lo tanto probabilidades tipo 20/50/30 son inválidas salvo que estén literalmente en keyFacts. Una asignación propuesta (porcentaje o monto) es distinta: puede ser un JUICIO TÁCTICO nuevo si está claramente etiquetado como propuesta, no como dato ni como resultado mecánico del research, y su dirección tiene puente cualitativo soportado.
 
-TRAZABILIDAD DE TRIGGERS: no permitas que el borrador agregue triggers, riesgos o criterios específicos para un activo que figura sin evidencia en evidenceMatrix, salvo que provengan explícitamente del Investor Model. Si el activo está uncovered/unknown, esos triggers también deben omitirse o declararse fuera de cobertura.
+PREFERENCIA VS IMPLEMENTACIÓN: una preferencia general confirmada no autoriza inventar una implementación específica. DCA no implica frecuencia, número de tramos ni split operativo.
+
+TRAZABILIDAD DE TRIGGERS: no permitas triggers, riesgos o criterios específicos para un activo sin soporte en evidenceMatrix o Investor Model.
 
 PROHIBIDO en revisionInstructions pedir nueva investigación, nuevos datos, escenarios probabilísticos, probabilidades numéricas, sensibilidades macro, DCF/múltiplos nuevos, fórmulas, scores, pesos, thresholds, triggers cuantificados o cualquier modelo/cálculo que no exista ya explícitamente en la evidencia provista.
 
-revisionInstructions sólo puede ordenar acciones sobre material YA DISPONIBLE: eliminar una conclusión no soportada; degradarla a posibilidad/hipótesis; quitar falsa precisión; reclasificarla como preferencia confirmada si realmente figura en Investor Model; declarar empate/incertidumbre/no-evaluable; separar hecho de inferencia; explicitar una limitación existente; o corregir una falsa representación del universo de cartera/screening.
+revisionInstructions sólo puede ordenar acciones sobre material YA DISPONIBLE: eliminar conclusión/número no soportado; degradar a posibilidad; quitar falsa precisión; reclasificar preferencia confirmada; declarar incertidumbre/no-evaluable; separar hecho de inferencia; explicitar una limitación; o corregir una falsa representación del screening.
 
-Si hay salto material, falsa precisión, ranking por cobertura, ranking no comparable, implementación inventada, trigger sin evidencia, universo incompleto o preferencia inventada, needsRevision=true. Mantené instrucciones breves y correctivas, no expansivas.`,
+Si hay salto material, número factual inventado, falsa atribución al research, ranking por cobertura, ranking no comparable, implementación inventada, trigger sin evidencia, screening incompleto presentado como completo o preferencia inventada, needsRevision=true.`,
     input, max_output_tokens: 1800,
     text: { verbosity: "low", format: { type: "json_schema", name: "twin_epistemic_audit", strict: true, schema: EPISTEMIC_AUDIT_SCHEMA } }, store: false
   });
@@ -115,11 +119,13 @@ Si hay salto material, falsa precisión, ranking por cobertura, ranking no compa
 
 async function reviseDecision({ draft, audit, evidenceMatrix, currentProfile, context, plan }) {
   if (!audit?.needsRevision) return { answer: draft, data: null };
-  const input = `Perfil: ${JSON.stringify(compactProfile(currentProfile))}\nCartera actual COMPLETA: ${JSON.stringify(compactContext(context))}\nPlan: ${JSON.stringify(compactPlan(plan))}\nEvidencia: ${JSON.stringify(compact(evidenceMatrix || {}))}\nAuditoría: ${JSON.stringify(compact(audit))}\nBorrador: ${String(draft || "").slice(0,7000)}`;
+  const input = `Perfil: ${JSON.stringify(compactProfile(currentProfile))}\nCartera actual COMPLETA: ${JSON.stringify(compactContext(context))}\nPlan y screening: ${JSON.stringify(compactPlan(plan))}\nEvidencia profunda: ${JSON.stringify(compact(evidenceMatrix || {}))}\nAuditoría: ${JSON.stringify(compact(audit))}\nBorrador: ${String(draft || "").slice(0,7000)}`;
   const data = await post({
     model: DEFAULT_MODEL,
     reasoning: { effort: "low" },
-    instructions: `Revisá el borrador sólo para corregir revisionInstructions usando exclusivamente el material ya disponible. No investigues, no agregues hechos y NO crees nueva metodología para defender la conclusión original. portfolioAssets representa la cartera actual completa: no reduzcas la decisión al shortlist de research. El shortlist es sólo profundidad selectiva después del screening completo. En esta etapa no introduzcas activos externos en la asignación; oportunidad externa es una fase separada. AUSENCIA DE EVIDENCIA NO ES EVIDENCIA NEGATIVA: un activo cubierto no puede ganar sólo porque otro quedó sin research. Si A tiene evidencia y B está uncovered/unknown, describí A como evaluable y B como indeterminado; no construyas A>B. Si la evidencia entre activos no comparte base comparable suficiente, declaralo no resuelto. No conviertas DCA en frecuencia/tramos/splits no confirmados. No agregues triggers ni riesgos específicos de activos sin evidencia en esta corrida. No inventes probabilidades, escenarios, scores, fórmulas, thresholds ni valuaciones. assumption/unknown no pueden desempatar. Conservá conclusiones soportadas. Español rioplatense, directo, máximo 450 palabras.`,
+    instructions: `Revisá el borrador sólo para corregir revisionInstructions usando exclusivamente el material ya disponible. No investigues, no agregues hechos y no crees nueva metodología. portfolioAssets es la cartera completa y screenedAssets es la revisión trazable de todos los activos; no llames screening completo si screeningComplete=false. Screening no equivale a research fundamental. AUSENCIA DE EVIDENCIA NO ES EVIDENCIA NEGATIVA: un activo cubierto no gana sólo porque otro quedó sin research. Si la evidencia no es comparable, declaralo no resuelto.
+
+Eliminá cualquier probabilidad, escenario, forecast, métrica, threshold o número presentado como dato que no aparezca literalmente en Perfil/Cartera/Plan/Evidencia profunda. No atribuyas al research campos que el research no contiene. Las probabilidades 12m están prohibidas salvo presencia literal en keyFacts. Podés conservar una asignación numérica propuesta únicamente si queda explícitamente rotulada como juicio táctico del Twin y no como traducción matemática del research; su dirección debe estar soportada por evidencia cualitativa disponible. No conviertas DCA en frecuencia/tramos/splits no confirmados. No agregues triggers específicos sin evidencia. assumption/unknown no pueden desempatar. Español rioplatense, directo, máximo 450 palabras.`,
     input, max_output_tokens: 2200, text: { verbosity: "low" }, store: false
   });
   return { answer: outputText(data) || draft, data };
