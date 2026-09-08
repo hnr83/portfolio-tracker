@@ -3,6 +3,10 @@ const { getInvestorProfile } = require("./digitalTwinController");
 const { runDecisionPipeline } = require("../services/digitalTwinDecisionPipeline");
 const { runQuery } = require("../services/bigQueryService");
 const { table } = require("../utils/bigqueryHelper");
+const {
+  applyPolicyUpdatesFromMessages,
+  loadCurrentInvestmentPolicy
+} = require("../services/digitalTwinInvestmentPolicy");
 
 const PRICING = {
   "gpt-5-mini": { input: 0.25, cachedInput: 0.025, output: 2.00 },
@@ -112,7 +116,7 @@ async function trackUsage(result, messageCount) {
 async function auditedDecisionChat(req, res) {
   try {
     const messages = normalizeMessages(req.body?.messages);
-    const context = req.body?.context && typeof req.body.context === "object" ? req.body.context : {};
+    const requestContext = req.body?.context && typeof req.body.context === "object" ? req.body.context : {};
     if (!messages.length) return res.status(400).json({ error: "A decision question is required" });
 
     const profileCapture = captureResponse();
@@ -122,9 +126,25 @@ async function auditedDecisionChat(req, res) {
     const profile = profileResult.payload || {};
     if (!profile.investor_narrative) return res.status(409).json({ error: "Build and confirm the Investor Model before using the Twin chat" });
 
+    // Clear statements in the chat are operational state changes, not Investor Model changes.
+    // Persist them before the decision so the same answer already sees the new current policy.
+    const policyUpdates = await applyPolicyUpdatesFromMessages(messages);
+    const currentInvestmentPolicy = await loadCurrentInvestmentPolicy();
+    const context = {
+      ...requestContext,
+      currentInvestmentPolicy: {
+        semantics: "current_operational_state_not_investor_preference_or_future_rule",
+        policies: currentInvestmentPolicy
+      }
+    };
+
     const result = await runDecisionPipeline({ messages, context, currentProfile: profile });
     await trackUsage(result, messages.length);
-    return res.json(result);
+    return res.json({
+      ...result,
+      currentInvestmentPolicy,
+      investmentPolicyUpdates: policyUpdates
+    });
   } catch (error) {
     console.error("Digital Twin decision failed:", {
       message: error?.message,
