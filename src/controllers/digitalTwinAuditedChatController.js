@@ -126,8 +126,6 @@ async function auditedDecisionChat(req, res) {
     const profile = profileResult.payload || {};
     if (!profile.investor_narrative) return res.status(409).json({ error: "Build and confirm the Investor Model before using the Twin chat" });
 
-    // Clear statements in the chat are operational state changes, not Investor Model changes.
-    // Persist them before the decision so the same answer already sees the new current policy.
     const policyUpdates = await applyPolicyUpdatesFromMessages(messages);
     const currentInvestmentPolicy = await loadCurrentInvestmentPolicy();
     const context = {
@@ -137,8 +135,14 @@ async function auditedDecisionChat(req, res) {
         policies: currentInvestmentPolicy
       }
     };
+    // The current pipeline compacts decision context aggressively. Carry operational state
+    // alongside the profile only as transport; Sol separates it before reasoning.
+    const decisionProfile = {
+      ...profile,
+      current_operational_state: context.currentInvestmentPolicy
+    };
 
-    const result = await runDecisionPipeline({ messages, context, currentProfile: profile });
+    const result = await runDecisionPipeline({ messages, context, currentProfile: decisionProfile });
     await trackUsage(result, messages.length);
     return res.json({
       ...result,
