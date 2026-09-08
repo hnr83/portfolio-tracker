@@ -75,7 +75,7 @@ function extractPolicyUpdates(message = "") {
     updates.push(update);
   };
 
-  const pauseRegex = /\b(?:paus[eé]|pause|detuve|cancel[eé])\b[^.!?\n]{0,60}?\b(?:dca|bot)?\s*(?:de\s+)?([A-Za-z0-9.-]{2,12})\b/gi;
+  const pauseRegex = /\b(?:paus[eé]|pause|detuve|cancel[eé])\b\s+(?:(?:el|la)\s+)?(?:(?:dca|bot)\s+(?:de\s+)?)?([A-Za-z0-9.-]{2,12})\b/gi;
   let match;
   while ((match = pauseRegex.exec(text))) {
     const asset = normalizeAsset(match[1]);
