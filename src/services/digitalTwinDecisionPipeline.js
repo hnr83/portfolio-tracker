@@ -5,6 +5,7 @@ const DEFAULT_MODEL = process.env.DIGITAL_TWIN_MODEL || "gpt-5-mini";
 const WEB_TOOLS = [{ type: "web_search" }];
 const RESEARCH_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const MAX_RESEARCH_ASSETS = 3;
+const MAX_SCREENED_ASSETS = 20;
 const researchCache = new Map();
 
 function outputText(response) {
@@ -120,14 +121,24 @@ async function post(body, timeout = 120000) {
   return (await axios.post(OPENAI_RESPONSES_URL, body, { headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" }, timeout })).data;
 }
 
+const SCREEN_ITEM = {
+  type: "object", additionalProperties: false,
+  properties: {
+    asset: { type: "string" },
+    status: { type: "string", enum: ["research_now", "defer"] },
+    reason: { type: "string" }
+  },
+  required: ["asset", "status", "reason"]
+};
 const PREFLIGHT_SCHEMA = {
   type: "object", additionalProperties: false,
   properties: {
     decisionType: { type: "string", enum: ["allocation", "asset_question", "portfolio_risk", "sell_hold", "plan_progress", "other"] },
+    screenedAssets: { type: "array", maxItems: MAX_SCREENED_ASSETS, items: SCREEN_ITEM },
     researchAssets: { type: "array", maxItems: MAX_RESEARCH_ASSETS, items: { type: "string" } },
     researchQuestion: { type: "string" }
   },
-  required: ["decisionType", "researchAssets", "researchQuestion"]
+  required: ["decisionType", "screenedAssets", "researchAssets", "researchQuestion"]
 };
 const EVIDENCE_ITEM = {
   type: "object", additionalProperties: false,
@@ -162,9 +173,19 @@ function normalizeResearchAssets(assets = [], context = {}) {
   }
   return out;
 }
-function fallbackAssets(context = {}) {
-  return portfolioAssetIds(context).slice(0, MAX_RESEARCH_ASSETS);
+function normalizeScreening(screenedAssets = [], context = {}) {
+  const ids = portfolioAssetIds(context);
+  const canonical = new Map(ids.map(id => [id.toUpperCase(), id]));
+  const byAsset = new Map();
+  for (const item of screenedAssets || []) {
+    const key = String(item?.asset || "").trim().toUpperCase();
+    const asset = canonical.get(key);
+    if (!asset || byAsset.has(key)) continue;
+    byAsset.set(key, { asset, status: item?.status === "research_now" ? "research_now" : "defer", reason: String(item?.reason || "").slice(0, 220) });
+  }
+  return ids.map(asset => byAsset.get(asset.toUpperCase())).filter(Boolean);
 }
+function fallbackAssets(context = {}) { return portfolioAssetIds(context).slice(0, MAX_RESEARCH_ASSETS); }
 async function runPreflight({ messages, context, currentProfile, amount }) {
   const recent = (messages || []).slice(-3).map(m => `${m.role}: ${String(m.content || "").slice(0, 700)}`).join("\n");
   const universe = portfolioUniverse(context);
@@ -172,8 +193,8 @@ async function runPreflight({ messages, context, currentProfile, amount }) {
   const body = {
     model: DEFAULT_MODEL,
     reasoning: { effort: "low" },
-    instructions: `Planificá la decisión, sin responderla ni investigar. Antes de elegir research, recorré TODOS los activos del UNIVERSO COMPLETO DE CARTERA provisto. Ese universo es exhaustivo para esta etapa. Elegí como máximo ${MAX_RESEARCH_ASSETS} activos DEL UNIVERSO ACTUAL cuya información pública reciente podría cambiar materialmente la respuesta. No propongas activos externos en este preflight y no uses el shortlist como ranking: sólo define dónde vale pagar research profundo. Considerá peso/contexto determinístico y el Investor Model, pero el peso actual no es preferencia ni prueba de atractivo. Devolvé una sola pregunta de research que ayude a comparar tesis/fundamentales y valuación de los seleccionados. Planner no es target.`,
-    input, max_output_tokens: 1200,
+    instructions: `Planificá la decisión, sin responderla ni investigar. Hacé un screening EXPLÍCITO de TODOS los activos del UNIVERSO COMPLETO DE CARTERA. screenedAssets debe contener exactamente un registro por cada activo, con status research_now o defer y una razón breve basada sólo en cartera, consulta e Investor Model; no inventes fundamentales actuales. Después elegí como máximo ${MAX_RESEARCH_ASSETS} activos DEL UNIVERSO ACTUAL para research público profundo. researchAssets debe ser subconjunto de los marcados research_now. No propongas activos externos. El screening no es ranking ni evaluación fundamental: es una revisión trazable de relevancia/prioridad para esta decisión. El peso actual no es preferencia ni prueba de atractivo. Devolvé una sola pregunta de research para comparar tesis/fundamentales y valuación de los seleccionados. Planner no es target.`,
+    input, max_output_tokens: 1600,
     text: { verbosity: "low", format: { type: "json_schema", name: "twin_preflight", strict: true, schema: PREFLIGHT_SCHEMA } }, store: false
   };
   let data;
@@ -181,12 +202,17 @@ async function runPreflight({ messages, context, currentProfile, amount }) {
     data = await post(body, 60000);
     if (truncated(data)) throw new Error("PREFLIGHT_TRUNCATED");
     const parsed = parseJson(outputText(data));
+    const screenedAssets = normalizeScreening(parsed.screenedAssets, context);
+    const screeningComplete = screenedAssets.length === universe.length;
     let researchAssets = normalizeResearchAssets(parsed.researchAssets, context);
+    const marked = new Set(screenedAssets.filter(x => x.status === "research_now").map(x => x.asset.toUpperCase()));
+    researchAssets = researchAssets.filter(asset => marked.has(asset.toUpperCase()));
+    if (!researchAssets.length && screeningComplete) researchAssets = screenedAssets.filter(x => x.status === "research_now").map(x => x.asset).slice(0, MAX_RESEARCH_ASSETS);
     if (!researchAssets.length) researchAssets = fallbackAssets(context);
-    return { plan: { ...parsed, researchAssets, portfolioUniverseAssets: portfolioAssetIds(context), screenedPortfolioCount: universe.length, allocationAmountUsd: amount }, attempts: [data] };
+    return { plan: { ...parsed, screenedAssets, screeningComplete, researchAssets, portfolioUniverseAssets: portfolioAssetIds(context), screenedPortfolioCount: screenedAssets.length, allocationAmountUsd: amount }, attempts: [data] };
   } catch (error) {
     console.warn("Digital Twin preflight unavailable; using deterministic fallback", { message: error?.message, usage: data?.usage });
-    return { plan: { decisionType: looksLikeOpenAllocation(messages) ? "allocation" : "other", researchAssets: fallbackAssets(context), researchQuestion: "Comparar tesis/fundamentales y valuación actual con evidencia reciente.", portfolioUniverseAssets: portfolioAssetIds(context), screenedPortfolioCount: universe.length, allocationAmountUsd: amount, preflightFallback: true }, attempts: data ? [data] : [] };
+    return { plan: { decisionType: looksLikeOpenAllocation(messages) ? "allocation" : "other", screenedAssets: [], screeningComplete: false, researchAssets: fallbackAssets(context), researchQuestion: "Comparar tesis/fundamentales y valuación actual con evidencia reciente.", portfolioUniverseAssets: portfolioAssetIds(context), screenedPortfolioCount: 0, allocationAmountUsd: amount, preflightFallback: true }, attempts: data ? [data] : [] };
   }
 }
 
@@ -208,7 +234,7 @@ async function researchBatch(plan) {
   const body = {
     model: DEFAULT_MODEL,
     reasoning: { effort: "low" },
-    instructions: `Investigá sólo estos activos de la cartera: ${missing.join(", ")}. Una única pasada de web search. No recomiendes ni asignes capital. Para cada activo devolvé: estado de tesis, valuación actual, máximo 3 hechos discriminantes, calidad y una limitación. Sé extremadamente compacto. Priorizá fuentes primarias y fuentes financieras sólidas. Para cripto, ATH/distancia sólo es contexto y no prueba baratura. Para acciones, preferí múltiplos, crecimiento, FCF/márgenes/expectativas. Si no alcanza la evidencia, marcá unknown. No sigas buscando para completar todos los campos.`,
+    instructions: `Investigá sólo estos activos de la cartera: ${missing.join(", ")}. Una única pasada de web search. No recomiendes ni asignes capital. Para cada activo devolvé: estado de tesis, valuación actual, máximo 3 hechos discriminantes, calidad y una limitación. Sé extremadamente compacto. Priorizá fuentes primarias y fuentes financieras sólidas. Para cripto, ATH/distancia sólo es contexto y no prueba baratura. Para acciones, preferí múltiplos, crecimiento, FCF/márgenes/expectativas. Si no alcanza la evidencia, marcá unknown. No inventes probabilidades, escenarios ni métricas que no puedas sostener. No sigas buscando para completar todos los campos.`,
     input: `Pregunta comparativa: ${String(plan?.researchQuestion || "").slice(0, 700)}`,
     tools: WEB_TOOLS, tool_choice: "auto", max_output_tokens: 1800,
     text: { verbosity: "low", format: { type: "json_schema", name: "twin_compact_research", strict: true, schema: RESEARCH_SCHEMA } }, store: false
@@ -233,12 +259,16 @@ async function researchBatch(plan) {
 async function draftDecision({ plan, matrix, currentProfile, context, messages }) {
   const recent = (messages || []).slice(-3).map(m => `${m.role}: ${String(m.content || "").slice(0, 900)}`).join("\n");
   const universe = portfolioUniverse(context);
-  const compactPlan = compact({ decisionType: plan?.decisionType, allocationAmountUsd: plan?.allocationAmountUsd, researchAssets: plan?.researchAssets, researchQuestion: plan?.researchQuestion, screenedPortfolioCount: plan?.screenedPortfolioCount });
-  const input = `Perfil: ${JSON.stringify(compactProfile(currentProfile))}\nContexto agregado: ${JSON.stringify(compactDecisionContext(context))}\nUNIVERSO COMPLETO SCREENEADO: ${JSON.stringify(universe)}\nPlan: ${JSON.stringify(compactPlan)}\nEvidencia profunda: ${JSON.stringify(matrix)}\nConsulta: ${recent}`;
+  const compactPlan = compact({ decisionType: plan?.decisionType, allocationAmountUsd: plan?.allocationAmountUsd, screenedAssets: plan?.screenedAssets, screeningComplete: plan?.screeningComplete, researchAssets: plan?.researchAssets, researchQuestion: plan?.researchQuestion, screenedPortfolioCount: plan?.screenedPortfolioCount });
+  const input = `Perfil: ${JSON.stringify(compactProfile(currentProfile))}\nContexto agregado: ${JSON.stringify(compactDecisionContext(context))}\nUNIVERSO COMPLETO DE CARTERA: ${JSON.stringify(universe)}\nSCREENING TRAZABLE: ${JSON.stringify(plan?.screenedAssets || [])}\nPlan: ${JSON.stringify(compactPlan)}\nEvidencia profunda: ${JSON.stringify(matrix)}\nConsulta: ${recent}`;
   const data = await post({
     model: DEFAULT_MODEL,
     reasoning: { effort: "medium" },
-    instructions: `Sos el Digital Investment Twin. Respondé desde el Investor Model, datos personales determinísticos y evidencia explícita. El UNIVERSO COMPLETO SCREENEADO contiene todos los activos actuales; el shortlist de research es sólo una selección de dónde profundizar, NO el universo de inversión ni un ranking. No uses web ni inventes hechos. Un activo no investigado es indeterminado, no inferior. Dato, inferencia y preferencia no son lo mismo. Una diferencia entre activos sólo puede mover ranking/asignación si evidencia comparable o una preferencia confirmada la sostienen; si no, admití incertidumbre. No conviertas cobertura en señal. No introduzcas activos externos en la recomendación de asignación en esta etapa; el descubrimiento de oportunidades externas será una fase separada posterior al screening de cartera. Diversificación, concentración y distancia al ATH describen contexto pero no prueban atractivo. Planner no es target. Para allocation: conclusión, cobertura del screening completo, research profundo, ranking sólo si está justificado, asignación separando evidencia de criterio práctico, y qué cambiaría la decisión. Español rioplatense, directo, máximo 450 palabras.`,
+    instructions: `Sos el Digital Investment Twin. Respondé desde el Investor Model, datos personales determinísticos y evidencia explícita. El universo completo contiene todos los activos actuales. El SCREENING TRAZABLE debe demostrar que cada activo fue considerado antes del shortlist; no digas "screening completo" si screeningComplete=false. El shortlist de research es sólo profundidad selectiva, NO el universo ni un ranking. No uses web ni inventes hechos. Un activo no investigado es indeterminado, no inferior. Dato, inferencia y preferencia no son lo mismo. Una diferencia entre activos sólo puede mover ranking/asignación si evidencia comparable o una preferencia confirmada la sostienen; si no, admití incertidumbre. No conviertas cobertura en señal. No introduzcas activos externos en esta etapa. Diversificación, concentración y distancia al ATH no prueban atractivo. Planner no es target.
+
+REGLA DE PROVENIENCIA NUMÉRICA: cualquier número presentado como HECHO, probabilidad, forecast, escenario, métrica o dato de research debe aparecer explícitamente en Contexto, Screening o Evidencia profunda. Si no aparece allí, está prohibido inventarlo. El schema de research actual NO contiene probabilidades 12m, por lo tanto no presentes probabilidades 12m salvo que estén literalmente dentro de keyFacts. En cambio, una asignación propuesta sí puede usar montos/porcentajes nuevos si los etiquetás claramente como JUICIO TÁCTICO del Twin, no como dato ni resultado mecánico del research, y explicás qué evidencia cualitativa la inclina.
+
+Para allocation: conclusión, cobertura real del screening, research profundo, ranking sólo si está justificado, propuesta accionable diferenciando evidencia de juicio táctico, y qué cambiaría la decisión. Español rioplatense, directo, máximo 450 palabras.`,
     input, max_output_tokens: 2800, text: { verbosity: "low" }, store: false
   }, 120000);
   let answer = outputText(data);
