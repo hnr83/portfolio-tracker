@@ -1,9 +1,15 @@
 const crypto = require("crypto");
 const { getInvestorProfile } = require("./digitalTwinController");
 const { runDecisionPipeline } = require("../services/digitalTwinDecisionPipeline");
-const { runSolDecisionExperiment } = require("../services/digitalTwinSolDecisionExperiment");
 const { runQuery } = require("../services/bigQueryService");
 const { table } = require("../utils/bigqueryHelper");
+
+const PRICING = {
+  "gpt-5-mini": { input: 0.25, cachedInput: 0.025, output: 2.00 },
+  "gpt-5.6-sol": { input: 4.00, cachedInput: 0.40, output: 20.00 }
+};
+const WEB_SEARCH_COST_USD = 0.01;
+const COST_SOURCE = "estimated_openai_standard_pricing_2026-09-08";
 
 function captureResponse() {
   let statusCode = 200;
@@ -26,26 +32,55 @@ function normalizeMessages(messages) {
     : [];
 }
 
-function mergeUsage(baseUsage = {}, extraUsage = {}) {
+function pricingForModel(model = "") {
+  const value = String(model).toLowerCase();
+  if (value.startsWith("gpt-5.6-sol") || value === "gpt-5.6") return PRICING["gpt-5.6-sol"];
+  if (value.startsWith("gpt-5-mini")) return PRICING["gpt-5-mini"];
+  return null;
+}
+
+function estimateStageCost(stage = {}) {
+  const rates = pricingForModel(stage.model);
+  if (!rates) return null;
+  const usage = stage.usage || {};
+  const input = Number(usage.input_tokens) || 0;
+  const cached = Math.min(input, Number(usage.input_tokens_details?.cached_tokens) || 0);
+  const uncached = Math.max(0, input - cached);
+  const output = Number(usage.output_tokens) || 0;
+  const webSearchCalls = Number(stage.webSearchCalls) || 0;
+  return (uncached / 1_000_000 * rates.input)
+    + (cached / 1_000_000 * rates.cachedInput)
+    + (output / 1_000_000 * rates.output)
+    + (webSearchCalls * WEB_SEARCH_COST_USD);
+}
+
+function usageBreakdown(stages = []) {
+  const enriched = (stages || []).map(stage => ({
+    stage: stage.stage,
+    model: stage.model,
+    api_requests: Number(stage.apiRequests) || 0,
+    input_tokens: Number(stage.usage?.input_tokens) || 0,
+    cached_tokens: Number(stage.usage?.input_tokens_details?.cached_tokens) || 0,
+    output_tokens: Number(stage.usage?.output_tokens) || 0,
+    reasoning_tokens: Number(stage.usage?.output_tokens_details?.reasoning_tokens) || 0,
+    total_tokens: Number(stage.usage?.total_tokens) || 0,
+    web_search_calls: Number(stage.webSearchCalls) || 0,
+    estimated_cost_usd: estimateStageCost(stage)
+  }));
+  const knownCosts = enriched.map(x => x.estimated_cost_usd).filter(Number.isFinite);
   return {
-    input_tokens: (Number(baseUsage.input_tokens) || 0) + (Number(extraUsage.input_tokens) || 0),
-    output_tokens: (Number(baseUsage.output_tokens) || 0) + (Number(extraUsage.output_tokens) || 0),
-    total_tokens: (Number(baseUsage.total_tokens) || 0) + (Number(extraUsage.total_tokens) || 0),
-    input_tokens_details: {
-      cached_tokens: (Number(baseUsage.input_tokens_details?.cached_tokens) || 0) + (Number(extraUsage.input_tokens_details?.cached_tokens) || 0)
-    },
-    output_tokens_details: {
-      reasoning_tokens: (Number(baseUsage.output_tokens_details?.reasoning_tokens) || 0) + (Number(extraUsage.output_tokens_details?.reasoning_tokens) || 0)
-    }
+    stages: enriched,
+    estimatedTotalCostUsd: knownCosts.length === enriched.length ? knownCosts.reduce((a,b)=>a+b,0) : null
   };
 }
 
 async function trackUsage(result, messageCount) {
   try {
     const usage = result?.usage || {};
+    const breakdown = usageBreakdown(result?.usageStages || []);
     await runQuery(
-      `INSERT INTO ${table("digital_twin_usage")} (id,operation_type,source,model,api_requests,input_tokens,output_tokens,total_tokens,cached_tokens,reasoning_tokens,web_search_calls,response_id,metadata_json,created_at)
-       VALUES(@id,'decision','digital_twin',@model,@apiRequests,@inputTokens,@outputTokens,@totalTokens,@cachedTokens,@reasoningTokens,@webSearchCalls,@responseId,@metadataJson,CURRENT_TIMESTAMP())`,
+      `INSERT INTO ${table("digital_twin_usage")} (id,operation_type,source,model,api_requests,input_tokens,output_tokens,total_tokens,cached_tokens,reasoning_tokens,web_search_calls,cost_usd,cost_source,response_id,metadata_json,created_at)
+       VALUES(@id,'decision','digital_twin',@model,@apiRequests,@inputTokens,@outputTokens,@totalTokens,@cachedTokens,@reasoningTokens,@webSearchCalls,@costUsd,@costSource,@responseId,@metadataJson,CURRENT_TIMESTAMP())`,
       {
         id: crypto.randomUUID(),
         model: String(result?.model || ""),
@@ -56,11 +91,13 @@ async function trackUsage(result, messageCount) {
         cachedTokens: Number(usage.input_tokens_details?.cached_tokens) || 0,
         reasoningTokens: Number(usage.output_tokens_details?.reasoning_tokens) || 0,
         webSearchCalls: Number(result?.tools?.webSearchCalls) || 0,
+        costUsd: breakdown.estimatedTotalCostUsd,
+        costSource: breakdown.estimatedTotalCostUsd == null ? null : COST_SOURCE,
         responseId: String(result?.responseId || ""),
         metadataJson: JSON.stringify({
           message_count: messageCount,
-          pipeline: result?.experiment?.name || "bounded_research_v3",
-          experiment: result?.experiment || null
+          pipeline: result?.pipeline || "hybrid_sol_v1",
+          usage_stages: breakdown.stages
         })
       }
     );
@@ -85,54 +122,17 @@ async function auditedDecisionChat(req, res) {
     const profile = profileResult.payload || {};
     if (!profile.investor_narrative) return res.status(409).json({ error: "Build and confirm the Investor Model before using the Twin chat" });
 
-    // Keep the existing cheap preflight + research pipeline unchanged so the experiment
-    // sees the same evidence architecture. Its mini draft is intentionally discarded.
     const result = await runDecisionPipeline({ messages, context, currentProfile: profile });
-    if (!result.answer || !result.evidenceMatrix) {
-      await trackUsage(result, messages.length);
-      return res.json(result);
-    }
-
-    // Controlled A/B: one Sol decision over the exact preflight/evidence already produced.
-    // No epistemic audit/rewrite afterwards, otherwise we would contaminate the comparison.
-    const sol = await runSolDecisionExperiment({
-      messages,
-      context,
-      currentProfile: profile,
-      preflight: result.preflight || {},
-      evidenceMatrix: result.evidenceMatrix
-    });
-
-    const finalResult = {
-      ...result,
-      answer: sol.answer,
-      usage: mergeUsage(result.usage, sol.usage),
-      apiRequests: (Number(result.apiRequests) || 0) + 1,
-      model: sol.model,
-      responseId: sol.responseId || result.responseId,
-      epistemicAudit: {
-        skipped: true,
-        reason: "controlled_sol_ab_experiment",
-        message: "Auditoría/revisión omitida deliberadamente para medir la decisión de Sol sin contaminación posterior."
-      },
-      experiment: {
-        name: "sol_decision_ab_v1",
-        decisionModel: sol.model,
-        baselinePipelineModel: result.model,
-        auditSkipped: true
-      }
-    };
-
-    await trackUsage(finalResult, messages.length);
-    return res.json(finalResult);
+    await trackUsage(result, messages.length);
+    return res.json(result);
   } catch (error) {
-    console.error("Digital Twin decision experiment failed:", {
+    console.error("Digital Twin decision failed:", {
       message: error?.message,
       code: error?.code,
       status: error?.response?.status
     });
     if (error?.code === "OPENAI_NOT_CONFIGURED") return res.status(503).json({ error: "Digital Twin LLM is not configured", code: error.code });
-    return res.status(500).json({ error: "Error running Digital Twin decision experiment" });
+    return res.status(500).json({ error: "Error running Digital Twin decision" });
   }
 }
 
