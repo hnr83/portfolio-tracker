@@ -36,6 +36,32 @@ function normalizeMessages(messages) {
     : [];
 }
 
+function lastUserText(messages = []) {
+  return String([...messages].reverse().find(item => item?.role === "user")?.content || "").trim();
+}
+
+function isPolicyUpdateOnly(messages, updates) {
+  if (!Array.isArray(updates) || !updates.length) return false;
+  const text = lastUserText(messages).toLowerCase();
+  if (!text) return false;
+  if (/[?¿]/.test(text)) return false;
+  return !/\b(qu[eé]\s+(?:te\s+)?parece|qu[eé]\s+opinas|opini[oó]n|conviene|deber[ií]a|mantengo|reduzco|aumento|acelero|freno|analiz[aá]|evalu[aá]|tiene\s+sentido|c[oó]mo\s+lo\s+ves|recomend[aá])\b/i.test(text);
+}
+
+function policyUpdateAnswer(updates = []) {
+  const labels = updates.map(update => {
+    if (update.status === "paused") return `${update.asset}: DCA pausado`;
+    const amount = Number(update.amount_usd);
+    const amountLabel = Number.isFinite(amount) ? `US$${amount.toLocaleString("en-US")}` : "monto actualizado";
+    const frequency = update.frequency === "daily" ? "por día"
+      : update.frequency === "weekly" ? "por semana"
+      : update.frequency === "monthly" ? "por mes"
+      : "";
+    return `${update.asset}: ${amountLabel}${frequency ? ` ${frequency}` : ""}`;
+  });
+  return `Actualicé tu Current Investment Policy: ${labels.join(" · ")}. Esto queda como estado operativo actual, separado de tu Investor Model y del Planner.`;
+}
+
 function pricingForModel(model = "") {
   const value = String(model).toLowerCase();
   if (value.startsWith("gpt-5.6-sol") || value === "gpt-5.6") return PRICING["gpt-5.6-sol"];
@@ -128,6 +154,22 @@ async function auditedDecisionChat(req, res) {
 
     const policyUpdates = await applyPolicyUpdatesFromMessages(messages);
     const currentInvestmentPolicy = await loadCurrentInvestmentPolicy();
+
+    if (isPolicyUpdateOnly(messages, policyUpdates)) {
+      return res.json({
+        answer: policyUpdateAnswer(policyUpdates),
+        currentInvestmentPolicy,
+        investmentPolicyUpdates: policyUpdates,
+        usage: null,
+        usageStages: [],
+        apiRequests: 0,
+        model: null,
+        responseId: null,
+        tools: { webSearchCalls: 0, outputTypes: [] },
+        pipeline: "policy_update_only"
+      });
+    }
+
     const context = {
       ...requestContext,
       currentInvestmentPolicy: {
@@ -135,8 +177,6 @@ async function auditedDecisionChat(req, res) {
         policies: currentInvestmentPolicy
       }
     };
-    // The current pipeline compacts decision context aggressively. Carry operational state
-    // alongside the profile only as transport; Sol separates it before reasoning.
     const decisionProfile = {
       ...profile,
       current_operational_state: context.currentInvestmentPolicy
