@@ -52,14 +52,7 @@ function compactPlan(plan = {}) {
 function compactContext(context = {}) {
   const p = context?.portfolio || {};
   const exposures = p.topExposures || p.exposures || [];
-  return compact({
-    portfolio: {
-      totalValueUsd: p.totalValueUsd,
-      cryptoExposurePct: p.cryptoExposurePct,
-      liquidityPct: p.liquidityPct,
-      topExposures: exposures.slice(0, 10)
-    }
-  });
+  return compact({ portfolio: { totalValueUsd: p.totalValueUsd, cryptoExposurePct: p.cryptoExposurePct, liquidityPct: p.liquidityPct, topExposures: exposures.slice(0, 10) } });
 }
 async function post(body, timeout = 90000) {
   return (await axios.post(OPENAI_RESPONSES_URL, body, { headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" }, timeout })).data;
@@ -72,17 +65,21 @@ async function auditDecision({ draft, evidenceMatrix, currentProfile, context, p
     reasoning: { effort: "low" },
     instructions: `Auditá epistemológicamente el borrador sin investigar, sin decidir de nuevo y sin crear metodología nueva. Revisá COMO MÁXIMO 6 claims que puedan cambiar conclusión, ranking o asignación. Clasificá cada uno como fact, evidence_based_inference, confirmed_preference, assumption o unknown. Una inferencia sólo puede mover la decisión si tiene evidencia explícita y un puente lógico válido. assumption/unknown no pueden moverla silenciosamente. Si A>B no está materialmente respaldado, registrá la comparación como no resuelta y permití empate.
 
-REGLA DE DEGRADACIÓN: cuando una conclusión sea más fuerte o precisa que la evidencia, REDUCÍ su fuerza/precisión hasta el nivel que la evidencia permite. No intentes conservarla fabricando análisis adicional. Evidencia heterogénea de activos distintos (por ejemplo crecimiento/márgenes vs on-chain/TVL) no implica por sí sola que exista una escala común suficiente para ordenar A>B>C. Si el puente comparativo no está explícitamente soportado, degradá el ranking, no sólo los porcentajes.
+REGLA DE DEGRADACIÓN: cuando una conclusión sea más fuerte o precisa que la evidencia, REDUCÍ su fuerza/precisión hasta el nivel que la evidencia permite. No intentes conservarla fabricando análisis adicional. Evidencia heterogénea de activos distintos no implica por sí sola una escala común suficiente para ordenar A>B>C. Si el puente comparativo no está explícitamente soportado, degradá el ranking, no sólo los porcentajes.
 
-PREFERENCIA VS IMPLEMENTACIÓN: una preferencia general confirmada no autoriza inventar una implementación específica. Por ejemplo DCA no implica por sí solo 4 tramos semanales, una frecuencia concreta ni un split concreto. Si el borrador agrega esos detalles sin soporte explícito, pedí quitarlos o etiquetarlos como ejemplo opcional, nunca como regla del usuario.
+COBERTURA NO ES EVIDENCIA: que un activo haya sido investigado y otro no, o que uno tenga quality=medium/high mientras otro no tenga evidencia, NO permite preferir el cubierto. Un activo sin cobertura es UNKNOWN/NO EVALUABLE, no inferior. Diferenciá siempre: (1) evidencia positiva/negativa sobre atractivo, de (2) mera disponibilidad/ausencia de evidencia. Research coverage determina qué puede evaluarse, no el ranking relativo. Si A tiene tesis intacta y B/C no fueron cubiertos, la conclusión válida es 'A es evaluable; B/C quedan indeterminados', NO 'A > B/C'. Un fallo o incompletitud del research jamás puede convertirse en señal de inversión.
 
-CANDIDATOS NUEVOS: es válido que el Twin descubra y recomiende un activo que no esté hoy entre las exposiciones principales; no lo rechaces sólo por ser nuevo. Pero si un activo nuevo aparece en el ranking/asignación, debe quedar explícito que es una idea nueva surgida del research y debe existir evidencia material que explique por qué merece competir con las alternativas actuales. El hecho de haber sido elegido por preflight/research NO es evidencia de superioridad. Si aparece sin ese puente, pedí degradarlo a candidato para considerar, no a ganador.
+PREFERENCIA VS IMPLEMENTACIÓN: una preferencia general confirmada no autoriza inventar una implementación específica. DCA no implica por sí solo 4 tramos semanales, frecuencia concreta ni split concreto. Si el borrador agrega detalles sin soporte explícito, pedí quitarlos o etiquetarlos como ejemplo opcional.
 
-PROHIBIDO en revisionInstructions pedir nueva investigación, nuevos datos, escenarios probabilísticos, probabilidades numéricas, sensibilidades macro, DCF/múltiplos nuevos, fórmulas, scores, pesos, thresholds, triggers cuantificados o cualquier modelo/cálculo que no exista ya explícitamente en la evidencia provista. Tampoco conviertas incertidumbre en una solicitud al usuario si el Twin puede simplemente declararla.
+CANDIDATOS NUEVOS: es válido que el Twin descubra y recomiende un activo que no esté hoy entre las exposiciones principales. Pero si un activo nuevo aparece en ranking/asignación, debe identificarse como idea nueva surgida del research y debe existir evidencia material que explique por qué merece competir. Haber sido elegido por preflight/research NO es evidencia de superioridad.
 
-revisionInstructions sólo puede ordenar acciones sobre material YA DISPONIBLE: eliminar una conclusión no soportada; degradarla a posibilidad/hipótesis; quitar falsa precisión; reclasificarla como preferencia confirmada si realmente figura en Investor Model; declarar empate/incertidumbre; separar hecho de inferencia; explicitar una limitación existente; o identificar un activo externo como candidato nuevo en vez de tratarlo como preferencia previa.
+TRAZABILIDAD DE TRIGGERS: no permitas que el borrador agregue triggers, riesgos o criterios específicos para un activo que figura sin evidencia en evidenceMatrix, salvo que provengan explícitamente del Investor Model. Si el activo está uncovered/unknown, esos triggers también deben omitirse o declararse fuera de cobertura; no rellenes huecos con conocimiento general.
 
-Si hay salto material, falsa precisión, ranking no comparable, implementación inventada o preferencia inventada, needsRevision=true. Mantené las instrucciones breves y correctivas, no expansivas.`,
+PROHIBIDO en revisionInstructions pedir nueva investigación, nuevos datos, escenarios probabilísticos, probabilidades numéricas, sensibilidades macro, DCF/múltiplos nuevos, fórmulas, scores, pesos, thresholds, triggers cuantificados o cualquier modelo/cálculo que no exista ya explícitamente en la evidencia provista.
+
+revisionInstructions sólo puede ordenar acciones sobre material YA DISPONIBLE: eliminar una conclusión no soportada; degradarla a posibilidad/hipótesis; quitar falsa precisión; reclasificarla como preferencia confirmada si realmente figura en Investor Model; declarar empate/incertidumbre/no-evaluable; separar hecho de inferencia; explicitar una limitación existente; o identificar un activo externo como candidato nuevo.
+
+Si hay salto material, falsa precisión, ranking por cobertura, ranking no comparable, implementación inventada, trigger sin evidencia o preferencia inventada, needsRevision=true. Mantené instrucciones breves y correctivas, no expansivas.`,
     input, max_output_tokens: 1800,
     text: { verbosity: "low", format: { type: "json_schema", name: "twin_epistemic_audit", strict: true, schema: EPISTEMIC_AUDIT_SCHEMA } }, store: false
   });
@@ -96,7 +93,7 @@ async function reviseDecision({ draft, audit, evidenceMatrix, currentProfile, co
   const data = await post({
     model: DEFAULT_MODEL,
     reasoning: { effort: "low" },
-    instructions: `Revisá el borrador sólo para corregir revisionInstructions usando exclusivamente el material ya disponible. No investigues, no agregues hechos y NO crees nueva metodología para defender la conclusión original. Si una conclusión excede la evidencia, degradala. Si la evidencia entre activos no comparte una base comparable suficiente, no conserves un ranking sólo porque cada activo tenga evidencia propia: declaralo no resuelto. No conviertas una preferencia general (como DCA) en frecuencia, tramos o splits específicos no confirmados. Un activo fuera de la cartera puede ser una recomendación válida, pero identificálo como candidato nuevo surgido del research y no como preferencia previa; si no hay puente suficiente para ponerlo por encima de las posiciones actuales, presentalo como idea a considerar. No inventes probabilidades, escenarios, scores, fórmulas, thresholds, valuaciones ni triggers cuantitativos. assumption/unknown no pueden desempatar. Conservá conclusiones que sí estén soportadas. Español rioplatense, directo, máximo 450 palabras.`,
+    instructions: `Revisá el borrador sólo para corregir revisionInstructions usando exclusivamente el material ya disponible. No investigues, no agregues hechos y NO crees nueva metodología para defender la conclusión original. Si una conclusión excede la evidencia, degradala. AUSENCIA DE EVIDENCIA NO ES EVIDENCIA NEGATIVA: un activo cubierto no puede ganar sólo porque otro quedó sin research. Si A tiene evidencia y B está uncovered/unknown, describí A como evaluable y B como indeterminado; no construyas A>B. Si la evidencia entre activos no comparte base comparable suficiente, declaralo no resuelto. No conviertas DCA en frecuencia/tramos/splits no confirmados. Un activo fuera de cartera puede ser una recomendación válida, pero identificálo como candidato nuevo y exigí evidencia para ponerlo por encima de posiciones actuales. No agregues triggers ni riesgos específicos de activos sin evidencia en esta corrida. No inventes probabilidades, escenarios, scores, fórmulas, thresholds ni valuaciones. assumption/unknown no pueden desempatar. Conservá conclusiones soportadas. Español rioplatense, directo, máximo 450 palabras.`,
     input, max_output_tokens: 2200, text: { verbosity: "low" }, store: false
   });
   return { answer: outputText(data) || draft, data };
@@ -105,13 +102,7 @@ async function reviseDecision({ draft, audit, evidenceMatrix, currentProfile, co
 async function auditAndReviseDecision(args) {
   const { audit, data: auditData } = await auditDecision(args);
   const { answer, data: revisionData } = await reviseDecision({ ...args, audit });
-  return {
-    answer, audit,
-    usage: mergeUsage(auditData?.usage, revisionData?.usage),
-    apiRequests: 1 + (revisionData ? 1 : 0),
-    model: revisionData?.model || auditData?.model || DEFAULT_MODEL,
-    responseId: revisionData?.id || auditData?.id || null
-  };
+  return { answer, audit, usage: mergeUsage(auditData?.usage, revisionData?.usage), apiRequests: 1 + (revisionData ? 1 : 0), model: revisionData?.model || auditData?.model || DEFAULT_MODEL, responseId: revisionData?.id || auditData?.id || null };
 }
 
 module.exports = { EPISTEMIC_AUDIT_SCHEMA, auditAndReviseDecision };
