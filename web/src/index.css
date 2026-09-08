@@ -5,27 +5,69 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+.scrollbar-hide::-webkit-scrollbar { display: none; }
 
-.scrollbar-hide::-webkit-scrollbar {
-  display: none;
-}
+:root { background: #020617; }
+html { background: #020617; height: 100%; }
+body { background: #020617; min-height: 100%; margin: 0; }
+#root { background: #020617; min-height: 100vh; }
 
-:root {
-  background: #020617;
+/* Digital Investment Twin — visual system */
+.twin-shell {
+  --twin-line: rgba(148,163,184,.16);
+  --twin-line-strong: rgba(129,140,248,.25);
+  --twin-surface: rgba(9,16,34,.82);
+  --twin-surface-2: rgba(15,23,42,.72);
+  position: relative;
+  isolation: isolate;
 }
-
-html {
-  background: #020617;
-  height: 100%;
+.twin-shell::before {
+  content:"";
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  z-index:-1;
+  background:
+    radial-gradient(700px 420px at 18% 5%, rgba(79,70,229,.12), transparent 62%),
+    radial-gradient(620px 420px at 92% 18%, rgba(14,165,233,.07), transparent 66%),
+    linear-gradient(180deg,#020617 0%,#030817 48%,#020617 100%);
 }
-
-body {
-  background: #020617;
-  min-height: 100%;
-  margin: 0;
+.twin-glass {
+  background: linear-gradient(145deg,rgba(15,23,42,.86),rgba(5,10,25,.78));
+  border:1px solid var(--twin-line);
+  box-shadow:0 18px 55px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.025);
+  backdrop-filter: blur(14px);
 }
-
-#root {
-  background: #020617;
-  min-height: 100vh;
+.twin-hero {
+  position:relative;
+  overflow:hidden;
+  background:linear-gradient(120deg,rgba(15,23,42,.94),rgba(8,12,29,.88) 58%,rgba(30,27,75,.48));
+  border:1px solid rgba(129,140,248,.2);
+  box-shadow:0 24px 70px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.04);
 }
+.twin-hero::after {
+  content:"";position:absolute;width:280px;height:280px;border-radius:999px;right:-110px;top:-170px;
+  background:rgba(99,102,241,.13);filter:blur(2px);pointer-events:none;
+}
+.twin-brand-mark {
+  width:42px;height:42px;border-radius:14px;display:grid;place-items:center;position:relative;flex:none;
+  background:linear-gradient(145deg,rgba(99,102,241,.3),rgba(14,165,233,.12));
+  border:1px solid rgba(129,140,248,.28);box-shadow:0 10px 30px rgba(79,70,229,.18),inset 0 1px 0 rgba(255,255,255,.08);
+}
+.twin-brand-mark::before { content:"✦";font-size:20px;color:#c7d2fe;text-shadow:0 0 22px rgba(129,140,248,.8); }
+.twin-card {
+  background:linear-gradient(145deg,rgba(15,23,42,.78),rgba(7,12,27,.72));
+  border:1px solid rgba(100,116,139,.24);
+  box-shadow:0 14px 40px rgba(0,0,0,.16),inset 0 1px 0 rgba(255,255,255,.025);
+  transition:border-color .2s ease,transform .2s ease,box-shadow .2s ease;
+}
+.twin-card:hover { border-color:rgba(129,140,248,.24);box-shadow:0 18px 48px rgba(0,0,0,.2); }
+.twin-stat-icon { width:34px;height:34px;border-radius:11px;display:grid;place-items:center;background:rgba(99,102,241,.1);border:1px solid rgba(129,140,248,.14);color:#a5b4fc;font-size:14px; }
+.twin-asset-logo { width:34px;height:34px;border-radius:999px;display:grid;place-items:center;font-weight:700;font-size:11px;background:linear-gradient(145deg,rgba(51,65,85,.85),rgba(15,23,42,.95));border:1px solid rgba(148,163,184,.2);box-shadow:inset 0 1px 0 rgba(255,255,255,.05); }
+.twin-asset-logo[data-asset="BTC"] { color:#fbbf24;background:linear-gradient(145deg,rgba(245,158,11,.16),rgba(15,23,42,.95));border-color:rgba(245,158,11,.25); }
+.twin-asset-logo[data-asset="ETH"] { color:#a5b4fc;background:linear-gradient(145deg,rgba(99,102,241,.18),rgba(15,23,42,.95));border-color:rgba(129,140,248,.26); }
+.twin-nav { background:rgba(15,23,42,.42);border:1px solid rgba(100,116,139,.14);padding:4px;border-radius:14px; }
+.twin-nav button { position:relative; }
+.twin-nav button[data-active="true"] { box-shadow:0 7px 20px rgba(79,70,229,.18),inset 0 1px 0 rgba(255,255,255,.05); }
+.twin-kicker { letter-spacing:.16em;text-transform:uppercase;font-size:9px;color:#64748b; }
+.twin-divider { height:1px;background:linear-gradient(90deg,transparent,rgba(129,140,248,.2),transparent); }
