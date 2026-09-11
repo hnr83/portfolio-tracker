@@ -116,7 +116,8 @@ export default function DigitalInvestmentTwinView({
     [chat, setChat] = useState([]),
     [draft, setDraft] = useState(""),
     [chatLoading, setChatLoading] = useState(false),
-    [chatError, setChatError] = useState("");
+    [chatError, setChatError] = useState(""),
+    [custodyRows, setCustodyRows] = useState([]);
   const chatEndRef = useRef(null);
   useEffect(() => {
     let c = false;
@@ -161,6 +162,21 @@ export default function DigitalInvestmentTwinView({
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [chat, chatLoading]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await apiFetch("/api/portfolio/custody-audit");
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!cancelled)
+          setCustodyRows(Array.isArray(data?.rows) ? data.rows : []);
+      } catch {}
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const context = useMemo(() => {
     const total = Number(
         summary?.total_with_trading_usd || summary?.total_market_usd || 0,
@@ -179,17 +195,16 @@ export default function DigitalInvestmentTwinView({
       non = Math.max(0, iv - crypto),
       exposures = buildExposures(investments, total),
       holdings = buildHoldings(positions, total),
-      ownership = buildOwnership(investments, total),
-      ownerHoldings = investments.map((row) => ({
+      ownership = buildOwnership(custodyRows, total),
+      ownerHoldings = custodyRows.map((row) => ({
         ticker: tickerOf(row),
         normalized_ticker: economic(row),
-        category: CRYPTO.has(economic(row)) ? "CRYPTO" : row.category,
+        category: economic(row) === "USDT" ? "CRYPTO" : "PORTFOLIO",
+        instrument_type: economic(row) === "USDT" ? "DIGITAL_DOLLAR" : "ASSET",
         owner: row.owner || "Sin titular",
         broker: row.broker || row.platform || null,
         quantity: Number(row.quantity_net ?? row.quantity ?? 0),
         market_value_usd: Number(row.market_value_usd || 0),
-        cost_value_usd: Number(row.cost_value_usd || 0),
-        pnl_usd: Number(row.pnl_usd || 0),
       }));
     return {
       portfolioTotal: total,
@@ -211,7 +226,7 @@ export default function DigitalInvestmentTwinView({
       topTicker: exposures[0]?.ticker || "",
       topWeight: exposures[0]?.weight || 0,
     };
-  }, [summary, positions, investments]);
+  }, [summary, positions, investments, custodyRows]);
   const planner = useMemo(
     () =>
       scenario
