@@ -19,10 +19,17 @@ function parseJson(text){return JSON.parse(String(text||"").trim().replace(/^```
 async function post(body){if(!process.env.OPENAI_API_KEY){const error=new Error("OPENAI_API_KEY is not configured");error.code="OPENAI_NOT_CONFIGURED";throw error}return(await axios.post(OPENAI_RESPONSES_URL,body,{headers:{Authorization:`Bearer ${process.env.OPENAI_API_KEY}`,"Content-Type":"application/json"},timeout:60000})).data}
 function usageStage(stage,data){return{stage,model:data?.model||MODEL,apiRequests:1,webSearchCalls:0,usage:data?.usage||null}}
 function lastQuestion(messages=[]){return String([...messages].reverse().find(x=>x?.role==="user")?.content||"").trim()}
+function normalizePlanTaxonomy(plan={},question=""){
+  const normalized={...plan,filters:{...(plan.filters||{})}};
+  const q=text(question);
+  if(/\bcriptomonedas?\b/.test(q))normalized.filters.category="cryptocurrency";
+  else if(/\b(crypto|cripto)\b/.test(q))normalized.filters.category="crypto";
+  return normalized;
+}
 
 async function planPortfolioQuestion(messages=[]){
   const question=lastQuestion(messages),data=await post({model:MODEL,reasoning:{effort:"low"},instructions:`Clasificá una pregunta para una app personal de inversiones. PORTFOLIO_DATA si puede responderse exclusivamente con datos propios: holdings, movimientos, titulares, brokers/plataformas, aportes, compras/ventas, PnL/performance histórica o trading. TWIN_ANALYSIS si pide opinión, recomendación, explicación causal, patrones, riesgo cualitativo o qué debería hacer. Taxonomía propia: "crypto" es la categoría CRYPTO de dólares digitales (USDT). BTC, ETH, SOL y RON son criptomonedas económicas pero están registrados como category=PORTFOLIO e instrument_type=ASSET; para preguntas que digan "criptomonedas" usá category=cryptocurrency, y para una moneda concreta usá ticker. Para distribución por broker/plataforma usá holdings y agrupá por broker. Elegí sólo los datasets mínimos. metric y groupBy deben ser nombres conceptuales breves; nunca generes SQL. Fechas en YYYY-MM-DD; resolvé referencias como "agosto" usando fecha actual ${new Date().toISOString().slice(0,10)}.`,input:question,max_output_tokens:700,text:{verbosity:"low",format:{type:"json_schema",name:"portfolio_query_plan",strict:true,schema:PLAN_SCHEMA}},store:false});
-  return{plan:parseJson(outputText(data)),usageStage:usageStage("data_planner",data)};
+  return{plan:normalizePlanTaxonomy(parseJson(outputText(data)),question),usageStage:usageStage("data_planner",data)};
 }
 
 function value(row,...keys){for(const key of keys)if(row?.[key]!=null)return row[key];return null}
@@ -67,4 +74,4 @@ async function answerPlannedQuestion({messages,plan,data}){
 
 async function runPortfolioDataAgent(messages=[],requestContext={}){const planned=await planPortfolioQuestion(messages);if(planned.plan.route!=="PORTFOLIO_DATA")return{handled:false,plan:planned.plan,usageStages:[planned.usageStage]};const data=await executePlan(planned.plan,requestContext),answered=await answerPlannedQuestion({messages,plan:planned.plan,data});return{handled:true,answer:answered.answer,plan:planned.plan,dataSources:planned.plan.datasets,usageStages:[planned.usageStage,answered.usageStage]}}
 
-module.exports={executePlan,matches,planPortfolioQuestion,runPortfolioDataAgent};
+module.exports={executePlan,matches,normalizePlanTaxonomy,planPortfolioQuestion,runPortfolioDataAgent};
