@@ -40,7 +40,10 @@ function findHolding(question, portfolio = {}) {
 
 function answerPortfolioQuestion(question, context = {}) {
   const portfolio = context.portfolio || context || {};
-  if (/\b(titular|titulares|nombre de|horacio|valeria|vale|owner)\b/i.test(question) && Array.isArray(portfolio.ownership)) {
+  const ownershipQuestion=/\b(titular|titulares|nombre de|horacio|valeria|vale|owner)\b/i.test(question);
+  const ownershipQualifier=/\b(crypto|cripto|acci[oó]n|cedear|etf|cash|usdt|btc|eth|sol|broker|plataforma|trading|compra|venta|aporte|durante|desde|hasta|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|20\d{2})\b/i.test(question);
+  if (ownershipQuestion && ownershipQualifier) return null;
+  if (ownershipQuestion && !ownershipQualifier && Array.isArray(portfolio.ownership)) {
     const requestedOwners = portfolio.ownership.filter((item) => new RegExp(`\\b${String(item.owner).replace(/[^a-záéíóúüñ0-9]/gi, "")}\\b`, "i").test(question));
     const rows = requestedOwners.length === 1 ? requestedOwners : portfolio.ownership;
     if (rows.length) return rows.map((item) => `${item.owner}: ${usd(item.valueUsd)} en ${number(item.assetCount, 0)} activos (${percent(item.weightPct)})`).join(" · ") + ".";

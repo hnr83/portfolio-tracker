@@ -27,13 +27,14 @@ async function planPortfolioQuestion(messages=[]){
 
 function value(row,...keys){for(const key of keys)if(row?.[key]!=null)return row[key];return null}
 function text(value){return String(value??"").trim().toLowerCase()}
+function ownerText(value){const normalized=text(value);return normalized==="vale"?"valeria":normalized}
 function rowDate(row){const raw=value(row,"fecha","date","created_at","closed_at","opened_at");return String(raw?.value||raw||"").slice(0,10)}
 function matches(row,filters={}){
   const ticker=text(value(row,"normalized_ticker","ticker","instrument","asset","underlying_ticker"));
   if(filters.ticker&&!ticker.includes(text(filters.ticker)))return false;
-  if(filters.owner&&text(value(row,"owner","titular"))!==text(filters.owner))return false;
+  if(filters.owner&&ownerText(value(row,"owner","titular"))!==ownerText(filters.owner))return false;
   if(filters.broker&&text(value(row,"broker","platform","exchange"))!==text(filters.broker))return false;
-  if(filters.category&&text(value(row,"category","asset_class"))!==text(filters.category))return false;
+  if(filters.category){const requested=text(filters.category),category=text(value(row,"category","asset_class")),crypto=["btc","eth","sol","usdt","ada","ron"].includes(ticker.replace(/ars$|usd$/,""));if((requested==="crypto"||requested==="cripto")?!crypto:category!==requested)return false}
   if(filters.side&&text(value(row,"side","direction"))!==text(filters.side))return false;
   const date=rowDate(row);if(filters.dateFrom&&date&&date<filters.dateFrom)return false;if(filters.dateTo&&date&&date>filters.dateTo)return false;
   return true;
