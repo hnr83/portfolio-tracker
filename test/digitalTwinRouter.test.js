@@ -5,7 +5,7 @@ process.env.BIGQUERY_PROJECT_ID ||= "test-project";
 process.env.BIGQUERY_DATASET_ID ||= "test-dataset";
 
 const { answerPortfolioQuestion, classifyTwinRoute } = require("../src/services/digitalTwinRouterService");
-const { matches } = require("../src/services/digitalTwinPortfolioAgentService");
+const { matches, normalizePlanTaxonomy } = require("../src/services/digitalTwinPortfolioAgentService");
 
 const messages = (content) => [{ role: "user", content }];
 
@@ -65,6 +65,12 @@ test("distinguishes digital-dollar crypto from cryptocurrencies", () => {
   assert.equal(matches({ normalized_ticker: "BTC", category: "PORTFOLIO", owner: "Valeria" }, { category: "crypto", owner: "Valeria" }), false);
   assert.equal(matches({ normalized_ticker: "BTC", category: "PORTFOLIO", owner: "Valeria" }, { category: "cryptocurrency", owner: "Valeria" }), true);
   assert.equal(matches({ normalized_ticker: "TSLA", category: "PORTFOLIO", owner: "Valeria" }, { category: "cryptocurrency", owner: "Valeria" }), false);
+});
+
+test("enforces the app taxonomy after LLM planning", () => {
+  const wrongPlan = { filters: { owner: "Valeria", category: "cryptocurrency" } };
+  assert.equal(normalizePlanTaxonomy(wrongPlan, "¿Cuánto tiene Vale en crypto?").filters.category, "crypto");
+  assert.equal(normalizePlanTaxonomy(wrongPlan, "¿Cuánto tiene Vale en criptomonedas?").filters.category, "cryptocurrency");
 });
 
 test("normalizes Vale as Valeria in generic filters", () => {
