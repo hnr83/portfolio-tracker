@@ -1,6 +1,77 @@
 import React from "react";
 import { formatDate } from "../../utils/formatters";
 
+function TransactionInfo({ movement }) {
+    const description = String(movement.description || "").trim();
+    const source = String(movement.source_table || "").trim();
+    const groupId = String(movement.transaction_group_id || "").trim();
+
+    const hasDetails = Boolean(
+        description || source || movement.broker || movement.owner || groupId
+    );
+
+    return (
+        <span className="relative inline-flex shrink-0 items-center group/info">
+            <button
+                type="button"
+                aria-label="Ver detalle de la transacción"
+                className={`flex h-5 w-5 items-center justify-center rounded-full border text-[11px] font-semibold leading-none transition ${
+                    hasDetails
+                        ? "border-indigo-400/50 bg-indigo-500/10 text-indigo-300 hover:border-indigo-300 hover:bg-indigo-500/20 focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+                        : "cursor-default border-slate-700/80 bg-slate-900/60 text-slate-600"
+                }`}
+            >
+                i
+            </button>
+
+            {hasDetails && (
+                <div className="pointer-events-none invisible absolute left-1/2 top-full z-50 mt-2 w-80 -translate-x-1/2 rounded-xl border border-slate-700 bg-slate-950/95 p-3 text-left opacity-0 shadow-2xl backdrop-blur transition group-hover/info:visible group-hover/info:opacity-100 group-focus-within/info:visible group-focus-within/info:opacity-100">
+                    <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                        Detalle de la transacción
+                    </div>
+
+                    <div className="space-y-2 text-xs leading-relaxed text-slate-300">
+                        {description && (
+                            <div>
+                                <span className="text-slate-500">Detalle:</span>{" "}
+                                <span className="text-slate-100">{description}</span>
+                            </div>
+                        )}
+
+                        {source && (
+                            <div>
+                                <span className="text-slate-500">Origen:</span>{" "}
+                                <span className="text-slate-200">{source}</span>
+                            </div>
+                        )}
+
+                        {movement.broker && (
+                            <div>
+                                <span className="text-slate-500">Broker:</span>{" "}
+                                <span className="text-slate-200">{movement.broker}</span>
+                            </div>
+                        )}
+
+                        {movement.owner && (
+                            <div>
+                                <span className="text-slate-500">Owner:</span>{" "}
+                                <span className="text-slate-200">{movement.owner}</span>
+                            </div>
+                        )}
+
+                        {groupId && (
+                            <div className="break-all">
+                                <span className="text-slate-500">Grupo:</span>{" "}
+                                <span className="text-slate-300">{groupId}</span>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+        </span>
+    );
+}
+
 export default function TransactionsView({
     selectedAssetMovements,
     setSelectedAssetMovements,
@@ -158,7 +229,7 @@ export default function TransactionsView({
             <FilterToolbar right={`${movementsToShow.length} resultados`}>
                 <input
                     type="text"
-                    placeholder="Buscar ticker, tipo o broker..."
+                    placeholder="Buscar ticker, tipo, broker o detalle..."
                     value={movementSearch}
                     onChange={(e) => setMovementSearch(e.target.value)}
                     className="rounded-xl border border-slate-700/70 bg-slate-950/90 px-4 py-2.5 text-sm text-white outline-none placeholder:text-slate-500 transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
@@ -208,7 +279,12 @@ export default function TransactionsView({
                                     }`}
                             >
                                 <td className="px-4 py-4 text-slate-300">{formatDate(m.fecha)}</td>
-                                <td className="px-4 py-4 text-slate-200">{m.movement_type}</td>
+                                <td className="px-4 py-4 text-slate-200">
+                                    <div className="flex items-center gap-2 whitespace-nowrap">
+                                        <span>{m.movement_type}</span>
+                                        <TransactionInfo movement={m} />
+                                    </div>
+                                </td>
                                 <td className="px-4 py-4 text-slate-300">{m.category}</td>
                                 <td className="px-4 py-4 font-semibold text-white">{m.ticker}</td>
                                 <td className="px-4 py-4 text-slate-300">{m.instrument_type || "-"}</td>
