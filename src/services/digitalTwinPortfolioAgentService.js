@@ -22,13 +22,15 @@ function lastQuestion(messages=[]){return String([...messages].reverse().find(x=
 function normalizePlanTaxonomy(plan={},question=""){
   const normalized={...plan,filters:{...(plan.filters||{})}};
   const q=text(question);
-  if(/\bcriptomonedas?\b/.test(q))normalized.filters.category="cryptocurrency";
-  else if(/\b(crypto|cripto)\b/.test(q))normalized.filters.category="crypto";
+  if(/\busdt\b|d[oó]lares? digitales?/.test(q)){
+    normalized.filters.ticker="USDT";
+    normalized.filters.category="crypto";
+  }else if(/\b(crypto|cripto|criptomonedas?)\b/.test(q))normalized.filters.category="cryptocurrency";
   return normalized;
 }
 
 async function planPortfolioQuestion(messages=[]){
-  const question=lastQuestion(messages),data=await post({model:MODEL,reasoning:{effort:"low"},instructions:`Clasificá una pregunta para una app personal de inversiones. PORTFOLIO_DATA si puede responderse exclusivamente con datos propios: holdings, movimientos, titulares, brokers/plataformas, aportes, compras/ventas, PnL/performance histórica o trading. TWIN_ANALYSIS si pide opinión, recomendación, explicación causal, patrones, riesgo cualitativo o qué debería hacer. Taxonomía propia: "crypto" es la categoría CRYPTO de dólares digitales (USDT). BTC, ETH, SOL y RON son criptomonedas económicas pero están registrados como category=PORTFOLIO e instrument_type=ASSET; para preguntas que digan "criptomonedas" usá category=cryptocurrency, y para una moneda concreta usá ticker. Para distribución por broker/plataforma usá holdings y agrupá por broker. Elegí sólo los datasets mínimos. metric y groupBy deben ser nombres conceptuales breves; nunca generes SQL. Fechas en YYYY-MM-DD; resolvé referencias como "agosto" usando fecha actual ${new Date().toISOString().slice(0,10)}.`,input:question,max_output_tokens:700,text:{verbosity:"low",format:{type:"json_schema",name:"portfolio_query_plan",strict:true,schema:PLAN_SCHEMA}},store:false});
+  const question=lastQuestion(messages),data=await post({model:MODEL,reasoning:{effort:"low"},instructions:`Clasificá una pregunta para una app personal de inversiones. PORTFOLIO_DATA si puede responderse exclusivamente con datos propios: holdings, movimientos, titulares, brokers/plataformas, aportes, compras/ventas, PnL/performance histórica o trading. TWIN_ANALYSIS si pide opinión, recomendación, explicación causal, patrones, riesgo cualitativo o qué debería hacer. Vocabulario del usuario: "crypto", "cripto" y "criptomonedas" significan criptomonedas económicas como BTC, ETH, SOL y RON, aunque estén registradas como category=PORTFOLIO e instrument_type=ASSET; usá category=cryptocurrency. Sólo cuando mencione USDT o dólares digitales usá ticker=USDT y category=crypto, que es su categoría técnica. Para una moneda concreta usá ticker. Para distribución por broker/plataforma usá holdings y agrupá por broker. Elegí sólo los datasets mínimos. metric y groupBy deben ser nombres conceptuales breves; nunca generes SQL. Fechas en YYYY-MM-DD; resolvé referencias como "agosto" usando fecha actual ${new Date().toISOString().slice(0,10)}.`,input:question,max_output_tokens:700,text:{verbosity:"low",format:{type:"json_schema",name:"portfolio_query_plan",strict:true,schema:PLAN_SCHEMA}},store:false});
   return{plan:normalizePlanTaxonomy(parseJson(outputText(data)),question),usageStage:usageStage("data_planner",data)};
 }
 
@@ -41,7 +43,7 @@ function matches(row,filters={}){
   if(filters.ticker&&!ticker.includes(text(filters.ticker)))return false;
   if(filters.owner&&ownerText(value(row,"owner","titular"))!==ownerText(filters.owner))return false;
   if(filters.broker&&text(value(row,"broker","platform","exchange"))!==text(filters.broker))return false;
-  if(filters.category){const requested=text(filters.category),category=text(value(row,"category","asset_class")),economicTicker=ticker.replace(/^currency:|ars$|usd$/g,""),isCryptocurrency=["btc","eth","sol","ron"].includes(economicTicker);if(requested==="crypto"||requested==="cripto"){if(category!=="crypto")return false}else if(requested==="cryptocurrency"||requested==="criptomoneda"||requested==="criptomonedas"){if(!isCryptocurrency)return false}else if(category!==requested)return false}
+  if(filters.category){const requested=text(filters.category),category=text(value(row,"category","asset_class")),economicTicker=ticker.replace(/^currency:|ars$|usd$/g,""),isCryptocurrency=["btc","eth","sol","ron"].includes(economicTicker);if(requested==="cryptocurrency"||requested==="criptomoneda"||requested==="criptomonedas"){if(!isCryptocurrency)return false}else if(category!==requested)return false}
   if(filters.side&&text(value(row,"side","direction"))!==text(filters.side))return false;
   const date=rowDate(row);if(filters.dateFrom&&date&&date<filters.dateFrom)return false;if(filters.dateTo&&date&&date>filters.dateTo)return false;
   return true;
