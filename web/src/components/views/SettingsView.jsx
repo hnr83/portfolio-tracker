@@ -73,6 +73,7 @@ function UsageTooltip({ active, payload, label }) {
 
 export default function SettingsView() {
   const [section] = useState("ai-usage");
+  const [scope, setScope] = useState("month");
   const [period, setPeriod] = useState(monthValue());
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -82,7 +83,8 @@ export default function SettingsView() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await apiFetch(`/api/digital-twin/usage?period=${encodeURIComponent(period)}`);
+      const query = scope === "month" ? `period=${encodeURIComponent(period)}` : `range=${scope}`;
+      const response = await apiFetch(`/api/digital-twin/usage?${query}`);
       const body = await response.json();
       if (!response.ok) throw new Error(body?.error || "No se pudo cargar el uso de IA");
       setData(body);
@@ -92,7 +94,7 @@ export default function SettingsView() {
     } finally {
       setLoading(false);
     }
-  }, [period]);
+  }, [period, scope]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -104,7 +106,7 @@ export default function SettingsView() {
   return <section className="min-h-[calc(100vh-2rem)] text-slate-200">
     <header className="flex flex-col gap-4 border-b border-slate-800/70 pb-6 sm:flex-row sm:items-end sm:justify-between">
       <div><div className="text-[10px] uppercase tracking-[.2em] text-indigo-300">Configuración</div><h1 className="mt-2 text-3xl font-semibold tracking-[-.04em] text-white">Settings</h1><p className="mt-2 text-sm text-slate-500">Controlá cómo funciona y cuánto cuesta la inteligencia de tu portfolio.</p></div>
-      <select value={period} onChange={(event) => setPeriod(event.target.value)} className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-xs capitalize text-slate-200 outline-none focus:border-indigo-500">{periods.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select>
+      <div className="flex flex-wrap items-center gap-2"><div className="flex rounded-xl border border-slate-700 bg-slate-900/80 p-1">{["7d", "14d", "30d", "month"].map((value) => <button key={value} type="button" onClick={() => setScope(value)} className={`rounded-lg px-3 py-2 text-[11px] transition ${scope === value ? "bg-indigo-500/20 text-indigo-200" : "text-slate-500 hover:text-slate-300"}`}>{value === "month" ? "Mes" : value}</button>)}</div>{scope === "month" && <select value={period} onChange={(event) => setPeriod(event.target.value)} className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-xs capitalize text-slate-200 outline-none focus:border-indigo-500">{periods.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select>}</div>
     </header>
 
     <div className="mt-6 grid gap-6 lg:grid-cols-[210px_minmax(0,1fr)]">
@@ -116,10 +118,10 @@ export default function SettingsView() {
         {error && <div className="mt-5 rounded-2xl border border-amber-400/20 bg-amber-500/[.06] p-4 text-xs text-amber-300">{error}</div>}
         {loading && !data ? <div className="mt-16 text-center text-sm text-slate-500">Cargando uso de IA…</div> : <>
           <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <StatCard label="Costo del mes" value={usd(summary.costUsd, 2)} detail={summary.unpricedConversations ? `${summary.unpricedConversations} consultas aún sin precio` : "Costo registrado y estimado"} accent />
+            <StatCard label="Costo del período" value={usd(summary.costUsd, 2)} detail={summary.unpricedConversations ? `${summary.unpricedConversations} consultas aún sin precio` : `${usd(summary.reportedCostUsd)} reportado · ${usd(summary.estimatedCostUsd)} estimado`} accent />
             <StatCard label="Consultas" value={compact(summary.conversations)} detail={`${compact(summary.apiRequests)} llamadas a modelos`} />
             <StatCard label="Tokens" value={compact(summary.totalTokens)} detail={`${compact(summary.cachedTokens)} desde caché`} />
-            <StatCard label="Costo promedio" value={usd(summary.averageCostUsd)} detail="Por consulta del Twin" />
+            <StatCard label="Costo promedio" value={summary.averageCostUsd == null ? "—" : usd(summary.averageCostUsd)} detail={`Sobre ${summary.pricedConversations || 0} consultas valuadas`} />
           </div>
 
           <div className="mt-4 grid gap-4 xl:grid-cols-[1.35fr_.65fr]">
@@ -132,9 +134,9 @@ export default function SettingsView() {
             <article className="rounded-[22px] border border-slate-800 bg-slate-950/35 p-5"><h3 className="text-sm font-medium text-white">Por función</h3><div className="mt-5 space-y-5">{data?.byOperation?.length ? data.byOperation.map((item) => <BreakdownRow key={item.operationType} label={operationLabel(item.operationType)} value={item.costUsd} max={operationMax} detail={`${usd(item.costUsd)} · ${item.conversations}`} />) : <div className="text-xs text-slate-600">Sin actividad en este período.</div>}</div></article>
           </div>
 
-          <article className="mt-4 overflow-hidden rounded-[22px] border border-slate-800 bg-slate-950/35"><div className="flex items-center justify-between border-b border-slate-800 px-5 py-4"><div><h3 className="text-sm font-medium text-white">Actividad reciente</h3><p className="mt-1 text-[11px] text-slate-600">Últimas 20 consultas registradas</p></div>{summary.webSearchCalls > 0 && <span className="rounded-full border border-sky-400/15 bg-sky-500/[.06] px-2.5 py-1 text-[10px] text-sky-300">{summary.webSearchCalls} búsquedas web</span>}</div><div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left text-xs"><thead className="text-[9px] uppercase tracking-[.12em] text-slate-600"><tr><th className="px-5 py-3 font-medium">Fecha</th><th className="px-3 py-3 font-medium">Función</th><th className="px-3 py-3 font-medium">Modelo</th><th className="px-3 py-3 text-right font-medium">Tokens</th><th className="px-5 py-3 text-right font-medium">Costo</th></tr></thead><tbody className="divide-y divide-slate-800/70">{data?.recent?.map((item) => <tr key={item.id} className="text-slate-400"><td className="whitespace-nowrap px-5 py-3">{dateTime(item.createdAt)}</td><td className="px-3 py-3 text-slate-300">{operationLabel(item.operationType)}</td><td className="px-3 py-3">{item.model}</td><td className="px-3 py-3 text-right tabular-nums">{compact(item.totalTokens)}</td><td className="px-5 py-3 text-right tabular-nums text-slate-200">{item.costUsd == null ? "Sin precio" : usd(item.costUsd)}</td></tr>)}</tbody></table>{!data?.recent?.length && <div className="py-10 text-center text-xs text-slate-600">Sin actividad en este período.</div>}</div></article>
+          <article className="mt-4 overflow-hidden rounded-[22px] border border-slate-800 bg-slate-950/35"><div className="flex items-center justify-between border-b border-slate-800 px-5 py-4"><div><h3 className="text-sm font-medium text-white">Actividad reciente</h3><p className="mt-1 text-[11px] text-slate-600">Últimas 20 consultas registradas</p></div>{summary.webSearchCalls > 0 && <span className="rounded-full border border-sky-400/15 bg-sky-500/[.06] px-2.5 py-1 text-[10px] text-sky-300">{summary.webSearchCalls} búsquedas web</span>}</div><div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left text-xs"><thead className="text-[9px] uppercase tracking-[.12em] text-slate-600"><tr><th className="px-5 py-3 font-medium">Fecha</th><th className="px-3 py-3 font-medium">Función</th><th className="px-3 py-3 font-medium">Modelo</th><th className="px-3 py-3 text-right font-medium">Tokens</th><th className="px-5 py-3 text-right font-medium">Costo</th></tr></thead><tbody className="divide-y divide-slate-800/70">{data?.recent?.map((item) => <tr key={item.id} className="text-slate-400"><td className="whitespace-nowrap px-5 py-3">{dateTime(item.createdAt)}</td><td className="px-3 py-3 text-slate-300">{operationLabel(item.operationType)}</td><td className="px-3 py-3">{item.model}</td><td className="px-3 py-3 text-right tabular-nums">{compact(item.totalTokens)}</td><td className="px-5 py-3 text-right tabular-nums text-slate-200"><div>{item.costUsd == null ? "Sin precio" : usd(item.costUsd)}</div><div className={`mt-0.5 text-[9px] uppercase tracking-[.08em] ${item.costKind === "reported" ? "text-emerald-400" : item.costKind === "estimated" ? "text-indigo-400" : "text-amber-400"}`}>{item.costKind === "reported" ? "reportado" : item.costKind === "estimated" ? "estimado" : "sin valuar"}</div></td></tr>)}</tbody></table>{!data?.recent?.length && <div className="py-10 text-center text-xs text-slate-600">Sin actividad en este período.</div>}</div></article>
 
-          <div className="mt-4 grid gap-3 sm:grid-cols-2"><div className="rounded-2xl border border-slate-800 bg-slate-950/25 p-4"><div className="text-[10px] uppercase tracking-[.12em] text-slate-600">Resueltas sin LLM</div><div className="mt-2 text-lg font-medium text-white">{summary.internalResolutionRate == null ? "—" : percent(summary.internalResolutionRate)}</div><p className="mt-1 text-[11px] leading-5 text-slate-600">Se completará cuando activemos el router de consultas internas.</p></div><div className="rounded-2xl border border-slate-800 bg-slate-950/25 p-4"><div className="text-[10px] uppercase tracking-[.12em] text-slate-600">Alcance del costo</div><div className="mt-2 text-lg font-medium text-white">OpenAI + búsqueda</div><p className="mt-1 text-[11px] leading-5 text-slate-600">No incluye el costo base de Cloud Run ni BigQuery.</p></div></div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2"><div className="rounded-2xl border border-slate-800 bg-slate-950/25 p-4"><div className="text-[10px] uppercase tracking-[.12em] text-slate-600">Resueltas sin LLM</div><div className="mt-2 text-lg font-medium text-white">{summary.internalResolutionRate == null ? "—" : percent(summary.internalResolutionRate)}</div><p className="mt-1 text-[11px] leading-5 text-slate-600">Se completará cuando activemos el router de consultas internas.</p></div><div className="rounded-2xl border border-slate-800 bg-slate-950/25 p-4"><div className="text-[10px] uppercase tracking-[.12em] text-slate-600">Conciliación</div><div className="mt-2 text-lg font-medium text-white">{summary.unpricedConversations ? "Parcial" : "Uso valuado"}</div><p className="mt-1 text-[11px] leading-5 text-slate-600">La vista incluye estimaciones por tokens. OpenAI puede incluir otras API keys o funciones del mismo proyecto.</p></div></div>
         </>}
       </main>
     </div>
