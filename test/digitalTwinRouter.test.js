@@ -60,22 +60,24 @@ test("generic data tools combine owner, asset, broker and dates", () => {
   assert.equal(matches(row, { dateFrom: "2026-09-01" }), false);
 });
 
-test("recognizes crypto economically even when the portfolio category is generic", () => {
-  assert.equal(matches({ normalized_ticker: "BTC", category: "PORTFOLIO", owner: "Valeria" }, { category: "crypto", owner: "Valeria" }), true);
-  assert.equal(matches({ normalized_ticker: "TSLA", category: "PORTFOLIO", owner: "Valeria" }, { category: "crypto", owner: "Valeria" }), false);
+test("distinguishes digital-dollar crypto from cryptocurrencies", () => {
+  assert.equal(matches({ normalized_ticker: "USDT", category: "CRYPTO", owner: "Valeria" }, { category: "crypto", owner: "Valeria" }), true);
+  assert.equal(matches({ normalized_ticker: "BTC", category: "PORTFOLIO", owner: "Valeria" }, { category: "crypto", owner: "Valeria" }), false);
+  assert.equal(matches({ normalized_ticker: "BTC", category: "PORTFOLIO", owner: "Valeria" }, { category: "cryptocurrency", owner: "Valeria" }), true);
+  assert.equal(matches({ normalized_ticker: "TSLA", category: "PORTFOLIO", owner: "Valeria" }, { category: "cryptocurrency", owner: "Valeria" }), false);
 });
 
 test("normalizes Vale as Valeria in generic filters", () => {
-  assert.equal(matches({ ticker: "ETH", owner: "Valeria", category: "PORTFOLIO" }, { owner: "Vale", category: "crypto" }), true);
+  assert.equal(matches({ ticker: "ETH", owner: "Valeria", category: "PORTFOLIO" }, { owner: "Vale", category: "cryptocurrency" }), true);
 });
 
 test("uses owner-aware holdings from the request context", async () => {
   const plan = { datasets: ["holdings"], filters: { owner: "Valeria", category: "crypto" } };
   const data = await require("../src/services/digitalTwinPortfolioAgentService").executePlan(plan, {
     portfolio: { ownerHoldings: [
-      { ticker: "BTC", owner: "Valeria", category: "CRYPTO", market_value_usd: 100 },
-      { ticker: "ETH", owner: "Horacio", category: "CRYPTO", market_value_usd: 200 },
+      { ticker: "USDT", owner: "Valeria", category: "CRYPTO", market_value_usd: 100 },
+      { ticker: "BTC", owner: "Horacio", category: "PORTFOLIO", market_value_usd: 200 },
     ] },
   });
-  assert.deepEqual(data.holdings, [{ ticker: "BTC", owner: "Valeria", category: "CRYPTO", market_value_usd: 100 }]);
+  assert.deepEqual(data.holdings, [{ ticker: "USDT", owner: "Valeria", category: "CRYPTO", market_value_usd: 100 }]);
 });
