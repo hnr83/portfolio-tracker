@@ -72,7 +72,6 @@ function UsageTooltip({ active, payload, label }) {
 }
 
 export default function SettingsView() {
-  const [section] = useState("ai-usage");
   const [scope, setScope] = useState("month");
   const [period, setPeriod] = useState(monthValue());
   const [data, setData] = useState(null);
@@ -109,9 +108,7 @@ export default function SettingsView() {
       <div className="flex flex-wrap items-center gap-2"><div className="flex rounded-xl border border-slate-700 bg-slate-900/80 p-1">{["7d", "14d", "30d", "month"].map((value) => <button key={value} type="button" onClick={() => setScope(value)} className={`rounded-lg px-3 py-2 text-[11px] transition ${scope === value ? "bg-indigo-500/20 text-indigo-200" : "text-slate-500 hover:text-slate-300"}`}>{value === "month" ? "Mes" : value}</button>)}</div>{scope === "month" && <select value={period} onChange={(event) => setPeriod(event.target.value)} className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-xs capitalize text-slate-200 outline-none focus:border-indigo-500">{periods.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select>}</div>
     </header>
 
-    <div className="mt-6 grid gap-6 lg:grid-cols-[210px_minmax(0,1fr)]">
-      <aside><div className="rounded-[20px] border border-slate-800 bg-slate-950/35 p-2"><button type="button" className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm ${section === "ai-usage" ? "bg-indigo-500/15 text-indigo-100" : "text-slate-400"}`}><span className="grid h-8 w-8 place-items-center rounded-xl border border-indigo-400/15 bg-indigo-500/10 text-indigo-300">✦</span><span><b className="block font-medium">AI Usage</b><small className="mt-0.5 block text-[10px] text-slate-500">Tokens y costos</small></span></button></div></aside>
-
+    <div className="mt-7">
       <main className="min-w-0">
         <div className="flex items-start justify-between gap-4"><div><h2 className="text-xl font-semibold tracking-[-.02em] text-white">AI Usage</h2><p className="mt-1 text-xs text-slate-500">Consumo registrado por el Digital Investment Twin.</p></div><button type="button" onClick={load} disabled={loading} className="rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-300 transition hover:bg-slate-800 disabled:opacity-50">↻ Actualizar</button></div>
 
