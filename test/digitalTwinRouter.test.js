@@ -33,3 +33,14 @@ test("answers a holding question from deterministic context", () => {
   assert.match(answer, /US\$\s?64\.000/);
   assert.match(answer, /32%/);
 });
+
+test("answers ownership with value and distinct asset count", () => {
+  const answer = answerPortfolioQuestion("¿Cuántos activos están a nombre de Horacio y cuántos de Valeria?", {
+    ownership: [
+      { owner: "Horacio", valueUsd: 180000, assetCount: 14, weightPct: 75 },
+      { owner: "Valeria", valueUsd: 60000, assetCount: 6, weightPct: 25 },
+    ],
+  });
+  assert.match(answer, /Horacio: US\$.*180\.000,00 en 14 activos \(75%\)/);
+  assert.match(answer, /Valeria: US\$.*60\.000,00 en 6 activos \(25%\)/);
+});
