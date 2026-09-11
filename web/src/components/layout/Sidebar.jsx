@@ -46,6 +46,7 @@ export default function Sidebar({ summary, activeView, setActiveView, setSelecte
         <DesktopItem view="planner" label="Planner" />
         <DesktopItem view="digital-twin" label="Digital Investment Twin" badge="Beta" />
         <DesktopItem view="decision-maker" label="Decision Maker" />
+        <DesktopItem view="settings" label="Settings" />
       </nav>
       <div className="mt-auto border-t border-slate-800 pt-6"><div className="flex items-center gap-3">{authUser?.picture ? <img src={authUser.picture} alt={authUser?.name || "Usuario"} className="h-9 w-9 rounded-full border border-slate-700" /> : <div className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-sm text-slate-300">{authUser?.email?.[0]?.toUpperCase() || "U"}</div>}<div className="min-w-0 flex-1"><div className="truncate text-sm font-medium text-slate-200">{authUser?.name || "Usuario"}</div><div className="truncate text-xs text-slate-500">{authUser?.email || ""}</div></div></div><button type="button" onClick={onLogout} className="mt-4 w-full rounded-xl border border-slate-700 px-3 py-2 text-sm text-slate-300 transition hover:bg-slate-800 hover:text-white">Cerrar sesión</button></div>
     </aside>
@@ -67,6 +68,7 @@ export default function Sidebar({ summary, activeView, setActiveView, setSelecte
       <MoreButton view="planner" label="Planner" icon="📈" />
       <MoreButton view="digital-twin" label="Digital Investment Twin · Beta" icon="✦" />
       <MoreButton view="decision-maker" label="Decision Maker" icon="🎯" />
+      <MoreButton view="settings" label="Settings · AI Usage" icon="⚙" />
       <button type="button" onClick={() => { setShowMoreMenu(false); onLogout(); }} className="w-full rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-medium text-red-300">Cerrar sesión</button>
       <div className="pt-2 text-center text-[11px] leading-5 text-slate-500"><div>Portfolio Jubilación · v{APP_VERSION}</div><div>{APP_BUILD_DATE}</div><div className="uppercase tracking-[0.12em]">{APP_COMMIT}</div></div>
     </div></div></>}

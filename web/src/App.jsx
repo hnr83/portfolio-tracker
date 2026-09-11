@@ -20,6 +20,7 @@ import PlannerView from "./components/views/planner/PlannerView";
 import LoginView from "./components/auth/LoginView";
 import AssetDetailView from "./components/views/AssetDetailView";
 import CustodyAuditView from "./components/views/CustodyAuditView";
+import SettingsView from "./components/views/SettingsView";
 import { PortfolioDataProvider, usePortfolioData } from "./context/PortfolioDataContext";
 import { apiFetch } from "./utils/api";
 import { formatCurrency, formatPercent, formatPortfolioPercent, formatNumber } from "./utils/formatters";
@@ -203,6 +204,7 @@ function AppContent() {
           {activeView === "trading" && <TradingView />}
           {activeView === "decision-maker" && <DecisionMaker />}
           {activeView === "custody" && <CustodyAuditView />}
+          {activeView === "settings" && <SettingsView />}
         </div>
       </main>
       <TransactionModal isOpen={isTransactionModalOpen} onClose={() => setIsTransactionModalOpen(false)} onSaved={async () => { invalidateCache(); await refreshAll(); }} />
