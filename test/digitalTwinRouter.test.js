@@ -68,3 +68,14 @@ test("recognizes crypto economically even when the portfolio category is generic
 test("normalizes Vale as Valeria in generic filters", () => {
   assert.equal(matches({ ticker: "ETH", owner: "Valeria", category: "PORTFOLIO" }, { owner: "Vale", category: "crypto" }), true);
 });
+
+test("uses owner-aware holdings from the request context", async () => {
+  const plan = { datasets: ["holdings"], filters: { owner: "Valeria", category: "crypto" } };
+  const data = await require("../src/services/digitalTwinPortfolioAgentService").executePlan(plan, {
+    portfolio: { ownerHoldings: [
+      { ticker: "BTC", owner: "Valeria", category: "CRYPTO", market_value_usd: 100 },
+      { ticker: "ETH", owner: "Horacio", category: "CRYPTO", market_value_usd: 200 },
+    ] },
+  });
+  assert.deepEqual(data.holdings, [{ ticker: "BTC", owner: "Valeria", category: "CRYPTO", market_value_usd: 100 }]);
+});
