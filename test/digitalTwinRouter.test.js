@@ -60,17 +60,17 @@ test("generic data tools combine owner, asset, broker and dates", () => {
   assert.equal(matches(row, { dateFrom: "2026-09-01" }), false);
 });
 
-test("distinguishes digital-dollar crypto from cryptocurrencies", () => {
-  assert.equal(matches({ normalized_ticker: "USDT", category: "CRYPTO", owner: "Valeria" }, { category: "crypto", owner: "Valeria" }), true);
-  assert.equal(matches({ normalized_ticker: "BTC", category: "PORTFOLIO", owner: "Valeria" }, { category: "crypto", owner: "Valeria" }), false);
+test("distinguishes the technical USDT category from economic cryptocurrencies", () => {
+  assert.equal(matches({ normalized_ticker: "USDT", category: "CRYPTO", owner: "Valeria" }, { ticker: "USDT", category: "crypto", owner: "Valeria" }), true);
   assert.equal(matches({ normalized_ticker: "BTC", category: "PORTFOLIO", owner: "Valeria" }, { category: "cryptocurrency", owner: "Valeria" }), true);
   assert.equal(matches({ normalized_ticker: "TSLA", category: "PORTFOLIO", owner: "Valeria" }, { category: "cryptocurrency", owner: "Valeria" }), false);
 });
 
 test("enforces the app taxonomy after LLM planning", () => {
   const wrongPlan = { filters: { owner: "Valeria", category: "cryptocurrency" } };
-  assert.equal(normalizePlanTaxonomy(wrongPlan, "¿Cuánto tiene Vale en crypto?").filters.category, "crypto");
+  assert.equal(normalizePlanTaxonomy(wrongPlan, "¿Cuánto tiene Vale en crypto?").filters.category, "cryptocurrency");
   assert.equal(normalizePlanTaxonomy(wrongPlan, "¿Cuánto tiene Vale en criptomonedas?").filters.category, "cryptocurrency");
+  assert.deepEqual(normalizePlanTaxonomy(wrongPlan, "¿Cuánto USDT tiene Vale?").filters, { owner: "Valeria", category: "crypto", ticker: "USDT" });
 });
 
 test("normalizes Vale as Valeria in generic filters", () => {
