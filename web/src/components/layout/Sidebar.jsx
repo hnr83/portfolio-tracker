@@ -46,9 +46,8 @@ export default function Sidebar({ summary, activeView, setActiveView, setSelecte
         <DesktopItem view="planner" label="Planner" />
         <DesktopItem view="digital-twin" label="Digital Investment Twin" badge="Beta" />
         <DesktopItem view="decision-maker" label="Decision Maker" />
-        <DesktopItem view="settings" label="Settings" />
       </nav>
-      <div className="mt-auto border-t border-slate-800 pt-6"><div className="flex items-center gap-3">{authUser?.picture ? <img src={authUser.picture} alt={authUser?.name || "Usuario"} className="h-9 w-9 rounded-full border border-slate-700" /> : <div className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-sm text-slate-300">{authUser?.email?.[0]?.toUpperCase() || "U"}</div>}<div className="min-w-0 flex-1"><div className="truncate text-sm font-medium text-slate-200">{authUser?.name || "Usuario"}</div><div className="truncate text-xs text-slate-500">{authUser?.email || ""}</div></div></div><button type="button" onClick={onLogout} className="mt-4 w-full rounded-xl border border-slate-700 px-3 py-2 text-sm text-slate-300 transition hover:bg-slate-800 hover:text-white">Cerrar sesión</button></div>
+      <div className="mt-auto border-t border-slate-800 pt-6"><div className="flex items-center gap-3">{authUser?.picture ? <img src={authUser.picture} alt={authUser?.name || "Usuario"} className="h-9 w-9 rounded-full border border-slate-700" /> : <div className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-sm text-slate-300">{authUser?.email?.[0]?.toUpperCase() || "U"}</div>}<div className="min-w-0 flex-1"><div className="truncate text-sm font-medium text-slate-200">{authUser?.name || "Usuario"}</div><div className="truncate text-xs text-slate-500">{authUser?.email || ""}</div></div><button type="button" onClick={() => handleNavigate("settings")} aria-label="Abrir configuración" title="Settings" className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl border transition ${activeView === "settings" ? "border-indigo-400/25 bg-indigo-500/15 text-indigo-300" : "border-slate-700/70 text-slate-500 hover:bg-slate-800 hover:text-slate-200"}`}>⚙</button></div><button type="button" onClick={onLogout} className="mt-4 w-full rounded-xl border border-slate-700 px-3 py-2 text-sm text-slate-300 transition hover:bg-slate-800 hover:text-white">Cerrar sesión</button></div>
     </aside>
 
     <nav className="fixed bottom-3 left-3 right-3 z-50 flex items-center gap-1 rounded-[26px] border border-slate-700/70 bg-[#020617]/95 p-2 shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-xl xl:hidden">
@@ -68,7 +67,8 @@ export default function Sidebar({ summary, activeView, setActiveView, setSelecte
       <MoreButton view="planner" label="Planner" icon="📈" />
       <MoreButton view="digital-twin" label="Digital Investment Twin · Beta" icon="✦" />
       <MoreButton view="decision-maker" label="Decision Maker" icon="🎯" />
-      <MoreButton view="settings" label="Settings · AI Usage" icon="⚙" />
+      <div className="my-3 h-px bg-slate-800" />
+      <button type="button" onClick={() => { setShowMoreMenu(false); handleNavigate("settings"); }} className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left text-sm ${activeView === "settings" ? "border-indigo-400/20 bg-indigo-500/10 text-indigo-200" : "border-slate-700/70 bg-slate-900/35 text-slate-300"}`}><span><span className="block">Settings</span><span className="mt-0.5 block text-[10px] text-slate-500">AI Usage y configuración</span></span><span className="text-slate-500">⚙</span></button>
       <button type="button" onClick={() => { setShowMoreMenu(false); onLogout(); }} className="w-full rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-medium text-red-300">Cerrar sesión</button>
       <div className="pt-2 text-center text-[11px] leading-5 text-slate-500"><div>Portfolio Jubilación · v{APP_VERSION}</div><div>{APP_BUILD_DATE}</div><div className="uppercase tracking-[0.12em]">{APP_COMMIT}</div></div>
     </div></div></>}
