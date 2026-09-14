@@ -135,6 +135,8 @@ async function loadOwnerHoldings(){
       FROM (SELECT * FROM movement_legs UNION ALL SELECT * FROM transfer_legs) l
     ), located AS (
       SELECT ticker,owner,platform,SUM(quantity) quantity FROM assigned GROUP BY 1,2,3
+    ), located_totals AS (
+      SELECT ticker,SUM(quantity) located_quantity FROM located GROUP BY 1
     ), valued AS (
       SELECT UPPER(COALESCE(NULLIF(normalized_ticker,''),ticker)) ticker,
         SUM(CAST(quantity_net AS FLOAT64)) expected_quantity,
@@ -142,13 +144,16 @@ async function loadOwnerHoldings(){
         SAFE_DIVIDE(SUM(CAST(cost_value_usd AS FLOAT64)),NULLIF(SUM(CAST(quantity_net AS FLOAT64)),0)) unit_cost_usd
       FROM ${table("vw_portfolio_valued")} GROUP BY 1
     )
-    SELECT l.ticker,l.owner,l.platform,l.quantity,
+    SELECT l.ticker,l.owner,l.platform,
+      l.quantity*SAFE_DIVIDE(v.expected_quantity,t.located_quantity) AS quantity,
       CASE WHEN l.ticker='USDT' THEN 'CRYPTO' ELSE 'PORTFOLIO' END category,
-      l.quantity*v.unit_value_usd AS market_value_usd,
-      l.quantity*v.unit_cost_usd AS cost_value_usd,
-      l.quantity*(v.unit_value_usd-v.unit_cost_usd) AS pnl_usd
-    FROM located l JOIN valued v USING(ticker)
-    WHERE l.quantity > 0.00000001 AND v.expected_quantity > 0
+      l.quantity*SAFE_DIVIDE(v.expected_quantity,t.located_quantity)*v.unit_value_usd AS market_value_usd,
+      l.quantity*SAFE_DIVIDE(v.expected_quantity,t.located_quantity)*v.unit_cost_usd AS cost_value_usd,
+      l.quantity*SAFE_DIVIDE(v.expected_quantity,t.located_quantity)*(v.unit_value_usd-v.unit_cost_usd) AS pnl_usd
+    FROM located l
+    JOIN located_totals t USING(ticker)
+    JOIN valued v USING(ticker)
+    WHERE l.quantity > 0.00000001 AND t.located_quantity > 0 AND v.expected_quantity > 0
   `);
 }
 
