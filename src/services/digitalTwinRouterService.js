@@ -24,7 +24,8 @@ function classifyTwinRoute(messages = []) {
   if (EXTERNAL.test(question)) return { route: "EXTERNAL_ANALYSIS", question, reason: "current_market_context" };
   if(withdrawalsFollowUp){
     const inheritedYear=withdrawalContext.match(/\b20\d{2}\b/)?.[0];
-    const effectiveQuestion=`${question}${inheritedYear&&!/\b20\d{2}\b/.test(question)?` en ${inheritedYear}`:""}`;
+    const inheritedOwnerGrouping=/\b(cada uno|por titular|por owner)\b/i.test(withdrawalContext);
+    const effectiveQuestion=`${question}${inheritedYear&&!/\b20\d{2}\b/.test(question)?` en ${inheritedYear}`:""}${inheritedOwnerGrouping&&!/\b(cada uno|por titular|por owner)\b/i.test(question)?" por titular":""}`;
     return{route:"WITHDRAWALS_DATA",question:effectiveQuestion,reason:"external_withdrawals_follow_up"};
   }
   if(WITHDRAWALS.test(question) && !ANALYTICAL.test(question)) return {route:"WITHDRAWALS_DATA",question,reason:"external_withdrawals_query"};
@@ -145,10 +146,12 @@ async function answerWithdrawals(question){
   const requestedOwner=question.match(/\b(Horacio|Vale|Valeria)\b/i)?.[1];
   const owner=/^(vale|valeria)$/i.test(requestedOwner||"")?"Vale":/^horacio$/i.test(requestedOwner||"")?"Horacio":null;
   const groupedOwners=/\b(cada uno|por titular|por owner)\b/i.test(question);
-  const bothOwners=groupedOwners||/\b(nuestros?|retiramos|entre los dos|ambos|los dos)\b/i.test(question);
+  const monthly=/\b(por mes|mes por mes|mensual(?:es|mente)?)\b/i.test(question);
   const dateFilter=Number.isInteger(year)?"AND EXTRACT(YEAR FROM fecha)=@year":"";
-  const ownerFilter=owner?"AND LOWER(TRIM(owner))=LOWER(@owner)":bothOwners?"AND LOWER(TRIM(owner)) IN (\'horacio\',\'vale\')":"";
-  const rows=await runQuery(`SELECT ${groupedOwners?"COALESCE(NULLIF(TRIM(owner),\'\'),\'Sin titular\') AS owner,":""} COALESCE(SUM(CASE
+  const ownerFilter=owner?"AND LOWER(TRIM(owner))=LOWER(@owner)":"AND LOWER(TRIM(owner)) IN (\'horacio\',\'vale\')";
+  const dimensions=[groupedOwners?"COALESCE(NULLIF(TRIM(owner),\'\'),\'Sin titular\') AS owner":null,monthly?"FORMAT_DATE(\'%Y-%m\',fecha) AS period":null].filter(Boolean);
+  const groups=[groupedOwners?"owner":null,monthly?"period":null].filter(Boolean);
+  const rows=await runQuery(`SELECT ${dimensions.length?`${dimensions.join(",")},`:""} COALESCE(SUM(CASE
     WHEN movement_type IN ('SELL_USD','SELL_USDT') THEN ABS(SAFE_CAST(quantity AS FLOAT64))
     WHEN movement_type='EXPENSE_USD' THEN ABS(SAFE_CAST(net_amount AS FLOAT64))
     ELSE 0 END),0) AS withdrawals_usd
@@ -156,14 +159,19 @@ async function answerWithdrawals(question){
       AND movement_type IN ('SELL_USD','SELL_USDT','EXPENSE_USD') AND (
         source_table='transactions_raw' OR flow_type='EXTERNAL' OR
         (transaction_group_id IS NULL AND NOT (movement_type='SELL_USDT' AND flow_type='SETTLEMENT') AND source_table NOT IN ('bingx_spot','trading_transfer'))
-      ) ${groupedOwners?"GROUP BY owner ORDER BY withdrawals_usd DESC":""}`,{...(Number.isInteger(year)?{year}:{}),...(owner?{owner}:{})});
+      ) ${groups.length?`GROUP BY ${groups.join(",")} ORDER BY ${groups.join(",")}`:""}`,{...(Number.isInteger(year)?{year}:{}),...(owner?{owner}:{})});
+  if(monthly){
+    const detail=rows.map(row=>`${groupedOwners?`${row.owner} · `:""}${row.period}: ${usd(row.withdrawals_usd)}`).join("\n");
+    const total=rows.reduce((sum,row)=>sum+Number(row.withdrawals_usd||0),0);
+    return `Retiros externos por mes${Number.isInteger(year)?` de ${year}`:""}:\n${detail}\n\nTotal: ${usd(total)}.`;
+  }
   if(groupedOwners){
     const detail=rows.map(row=>`${row.owner}: ${usd(row.withdrawals_usd)}`).join(" · ");
     const total=rows.reduce((sum,row)=>sum+Number(row.withdrawals_usd||0),0);
     return `${detail}. Total: ${usd(total)} de retiros externos${Number.isInteger(year)?` durante ${year}`:""}.`;
   }
   const amount=rows[0]?.withdrawals_usd||0;
-  const subject=owner?owner:bothOwners?"Horacio y Vale":"Tu portfolio";
+  const subject=owner?owner:"Horacio y Vale";
   return `${subject}: ${usd(amount)} de retiros externos${Number.isInteger(year)?` durante ${year}`:" acumulados"}.`;
 }
 
