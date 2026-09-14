@@ -194,7 +194,7 @@ async function resolveCustodyBrokerAlias(broker){
 }
 
 async function executePlan(plan={},requestContext={}){
-  const effectivePlan={...plan,filters:{...(effectivePlan.filters||{})}};
+  const effectivePlan={...plan,filters:{...(plan.filters||{})}};
   if(effectivePlan.filters.broker)effectivePlan.filters.broker=await resolveCustodyBrokerAlias(effectivePlan.filters.broker);
   const selected=(effectivePlan.datasets||[]).filter(name=>DATASETS[name]).slice(0,3);
   const results={};
