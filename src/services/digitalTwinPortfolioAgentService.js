@@ -37,7 +37,7 @@ async function planPortfolioQuestion(messages=[]){
 
 function value(row,...keys){for(const key of keys)if(row?.[key]!=null)return row[key];return null}
 function text(value){return String(value??"").trim().toLowerCase()}
-function ownerText(value){const normalized=text(value);return normalized==="vale"?"valeria":normalized}
+function ownerText(value){const normalized=text(value);return normalized==="valeria"?"vale":normalized}
 function rowDate(row){const raw=value(row,"fecha","date","created_at","closed_at","opened_at");return String(raw?.value||raw||"").slice(0,10)}
 function matches(row,filters={}){
   const ticker=text(value(row,"normalized_ticker","ticker","instrument","asset","underlying_ticker"));
