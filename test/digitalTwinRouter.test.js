@@ -113,6 +113,12 @@ test("does not let withdrawal history hijack a new BTC performance question", ()
   assert.equal(route.route,"TWIN_ANALYSIS");
 });
 
+test("keeps current position PnL on internal portfolio data", () => {
+  const route=classifyTwinRoute(messages("Recalculá el PnL actual de BTC por titular"));
+  assert.equal(route.route,"TWIN_ANALYSIS");
+  assert.equal(route.reason,"current_position_pnl");
+});
+
 test("keeps judgment and current-market questions in an LLM pipeline", () => {
   assert.equal(classifyTwinRoute(messages("¿Estoy demasiado expuesto a BTC?")).route, "TWIN_ANALYSIS");
   assert.equal(classifyTwinRoute(messages("¿Conviene comprar BTC con el precio de hoy?")).route, "EXTERNAL_ANALYSIS");
