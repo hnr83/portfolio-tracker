@@ -203,6 +203,29 @@ test("normalizes Valeria to the canonical owner Vale", () => {
   assert.equal(matches({ ticker: "ETH", owner: "Vale", category: "PORTFOLIO" }, { owner: "Valeria", category: "cryptocurrency" }), true);
 });
 
+test("uses reconciled custody rows as the only source for owner PnL", async () => {
+  const plan={
+    datasets:["holdings"],
+    filters:{ticker:"TSLA",owner:null,broker:null,category:null,side:null,dateFrom:null,dateTo:null},
+    calculation:"group",
+    metric:"pnl_usd",
+    groupBy:"owner",
+  };
+  const data=await require("../src/services/digitalTwinPortfolioAgentService").executePlan(plan,{
+    portfolio:{
+      holdings:[{ticker:"TSLA",quantity:100,valueUsd:1000,costUsd:800,pnlUsd:200}],
+      ownerHoldings:[
+        {ticker:"BCBA:TSLA",normalized_ticker:"TSLA",owner:"Horacio",market_value_usd:600,quantity:60},
+        {ticker:"TSLA",normalized_ticker:"TSLA",owner:"Vale",market_value_usd:400,quantity:40},
+      ],
+    },
+  });
+  assert.deepEqual(data.computed_summary.holdings.owners.sort(),["Horacio","Vale"]);
+  assert.equal(data.computed_summary.holdings.market_value_usd,1000);
+  assert.equal(data.computed_summary.holdings.cost_value_usd,800);
+  assert.equal(data.computed_summary.holdings.pnl_usd,200);
+});
+
 test("uses owner-aware holdings from the request context", async () => {
   const plan = { datasets: ["holdings"], filters: { owner: "Valeria", category: "crypto" } };
   const data = await require("../src/services/digitalTwinPortfolioAgentService").executePlan(plan, {
