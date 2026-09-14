@@ -176,6 +176,23 @@ test("enforces the app taxonomy after LLM planning", () => {
   assert.equal(grouped.groupBy, "owner");
 });
 
+test("plans current asset PnL by owner from holdings without historical dates", () => {
+  const plan=normalizePlanTaxonomy({
+    datasets:["performance"],
+    filters:{ticker:"BTC",owner:"Horacio y Vale",dateFrom:"2026-01-01",dateTo:"2026-12-31"},
+    calculation:"sum",
+    metric:"return",
+    groupBy:null,
+  },"¿Cuánto ganamos o perdemos actualmente con BTC y cómo se distribuye entre Horacio y Vale?");
+  assert.deepEqual(plan.datasets,["holdings"]);
+  assert.equal(plan.filters.ticker,"BTC");
+  assert.equal(plan.filters.owner,null);
+  assert.equal(plan.filters.dateFrom,null);
+  assert.equal(plan.filters.dateTo,null);
+  assert.equal(plan.groupBy,"owner");
+  assert.equal(plan.metric,"pnl_usd");
+});
+
 test("normalizes Valeria to the canonical owner Vale", () => {
   assert.equal(matches({ ticker: "ETH", owner: "Vale", category: "PORTFOLIO" }, { owner: "Valeria", category: "cryptocurrency" }), true);
 });
