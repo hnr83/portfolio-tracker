@@ -23,6 +23,11 @@ function planningConversation(messages=[]){return messages.slice(-8).map(message
 function normalizePlanTaxonomy(plan={},question=""){
   const normalized={...plan,filters:{...(plan.filters||{})}};
   const q=text(question);
+  if(/\b(cada uno|cada titular|por titular|por owner|ambos|ambas|los dos|las dos)\b/.test(q)){
+    normalized.filters.owner=null;
+    normalized.calculation="group";
+    normalized.groupBy="owner";
+  }
   if(/\busdt\b|d[oó]lares? digitales?/.test(q)){
     normalized.filters.ticker="USDT";
     normalized.filters.category="crypto";
@@ -74,6 +79,7 @@ function summarizeResults(results={}){
       owners:[...new Set(rows.map(row=>value(row,"owner","titular")).filter(Boolean))],
       by_ticker:groupValue("ticker"),
       by_platform:groupValue("platform"),
+      by_owner:groupValue("owner"),
     };
   }
   return summary;
@@ -137,7 +143,7 @@ async function executePlan(plan={},requestContext={}){
   const results={};
   await Promise.all(selected.map(async name=>{
     const contextualHoldings=Array.isArray(requestContext?.portfolio?.ownerHoldings)?requestContext.portfolio.ownerHoldings:[];
-    if(name==="holdings"&&plan.filters?.owner){
+    if(name==="holdings"&&(plan.filters?.owner||text(plan.groupBy)==="owner")){
       const contextualMatches=contextualHoldings.filter(row=>matches(row,plan.filters));
       const rows=contextualMatches.length?contextualMatches:(await loadOwnerHoldings()).filter(row=>matches(row,plan.filters));
       results[name]=compact(rows);return
@@ -151,7 +157,7 @@ async function executePlan(plan={},requestContext={}){
 }
 
 async function answerPlannedQuestion({messages,plan,data}){
-  const question=lastQuestion(messages),response=await post({model:MODEL,reasoning:{effort:"low"},instructions:`Respondé en español rioplatense una pregunta factual sobre el portfolio usando exclusivamente DATA. Priorizá computed_summary, cuyos cálculos ya fueron realizados por el backend. Para distribuciones usá by_ticker o by_platform según corresponda. market_value, value_usd y market_value_usd son la misma valuación expresada en USD. Formateá moneda como US$ 99.129,89 y cantidades con un máximo razonable de decimales. Nunca muestres nombres técnicos como record_count, market_value_usd, quantity, DATA, filtros ni arrays JSON. No opines, no recomiendes, no completes datos ausentes y no menciones SQL ni implementación. Si record_count es cero, indicá que no se encontraron posiciones conciliadas para esos filtros. Respuesta natural, directa y compacta.`,input:`PREGUNTA:\n${question}\n\nPLAN:\n${JSON.stringify(plan)}\n\nDATA:\n${JSON.stringify(data)}`,max_output_tokens:900,text:{verbosity:"low"},store:false});return{answer:outputText(response),usageStage:usageStage("data_answer",response)}
+  const question=lastQuestion(messages),response=await post({model:MODEL,reasoning:{effort:"low"},instructions:`Respondé en español rioplatense una pregunta factual sobre el portfolio usando exclusivamente DATA. Priorizá computed_summary, cuyos cálculos ya fueron realizados por el backend. Para distribuciones usá by_ticker, by_platform o by_owner según corresponda. market_value, value_usd y market_value_usd son la misma valuación expresada en USD. Formateá moneda como US$ 99.129,89 y cantidades con un máximo razonable de decimales. Nunca muestres nombres técnicos como record_count, market_value_usd, quantity, DATA, filtros ni arrays JSON. No opines, no recomiendes, no completes datos ausentes y no menciones SQL ni implementación. Si record_count es cero, indicá que no se encontraron posiciones conciliadas para esos filtros. Respuesta natural, directa y compacta.`,input:`PREGUNTA:\n${question}\n\nPLAN:\n${JSON.stringify(plan)}\n\nDATA:\n${JSON.stringify(data)}`,max_output_tokens:900,text:{verbosity:"low"},store:false});return{answer:outputText(response),usageStage:usageStage("data_answer",response)}
 }
 
 async function runPortfolioDataAgent(messages=[],requestContext={}){const planned=await planPortfolioQuestion(messages);if(planned.plan.route!=="PORTFOLIO_DATA")return{handled:false,plan:planned.plan,usageStages:[planned.usageStage]};const data=await executePlan(planned.plan,requestContext),answered=await answerPlannedQuestion({messages,plan:planned.plan,data});return{handled:true,answer:answered.answer,plan:planned.plan,dataSources:planned.plan.datasets,usageStages:[planned.usageStage,answered.usageStage]}}
