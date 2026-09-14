@@ -102,6 +102,17 @@ test("keeps factual trading follow-ups in trading context", () => {
   assert.equal(classifyTwinRoute(conversation).route, "TRADING_DATA");
 });
 
+test("does not let withdrawal history hijack a new BTC performance question", () => {
+  const route=classifyTwinRoute([
+    {role:"user",content:"¿Cuánto retiró cada uno en 2026?"},
+    {role:"assistant",content:"Horacio... Vale..."},
+    {role:"user",content:"¿Y en 2025?"},
+    {role:"assistant",content:"Horacio... Vale..."},
+    {role:"user",content:"¿Cuánto ganamos o perdimos con BTC en 2026 y cómo se distribuye entre Horacio y Vale?"},
+  ]);
+  assert.equal(route.route,"TWIN_ANALYSIS");
+});
+
 test("keeps judgment and current-market questions in an LLM pipeline", () => {
   assert.equal(classifyTwinRoute(messages("¿Estoy demasiado expuesto a BTC?")).route, "TWIN_ANALYSIS");
   assert.equal(classifyTwinRoute(messages("¿Conviene comprar BTC con el precio de hoy?")).route, "EXTERNAL_ANALYSIS");
