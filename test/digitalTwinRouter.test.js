@@ -27,6 +27,15 @@ test("routes net contribution questions to the canonical calculation", () => {
   assert.equal(classifyTwinRoute(messages("¿Cómo se distribuyeron nuestros aportes de 2026 por mes?")).route, "CONTRIBUTIONS_DATA");
 });
 
+test("routes withdrawals before inherited contribution context", () => {
+  const route=classifyTwinRoute([
+    {role:"user",content:"¿Cómo se distribuyeron nuestros aportes de 2026 por mes?"},
+    {role:"assistant",content:"Aportes por mes..."},
+    {role:"user",content:"¿Cuánto retiramos entre los dos en 2026?"},
+  ]);
+  assert.equal(route.route,"WITHDRAWALS_DATA");
+});
+
 test("inherits contribution metric and year in owner follow-ups", () => {
   const route=classifyTwinRoute([
     {role:"user",content:"¿Cuántos aportes netos hizo Horacio en 2026?"},
