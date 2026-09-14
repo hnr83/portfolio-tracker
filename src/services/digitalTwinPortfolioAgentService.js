@@ -32,6 +32,15 @@ function normalizePlanTaxonomy(plan={},question=""){
     normalized.filters.ticker="USDT";
     normalized.filters.category="crypto";
   }else if(/\b(crypto|cripto|criptomonedas?)\b/.test(q))normalized.filters.category="cryptocurrency";
+  if(/\b(ganamos|ganancia|ganancias|perdemos|p[eé]rdida|p[eé]rdidas|pnl)\b/.test(q)&&/\b(actual|actualmente|hoy|posici[oó]n)\b/.test(q)){
+    normalized.datasets=["holdings"];
+    normalized.filters.owner=null;
+    normalized.filters.dateFrom=null;
+    normalized.filters.dateTo=null;
+    normalized.calculation="group";
+    normalized.groupBy="owner";
+    normalized.metric="pnl_usd";
+  }
   return normalized;
 }
 
@@ -70,10 +79,12 @@ function summarizeResults(results={}){
   const summary={};
   for(const [dataset,rows] of Object.entries(results)){
     if(!Array.isArray(rows))continue;
-    const groupValue=(key)=>Object.values(rows.reduce((groups,row)=>{const name=String(value(row,key)||"Sin especificar"),current=groups[name]||{name,market_value_usd:0,quantity:0};current.market_value_usd+=Number(row.market_value_usd??row.value_usd??row.market_value)||0;current.quantity+=Number(row.quantity??row.quantity_net)||0;groups[name]=current;return groups},{})).sort((a,b)=>b.market_value_usd-a.market_value_usd);
+    const groupValue=(key)=>Object.values(rows.reduce((groups,row)=>{const name=String(value(row,key)||"Sin especificar"),current=groups[name]||{name,market_value_usd:0,cost_value_usd:0,pnl_usd:0,quantity:0};current.market_value_usd+=Number(row.market_value_usd??row.value_usd??row.market_value)||0;current.cost_value_usd+=Number(row.cost_value_usd)||0;current.pnl_usd+=Number(row.pnl_usd)||0;current.quantity+=Number(row.quantity??row.quantity_net)||0;groups[name]=current;return groups},{})).sort((a,b)=>b.market_value_usd-a.market_value_usd);
     summary[dataset]={
       record_count:rows.length,
       market_value_usd:rows.reduce((sum,row)=>sum+(Number(row.market_value_usd??row.value_usd??row.market_value)||0),0),
+      cost_value_usd:rows.reduce((sum,row)=>sum+(Number(row.cost_value_usd)||0),0),
+      pnl_usd:rows.reduce((sum,row)=>sum+(Number(row.pnl_usd)||0),0),
       quantity:rows.reduce((sum,row)=>sum+(Number(row.quantity??row.quantity_net)||0),0),
       tickers:[...new Set(rows.map(row=>value(row,"normalized_ticker","ticker","instrument")).filter(Boolean))],
       owners:[...new Set(rows.map(row=>value(row,"owner","titular")).filter(Boolean))],
@@ -127,12 +138,15 @@ async function loadOwnerHoldings(){
     ), valued AS (
       SELECT UPPER(COALESCE(NULLIF(normalized_ticker,''),ticker)) ticker,
         SUM(CAST(quantity_net AS FLOAT64)) expected_quantity,
-        SAFE_DIVIDE(SUM(CAST(market_value_usd AS FLOAT64)),NULLIF(SUM(CAST(quantity_net AS FLOAT64)),0)) unit_value_usd
+        SAFE_DIVIDE(SUM(CAST(market_value_usd AS FLOAT64)),NULLIF(SUM(CAST(quantity_net AS FLOAT64)),0)) unit_value_usd,
+        SAFE_DIVIDE(SUM(CAST(cost_value_usd AS FLOAT64)),NULLIF(SUM(CAST(quantity_net AS FLOAT64)),0)) unit_cost_usd
       FROM ${table("vw_portfolio_valued")} GROUP BY 1
     )
     SELECT l.ticker,l.owner,l.platform,l.quantity,
       CASE WHEN l.ticker='USDT' THEN 'CRYPTO' ELSE 'PORTFOLIO' END category,
-      l.quantity*v.unit_value_usd AS market_value_usd
+      l.quantity*v.unit_value_usd AS market_value_usd,
+      l.quantity*v.unit_cost_usd AS cost_value_usd,
+      l.quantity*(v.unit_value_usd-v.unit_cost_usd) AS pnl_usd
     FROM located l JOIN valued v USING(ticker)
     WHERE l.quantity > 0.00000001 AND v.expected_quantity > 0
   `);
@@ -157,7 +171,7 @@ async function executePlan(plan={},requestContext={}){
 }
 
 async function answerPlannedQuestion({messages,plan,data}){
-  const question=lastQuestion(messages),response=await post({model:MODEL,reasoning:{effort:"low"},instructions:`Respondé en español rioplatense una pregunta factual sobre el portfolio usando exclusivamente DATA. Priorizá computed_summary, cuyos cálculos ya fueron realizados por el backend. Para distribuciones usá by_ticker, by_platform o by_owner según corresponda. market_value, value_usd y market_value_usd son la misma valuación expresada en USD. Formateá moneda como US$ 99.129,89 y cantidades con un máximo razonable de decimales. Nunca muestres nombres técnicos como record_count, market_value_usd, quantity, DATA, filtros ni arrays JSON. No opines, no recomiendes, no completes datos ausentes y no menciones SQL ni implementación. Si record_count es cero, indicá que no se encontraron posiciones conciliadas para esos filtros. Respuesta natural, directa y compacta.`,input:`PREGUNTA:\n${question}\n\nPLAN:\n${JSON.stringify(plan)}\n\nDATA:\n${JSON.stringify(data)}`,max_output_tokens:900,text:{verbosity:"low"},store:false});return{answer:outputText(response),usageStage:usageStage("data_answer",response)}
+  const question=lastQuestion(messages),response=await post({model:MODEL,reasoning:{effort:"low"},instructions:`Respondé en español rioplatense una pregunta factual sobre el portfolio usando exclusivamente DATA. Priorizá computed_summary, cuyos cálculos ya fueron realizados por el backend. Para distribuciones usá by_ticker, by_platform o by_owner según corresponda. En preguntas de ganancia o pérdida actual, informá market_value_usd, cost_value_usd y pnl_usd; si está agrupado por titular, detallá los tres importes por titular y el total. market_value, value_usd y market_value_usd son la misma valuación expresada en USD. Formateá moneda como US$ 99.129,89 y cantidades con un máximo razonable de decimales. Nunca muestres nombres técnicos como record_count, market_value_usd, quantity, DATA, filtros ni arrays JSON. No opines, no recomiendes, no completes datos ausentes y no menciones SQL ni implementación. Si record_count es cero, indicá que no se encontraron posiciones conciliadas para esos filtros. Respuesta natural, directa y compacta.`,input:`PREGUNTA:\n${question}\n\nPLAN:\n${JSON.stringify(plan)}\n\nDATA:\n${JSON.stringify(data)}`,max_output_tokens:900,text:{verbosity:"low"},store:false});return{answer:outputText(response),usageStage:usageStage("data_answer",response)}
 }
 
 async function runPortfolioDataAgent(messages=[],requestContext={}){const planned=await planPortfolioQuestion(messages);if(planned.plan.route!=="PORTFOLIO_DATA")return{handled:false,plan:planned.plan,usageStages:[planned.usageStage]};const data=await executePlan(planned.plan,requestContext),answered=await answerPlannedQuestion({messages,plan:planned.plan,data});return{handled:true,answer:answered.answer,plan:planned.plan,dataSources:planned.plan.datasets,usageStages:[planned.usageStage,answered.usageStage]}}
