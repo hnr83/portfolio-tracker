@@ -57,12 +57,69 @@ function scalar(value){
 }
 function compact(rows=[]){return rows.slice(0,250).map(row=>Object.fromEntries(Object.entries(row).map(([key,val])=>[key,scalar(val)]).filter(([,val])=>val!=null).slice(0,24)))}
 
+async function loadOwnerHoldings(){
+  return runQuery(`
+    WITH movement_legs AS (
+      SELECT
+        COALESCE(
+          (SELECT ANY_VALUE(UPPER(COALESCE(NULLIF(v.normalized_ticker, ''), v.ticker)))
+           FROM ${table("vw_portfolio_valued")} v WHERE UPPER(v.ticker) = UPPER(m.ticker)),
+          CASE
+            WHEN STARTS_WITH(UPPER(m.ticker), 'CURRENCY:') AND ENDS_WITH(UPPER(m.ticker), 'ARS')
+              THEN REGEXP_REPLACE(REGEXP_REPLACE(UPPER(m.ticker), r'^CURRENCY:', ''), r'ARS$', '')
+            WHEN STARTS_WITH(UPPER(m.ticker), 'CURRENCY:') THEN REGEXP_REPLACE(UPPER(m.ticker), r'^CURRENCY:', '')
+            ELSE UPPER(TRIM(m.ticker))
+          END
+        ) AS ticker,
+        COALESCE(NULLIF(TRIM(m.owner), ''), 'Sin titular') AS owner,
+        COALESCE(NULLIF(TRIM(m.broker), ''), 'Sin plataforma') AS platform,
+        SUM(CASE
+          WHEN m.movement_type IN ('BUY_ASSET','BUY_USD','BUY_USDT','INCOME_USD')
+            THEN ABS(CAST(COALESCE(m.quantity,m.net_amount,m.gross_amount) AS FLOAT64))
+          WHEN m.movement_type IN ('SELL_ASSET','SELL_USD','SELL_USDT','EXPENSE_USD')
+            THEN -ABS(CAST(COALESCE(m.quantity,m.net_amount,m.gross_amount) AS FLOAT64))
+          ELSE 0 END) AS quantity
+      FROM ${table("movements")} m
+      WHERE m.movement_type IN ('BUY_ASSET','SELL_ASSET','BUY_USD','SELL_USD','INCOME_USD','EXPENSE_USD','BUY_USDT','SELL_USDT')
+        AND COALESCE(m.quantity,m.net_amount,m.gross_amount) IS NOT NULL
+        AND (UPPER(m.ticker) = 'USDT' OR NOT REGEXP_CONTAINS(LOWER(COALESCE(m.description,'')), r'posici[oó]n cerrada'))
+      GROUP BY 1,2,3
+    ), transfer_legs AS (
+      SELECT UPPER(TRIM(ticker)) ticker,COALESCE(NULLIF(TRIM(owner),''),'Sin titular') owner,from_broker platform,-CAST(quantity AS FLOAT64) quantity FROM ${table("custody_transfers")}
+      UNION ALL
+      SELECT UPPER(TRIM(ticker)),COALESCE(NULLIF(TRIM(owner),''),'Sin titular'),to_broker,CAST(quantity AS FLOAT64) FROM ${table("custody_transfers")}
+    ), assigned AS (
+      SELECT l.ticker,
+        COALESCE((SELECT ANY_VALUE(a.owner) FROM ${table("custody_owner_assignments")} a
+          WHERE UPPER(a.ticker)=l.ticker AND LOWER(TRIM(a.platform))=LOWER(TRIM(l.platform))),l.owner) owner,
+        l.platform,l.quantity
+      FROM (SELECT * FROM movement_legs UNION ALL SELECT * FROM transfer_legs) l
+    ), located AS (
+      SELECT ticker,owner,platform,SUM(quantity) quantity FROM assigned GROUP BY 1,2,3
+    ), valued AS (
+      SELECT UPPER(COALESCE(NULLIF(normalized_ticker,''),ticker)) ticker,
+        SUM(CAST(quantity_net AS FLOAT64)) expected_quantity,
+        SAFE_DIVIDE(SUM(CAST(market_value_usd AS FLOAT64)),NULLIF(SUM(CAST(quantity_net AS FLOAT64)),0)) unit_value_usd
+      FROM ${table("vw_portfolio_valued")} GROUP BY 1
+    )
+    SELECT l.ticker,l.owner,l.platform,l.quantity,
+      CASE WHEN l.ticker='USDT' THEN 'CRYPTO' ELSE 'PORTFOLIO' END category,
+      l.quantity*v.unit_value_usd AS market_value_usd
+    FROM located l JOIN valued v USING(ticker)
+    WHERE l.quantity > 0.00000001 AND v.expected_quantity > 0
+  `);
+}
+
 async function executePlan(plan={},requestContext={}){
   const selected=(plan.datasets||[]).filter(name=>DATASETS[name]).slice(0,3);
   const results={};
   await Promise.all(selected.map(async name=>{
     const contextualHoldings=Array.isArray(requestContext?.portfolio?.ownerHoldings)?requestContext.portfolio.ownerHoldings:[];
-    if(name==="holdings"&&contextualHoldings.length){results[name]=compact(contextualHoldings.filter(row=>matches(row,plan.filters)));return}
+    if(name==="holdings"&&plan.filters?.owner){
+      const contextualMatches=contextualHoldings.filter(row=>matches(row,plan.filters));
+      const rows=contextualMatches.length?contextualMatches:(await loadOwnerHoldings()).filter(row=>matches(row,plan.filters));
+      results[name]=compact(rows);return
+    }
     const limit=name==="movements"||name==="trading_trades"?1000:250;
     const rows=await runQuery(`SELECT * FROM ${table(DATASETS[name])} LIMIT ${limit}`);
     results[name]=compact(rows.filter(row=>matches(row,plan.filters)));
