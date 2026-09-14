@@ -6,6 +6,7 @@ const TRADING = /\b(trading|trade|trades|longs?|shorts?|fees?|apalancamiento)\b/
 const FACTUAL = /\b(cu[aá]nto|cu[aá]ntos|tengo|tenencia|posici[oó]n|saldo|total|pnl|gan[eé]|perd[ií]|resultado|liquidez|peso|porcentaje|fees?)\b/i;
 const ANALYTICAL = /\b(conviene|deber[ií]a|parece|demasiado|riesgo|mejorar|patr[oó]n|por qu[eé]|recomend|analiz)\b/i;
 const CONTRIBUTIONS = /\b(aportes?(?: netos?)?|capital (externo )?(neto )?aportado|ingresos? netos?)\b|\baport(?:e|é|aste|ó|o|amos|aron)(?=\s|[?.,!]|$)/i;
+const WITHDRAWALS = /\b(retiros?|retir(?:e|é|aste|ó|o|amos|aron)|extracciones?)\b/i;
 
 function latestQuestion(messages = []) {
   return String([...messages].reverse().find((message) => message?.role === "user")?.content || "").trim();
@@ -19,6 +20,7 @@ function classifyTwinRoute(messages = []) {
   const tradingFollowUp=TRADING.test(previousQuestion)&&(/\b(eso|ese|esa|total|pero|entonces|y|en\s+20\d{2})\b/i.test(question)||FACTUAL.test(question));
   const contributionsFollowUp=Boolean(contributionContext)&&/\b(y|vale|valeria|horacio|eso|ese|esa|ambos|cada uno|20\d{2}|mes)\b/i.test(question);
   if (EXTERNAL.test(question)) return { route: "EXTERNAL_ANALYSIS", question, reason: "current_market_context" };
+  if(WITHDRAWALS.test(question) && !ANALYTICAL.test(question)) return {route:"WITHDRAWALS_DATA",question,reason:"external_withdrawals_query"};
   if(contributionsFollowUp){
     const inheritedYear=contributionContext.match(/\b20\d{2}\b/)?.[0];
     const inheritedMonthly=/\b(por mes|mes por mes|mensual(?:es|mente)?)\b/i.test(contributionContext);
@@ -131,6 +133,28 @@ async function answerNetContributions(question){
   return `${subject} ${usd(amount)} de aportes netos${Number.isInteger(year)?` durante ${year}`:' acumulados'}.`;
 }
 
+async function answerWithdrawals(question){
+  const year=Number(question.match(/\b(20\d{2})\b/)?.[1]);
+  const requestedOwner=question.match(/\b(Horacio|Vale|Valeria)\b/i)?.[1];
+  const owner=/^(vale|valeria)$/i.test(requestedOwner||"")?"Vale":/^horacio$/i.test(requestedOwner||"")?"Horacio":null;
+  const bothOwners=/\b(nuestros?|retiramos|entre los dos|ambos|los dos)\b/i.test(question);
+  const dateFilter=Number.isInteger(year)?"AND EXTRACT(YEAR FROM fecha)=@year":"";
+  const ownerFilter=owner?"AND LOWER(TRIM(owner))=LOWER(@owner)":bothOwners?"AND LOWER(TRIM(owner)) IN ('horacio','vale')":"";
+  const rows=await runQuery(`SELECT COALESCE(SUM(CASE
+    WHEN movement_type IN ('SELL_ASSET') THEN ABS(SAFE_CAST(net_amount AS FLOAT64))
+    WHEN movement_type IN ('SELL_USD','SELL_USDT') THEN ABS(SAFE_CAST(quantity AS FLOAT64))
+    WHEN movement_type='EXPENSE_USD' THEN ABS(SAFE_CAST(net_amount AS FLOAT64))
+    ELSE 0 END),0) AS withdrawals_usd
+    FROM ${table("movements")} WHERE fecha IS NOT NULL ${dateFilter} ${ownerFilter}
+      AND movement_type IN ('SELL_ASSET','SELL_USD','SELL_USDT','EXPENSE_USD') AND (
+        source_table='transactions_raw' OR flow_type='EXTERNAL' OR
+        (transaction_group_id IS NULL AND NOT (movement_type IN ('SELL_USDT') AND flow_type='SETTLEMENT') AND source_table NOT IN ('bingx_spot','trading_transfer'))
+      )`,{...(Number.isInteger(year)?{year}:{}),...(owner?{owner}:{})});
+  const amount=rows[0]?.withdrawals_usd||0;
+  const subject=owner?owner:bothOwners?"Horacio y Vale":"Tu portfolio";
+  return `${subject}: ${usd(amount)} de retiros externos${Number.isInteger(year)?` durante ${year}`:" acumulados"}.`;
+}
+
 async function resolveRoutedQuestion(route, context = {}) {
   if (route.route === "INTERNAL_DATA") {
     const answer = answerPortfolioQuestion(route.question, context);
@@ -142,6 +166,10 @@ async function resolveRoutedQuestion(route, context = {}) {
   }
   if(route.route==="CONTRIBUTIONS_DATA"){
     const answer=await answerNetContributions(route.question);
+    return{answer,route:route.route,dataSources:["movements"]};
+  }
+  if(route.route==="WITHDRAWALS_DATA"){
+    const answer=await answerWithdrawals(route.question);
     return{answer,route:route.route,dataSources:["movements"]};
   }
   return null;
