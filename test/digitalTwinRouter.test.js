@@ -53,6 +53,12 @@ test("does not use the ownership fast path when another filter is requested", ()
   assert.equal(answer, null);
 });
 
+test("does not use a total holding fast path for grouped owner questions", () => {
+  const context = { holdings: [{ ticker: "USDT", quantity: 8000, valueUsd: 7990 }] };
+  assert.equal(answerPortfolioQuestion("¿Cuánto USDT tiene cada uno?", context), null);
+  assert.equal(answerPortfolioQuestion("¿Cómo se distribuye USDT por titular?", context), null);
+});
+
 test("generic data tools combine owner, asset, broker and dates", () => {
   const row = { ticker: "BTC", owner: "Valeria", broker: "BingX", side: "BUY", fecha: "2026-08-14" };
   assert.equal(matches(row, { ticker: "BTC", owner: "Valeria", broker: "BingX", side: "BUY", dateFrom: "2026-08-01", dateTo: "2026-08-31" }), true);
@@ -71,6 +77,9 @@ test("enforces the app taxonomy after LLM planning", () => {
   assert.equal(normalizePlanTaxonomy(wrongPlan, "¿Cuánto tiene Vale en crypto?").filters.category, "cryptocurrency");
   assert.equal(normalizePlanTaxonomy(wrongPlan, "¿Cuánto tiene Vale en criptomonedas?").filters.category, "cryptocurrency");
   assert.deepEqual(normalizePlanTaxonomy(wrongPlan, "¿Cuánto USDT tiene Vale?").filters, { owner: "Valeria", category: "crypto", ticker: "USDT" });
+  const grouped = normalizePlanTaxonomy(wrongPlan, "¿Cuánto USDT tiene cada uno?");
+  assert.equal(grouped.filters.owner, null);
+  assert.equal(grouped.groupBy, "owner");
 });
 
 test("normalizes Valeria to the canonical owner Vale", () => {
