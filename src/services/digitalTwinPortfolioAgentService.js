@@ -19,6 +19,7 @@ function parseJson(text){return JSON.parse(String(text||"").trim().replace(/^```
 async function post(body){if(!process.env.OPENAI_API_KEY){const error=new Error("OPENAI_API_KEY is not configured");error.code="OPENAI_NOT_CONFIGURED";throw error}return(await axios.post(OPENAI_RESPONSES_URL,body,{headers:{Authorization:`Bearer ${process.env.OPENAI_API_KEY}`,"Content-Type":"application/json"},timeout:60000})).data}
 function usageStage(stage,data){return{stage,model:data?.model||MODEL,apiRequests:1,webSearchCalls:0,usage:data?.usage||null}}
 function lastQuestion(messages=[]){return String([...messages].reverse().find(x=>x?.role==="user")?.content||"").trim()}
+function planningConversation(messages=[]){return messages.slice(-8).map(message=>`${message.role==="assistant"?"TWIN":"USUARIO"}: ${String(message.content||"").slice(0,1200)}`).join("\n")}
 function normalizePlanTaxonomy(plan={},question=""){
   const normalized={...plan,filters:{...(plan.filters||{})}};
   const q=text(question);
@@ -30,7 +31,7 @@ function normalizePlanTaxonomy(plan={},question=""){
 }
 
 async function planPortfolioQuestion(messages=[]){
-  const question=lastQuestion(messages),data=await post({model:MODEL,reasoning:{effort:"low"},instructions:`Clasificá una pregunta para una app personal de inversiones. PORTFOLIO_DATA si puede responderse exclusivamente con datos propios: holdings, movimientos, titulares, brokers/plataformas, aportes, compras/ventas, PnL/performance histórica o trading. TWIN_ANALYSIS si pide opinión, recomendación, explicación causal, patrones, riesgo cualitativo o qué debería hacer. Vocabulario del usuario: "crypto", "cripto" y "criptomonedas" significan criptomonedas económicas como BTC, ETH, SOL y RON, aunque estén registradas como category=PORTFOLIO e instrument_type=ASSET; usá category=cryptocurrency. Sólo cuando mencione USDT o dólares digitales usá ticker=USDT y category=crypto, que es su categoría técnica. Para una moneda concreta usá ticker. Para distribución por broker/plataforma usá holdings y agrupá por broker. Elegí sólo los datasets mínimos. metric y groupBy deben ser nombres conceptuales breves; nunca generes SQL. Fechas en YYYY-MM-DD; resolvé referencias como "agosto" usando fecha actual ${new Date().toISOString().slice(0,10)}.`,input:question,max_output_tokens:700,text:{verbosity:"low",format:{type:"json_schema",name:"portfolio_query_plan",strict:true,schema:PLAN_SCHEMA}},store:false});
+  const question=lastQuestion(messages),data=await post({model:MODEL,reasoning:{effort:"low"},instructions:`Clasificá la última pregunta de una conversación para una app personal de inversiones. Conservá de los turnos anteriores los filtros implícitos en continuaciones como "¿y Vale?", "¿cómo está distribuido?", "¿y por plataforma?" o "¿cuánto representa?". PORTFOLIO_DATA si puede responderse exclusivamente con datos propios: holdings, movimientos, titulares, brokers/plataformas, aportes, compras/ventas, PnL/performance histórica o trading. TWIN_ANALYSIS si pide opinión, recomendación, explicación causal, patrones, riesgo cualitativo o qué debería hacer. Vocabulario del usuario: "crypto", "cripto" y "criptomonedas" significan criptomonedas económicas como BTC, ETH, SOL y RON, aunque estén registradas como category=PORTFOLIO e instrument_type=ASSET; usá category=cryptocurrency. Sólo cuando mencione USDT o dólares digitales usá ticker=USDT y category=crypto, que es su categoría técnica. Para una moneda concreta usá ticker. Para distribución por broker/plataforma usá holdings y agrupá por broker. Elegí sólo los datasets mínimos. metric y groupBy deben ser nombres conceptuales breves; nunca generes SQL. Fechas en YYYY-MM-DD; resolvé referencias como "agosto" usando fecha actual ${new Date().toISOString().slice(0,10)}.`,input:planningConversation(messages),max_output_tokens:700,text:{verbosity:"low",format:{type:"json_schema",name:"portfolio_query_plan",strict:true,schema:PLAN_SCHEMA}},store:false});
   return{plan:normalizePlanTaxonomy(parseJson(outputText(data)),question),usageStage:usageStage("data_planner",data)};
 }
 
@@ -64,12 +65,15 @@ function summarizeResults(results={}){
   const summary={};
   for(const [dataset,rows] of Object.entries(results)){
     if(!Array.isArray(rows))continue;
+    const groupValue=(key)=>Object.values(rows.reduce((groups,row)=>{const name=String(value(row,key)||"Sin especificar"),current=groups[name]||{name,market_value_usd:0,quantity:0};current.market_value_usd+=Number(row.market_value_usd??row.value_usd??row.market_value)||0;current.quantity+=Number(row.quantity??row.quantity_net)||0;groups[name]=current;return groups},{})).sort((a,b)=>b.market_value_usd-a.market_value_usd);
     summary[dataset]={
       record_count:rows.length,
       market_value_usd:rows.reduce((sum,row)=>sum+(Number(row.market_value_usd??row.value_usd??row.market_value)||0),0),
       quantity:rows.reduce((sum,row)=>sum+(Number(row.quantity??row.quantity_net)||0),0),
       tickers:[...new Set(rows.map(row=>value(row,"normalized_ticker","ticker","instrument")).filter(Boolean))],
       owners:[...new Set(rows.map(row=>value(row,"owner","titular")).filter(Boolean))],
+      by_ticker:groupValue("ticker"),
+      by_platform:groupValue("platform"),
     };
   }
   return summary;
@@ -147,7 +151,7 @@ async function executePlan(plan={},requestContext={}){
 }
 
 async function answerPlannedQuestion({messages,plan,data}){
-  const question=lastQuestion(messages),response=await post({model:MODEL,reasoning:{effort:"low"},instructions:`Respondé en español rioplatense una pregunta factual sobre el portfolio usando exclusivamente DATA. Priorizá computed_summary, cuyos cálculos ya fueron realizados por el backend. market_value, value_usd y market_value_usd son la misma valuación expresada en USD. No opines, no recomiendes, no completes datos ausentes y no menciones SQL ni implementación. Si record_count es cero, indicá que no se encontraron posiciones conciliadas para esos filtros. Respuesta directa y compacta.`,input:`PREGUNTA:\n${question}\n\nPLAN:\n${JSON.stringify(plan)}\n\nDATA:\n${JSON.stringify(data)}`,max_output_tokens:900,text:{verbosity:"low"},store:false});return{answer:outputText(response),usageStage:usageStage("data_answer",response)}
+  const question=lastQuestion(messages),response=await post({model:MODEL,reasoning:{effort:"low"},instructions:`Respondé en español rioplatense una pregunta factual sobre el portfolio usando exclusivamente DATA. Priorizá computed_summary, cuyos cálculos ya fueron realizados por el backend. Para distribuciones usá by_ticker o by_platform según corresponda. market_value, value_usd y market_value_usd son la misma valuación expresada en USD. Formateá moneda como US$ 99.129,89 y cantidades con un máximo razonable de decimales. Nunca muestres nombres técnicos como record_count, market_value_usd, quantity, DATA, filtros ni arrays JSON. No opines, no recomiendes, no completes datos ausentes y no menciones SQL ni implementación. Si record_count es cero, indicá que no se encontraron posiciones conciliadas para esos filtros. Respuesta natural, directa y compacta.`,input:`PREGUNTA:\n${question}\n\nPLAN:\n${JSON.stringify(plan)}\n\nDATA:\n${JSON.stringify(data)}`,max_output_tokens:900,text:{verbosity:"low"},store:false});return{answer:outputText(response),usageStage:usageStage("data_answer",response)}
 }
 
 async function runPortfolioDataAgent(messages=[],requestContext={}){const planned=await planPortfolioQuestion(messages);if(planned.plan.route!=="PORTFOLIO_DATA")return{handled:false,plan:planned.plan,usageStages:[planned.usageStage]};const data=await executePlan(planned.plan,requestContext),answered=await answerPlannedQuestion({messages,plan:planned.plan,data});return{handled:true,answer:answered.answer,plan:planned.plan,dataSources:planned.plan.datasets,usageStages:[planned.usageStage,answered.usageStage]}}
