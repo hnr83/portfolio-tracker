@@ -25,7 +25,7 @@ function classifyTwinRoute(messages = []) {
   if(withdrawalsFollowUp){
     const inheritedYear=withdrawalContext.match(/\b20\d{2}\b/)?.[0];
     const inheritedOwnerGrouping=/\b(cada uno|por titular|por owner)\b/i.test(withdrawalContext);
-    const effectiveQuestion=`${question}${inheritedYear&&!/\b20\d{2}\b/.test(question)?` en ${inheritedYear}`:""}${inheritedOwnerGrouping&&!/\b(cada uno|por titular|por owner)\b/i.test(question)?" por titular":""}`;
+    const effectiveQuestion=`${question}${inheritedYear&&!/\b20\d{2}\b/.test(question)?` en ${inheritedYear}`:""}${inheritedOwnerGrouping&&!WITHDRAWALS.test(question)&&!/\b(cada uno|por titular|por owner)\b/i.test(question)?" por titular":""}`;
     return{route:"WITHDRAWALS_DATA",question:effectiveQuestion,reason:"external_withdrawals_follow_up"};
   }
   if(WITHDRAWALS.test(question) && !ANALYTICAL.test(question)) return {route:"WITHDRAWALS_DATA",question,reason:"external_withdrawals_query"};
@@ -149,7 +149,7 @@ async function answerWithdrawals(question){
   const monthly=/\b(por mes|mes por mes|mensual(?:es|mente)?)\b/i.test(question);
   const dateFilter=Number.isInteger(year)?"AND EXTRACT(YEAR FROM fecha)=@year":"";
   const ownerFilter=owner?"AND LOWER(TRIM(owner))=LOWER(@owner)":"AND LOWER(TRIM(owner)) IN (\'horacio\',\'vale\')";
-  const dimensions=[groupedOwners?"COALESCE(NULLIF(TRIM(owner),\'\'),\'Sin titular\') AS owner":null,monthly?"FORMAT_DATE(\'%Y-%m\',fecha) AS period":null].filter(Boolean);
+  const dimensions=[groupedOwners?"CASE WHEN LOWER(TRIM(owner))=\'horacio\' THEN \'Horacio\' WHEN LOWER(TRIM(owner)) IN (\'vale\',\'valeria\') THEN \'Vale\' ELSE COALESCE(NULLIF(TRIM(owner),\'\'),\'Sin titular\') END AS owner":null,monthly?"FORMAT_DATE(\'%Y-%m\',fecha) AS period":null].filter(Boolean);
   const groups=[groupedOwners?"owner":null,monthly?"period":null].filter(Boolean);
   const rows=await runQuery(`SELECT ${dimensions.length?`${dimensions.join(",")},`:""} COALESCE(SUM(CASE
     WHEN movement_type IN ('SELL_USD','SELL_USDT') THEN ABS(SAFE_CAST(quantity AS FLOAT64))
