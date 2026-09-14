@@ -5,7 +5,7 @@ const EXTERNAL = /\b(hoy|ahora|actual|mercado|cotizaci[oó]n|precio|noticia|t[e�
 const TRADING = /\b(trading|trade|trades|longs?|shorts?|fees?|apalancamiento)\b/i;
 const FACTUAL = /\b(cu[aá]nto|cu[aá]ntos|tengo|tenencia|posici[oó]n|saldo|total|pnl|gan[eé]|perd[ií]|resultado|liquidez|peso|porcentaje|fees?)\b/i;
 const ANALYTICAL = /\b(conviene|deber[ií]a|parece|demasiado|riesgo|mejorar|patr[oó]n|por qu[eé]|recomend|analiz)\b/i;
-const CONTRIBUTIONS = /\b(aportes? netos?|capital (externo )?(neto )?aportado|ingresos? netos?)\b/i;
+const CONTRIBUTIONS = /\b(aportes? netos?|capital (externo )?(neto )?aportado|ingresos? netos?)\b|\baport(?:e|é|aste|ó|o|amos|aron)(?=\s|[?.,!]|$)/i;
 
 function latestQuestion(messages = []) {
   return String([...messages].reverse().find((message) => message?.role === "user")?.content || "").trim();
@@ -101,7 +101,7 @@ async function answerTradingQuestion(question) {
 async function answerNetContributions(question){
   const year=Number(question.match(/\b(20\d{2})\b/)?.[1]);
   const requestedOwner=question.match(/\b(Horacio|Vale|Valeria)\b/i)?.[1];
-  const owner=requestedOwner?.toLowerCase()==="valeria"?"Vale":requestedOwner||null;
+  const owner=/^(vale|valeria)$/i.test(requestedOwner||"")?"Vale":/^horacio$/i.test(requestedOwner||"")?"Horacio":null;
   const dateFilter=Number.isInteger(year)?"AND EXTRACT(YEAR FROM fecha)=@year":"";
   const ownerFilter=owner?"AND LOWER(TRIM(owner))=LOWER(@owner)":"";
   const rows=await runQuery(`SELECT COALESCE(SUM(CASE
