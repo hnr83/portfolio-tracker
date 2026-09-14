@@ -12,8 +12,11 @@ function latestQuestion(messages = []) {
 
 function classifyTwinRoute(messages = []) {
   const question = latestQuestion(messages);
+  const userQuestions=messages.filter(message=>message?.role==="user").map(message=>String(message.content||""));
+  const previousQuestion=userQuestions.at(-2)||"";
+  const tradingFollowUp=TRADING.test(previousQuestion)&&(/\b(eso|ese|esa|total|pero|entonces|y|en\s+20\d{2})\b/i.test(question)||FACTUAL.test(question));
   if (EXTERNAL.test(question)) return { route: "EXTERNAL_ANALYSIS", question, reason: "current_market_context" };
-  if (TRADING.test(question) && FACTUAL.test(question) && !ANALYTICAL.test(question)) return { route: "TRADING_DATA", question, reason: "factual_trading_query" };
+  if ((TRADING.test(question)||tradingFollowUp) && FACTUAL.test(question) && !ANALYTICAL.test(question)) return { route: "TRADING_DATA", question, reason: tradingFollowUp?"factual_trading_follow_up":"factual_trading_query" };
   if (FACTUAL.test(question) && !ANALYTICAL.test(question)) return { route: "INTERNAL_DATA", question, reason: "factual_portfolio_query" };
   return { route: "TWIN_ANALYSIS", question, reason: "reasoning_required" };
 }
@@ -65,6 +68,12 @@ function answerPortfolioQuestion(question, context = {}) {
 }
 
 async function answerTradingQuestion(question) {
+  const year=Number(question.match(/\b(20\d{2})\b/)?.[1]);
+  if(Number.isInteger(year)){
+    const rows=await runQuery(`SELECT COUNT(*) AS total_trades,COALESCE(SUM(CAST(pnl_usd AS FLOAT64)),0) AS total_pnl_usd FROM ${table("vw_trading_trades_valued")} WHERE EXTRACT(YEAR FROM DATE(closed_at))=@year`,{year});
+    const summary=rows[0]||{};
+    return `En ${year}, tu resultado realizado de trading es ${usd(summary.total_pnl_usd)} sobre ${number(summary.total_trades,0)} trades.`;
+  }
   const [summaryRows, assetRows] = await Promise.all([
     runQuery(`SELECT * FROM ${table("vw_trading_summary")} LIMIT 1`),
     runQuery(`SELECT * FROM ${table("vw_trading_by_asset")} ORDER BY pnl_usd DESC`),
