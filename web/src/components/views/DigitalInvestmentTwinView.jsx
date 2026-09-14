@@ -230,7 +230,8 @@ export default function DigitalInvestmentTwinView({
         category: economic(row) === "USDT" ? "CRYPTO" : "PORTFOLIO",
         instrument_type: economic(row) === "USDT" ? "DIGITAL_DOLLAR" : "ASSET",
         owner: row.owner || "Sin titular",
-        broker: row.broker || row.platform || null,
+        platform: row.platform || row.broker || null,
+        broker: row.platform || row.broker || null,
         quantity: Number(row.quantity_net ?? row.quantity ?? 0),
         market_value_usd: Number(row.market_value_usd || 0),
       }));
