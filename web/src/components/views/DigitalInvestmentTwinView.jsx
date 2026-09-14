@@ -81,10 +81,14 @@ function buildHoldings(rows, total) {
       ticker,
       quantity: 0,
       valueUsd: 0,
+      costUsd: 0,
+      pnlUsd: 0,
       category: row.category,
     };
     current.quantity += Number(row.quantity_net ?? row.quantity ?? 0);
     current.valueUsd += Number(row.market_value_usd || 0);
+    current.costUsd += Number(row.cost_value_usd || 0);
+    current.pnlUsd += Number(row.pnl_usd || 0);
     grouped.set(ticker, current);
   });
   return [...grouped.values()].map((row) => ({
