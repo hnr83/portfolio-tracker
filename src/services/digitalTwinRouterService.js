@@ -16,7 +16,7 @@ function classifyTwinRoute(messages = []) {
   const previousQuestion=userQuestions.at(-2)||"";
   const tradingFollowUp=TRADING.test(previousQuestion)&&(/\b(eso|ese|esa|total|pero|entonces|y|en\s+20\d{2})\b/i.test(question)||FACTUAL.test(question));
   if (EXTERNAL.test(question)) return { route: "EXTERNAL_ANALYSIS", question, reason: "current_market_context" };
-  if ((TRADING.test(question)||tradingFollowUp) && FACTUAL.test(question) && !ANALYTICAL.test(question)) return { route: "TRADING_DATA", question, reason: tradingFollowUp?"factual_trading_follow_up":"factual_trading_query" };
+  if (((TRADING.test(question)&&FACTUAL.test(question))||tradingFollowUp) && !ANALYTICAL.test(question)) return { route: "TRADING_DATA", question, reason: tradingFollowUp?"factual_trading_follow_up":"factual_trading_query" };
   if (FACTUAL.test(question) && !ANALYTICAL.test(question)) return { route: "INTERNAL_DATA", question, reason: "factual_portfolio_query" };
   return { route: "TWIN_ANALYSIS", question, reason: "reasoning_required" };
 }
