@@ -40,6 +40,8 @@ function findHolding(question, portfolio = {}) {
 
 function answerPortfolioQuestion(question, context = {}) {
   const portfolio = context.portfolio || context || {};
+  const groupedQuestion=/\b(cada uno|cada titular|por titular|por owner|ambos|ambas|los dos|las dos|entre\s+(horacio|vale|valeria))\b/i.test(question);
+  if(groupedQuestion)return null;
   const ownershipQuestion=/\b(titular|titulares|nombre de|horacio|valeria|vale|owner)\b/i.test(question);
   const ownershipQualifier=/\b(crypto|cripto|acci[oó]n|cedear|etf|cash|usdt|btc|eth|sol|broker|plataforma|trading|compra|venta|aporte|durante|desde|hasta|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|20\d{2})\b/i.test(question);
   if (ownershipQuestion && ownershipQualifier) return null;
