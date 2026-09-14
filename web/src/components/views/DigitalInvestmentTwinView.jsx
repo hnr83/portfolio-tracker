@@ -13,7 +13,24 @@ import {
   TwinTrackingPanel,
 } from "./digital-twin/TwinStatePanels";
 const KEY = "digital-twin-reference-scenario-id",
+  CHAT_KEY = "digital-investment-twin-chat",
   CRYPTO = new Set(["BTC", "ETH", "SOL", "RON"]);
+function loadSessionChat() {
+  if (typeof window === "undefined") return [];
+  try {
+    const saved = JSON.parse(window.sessionStorage.getItem(CHAT_KEY) || "[]");
+    return Array.isArray(saved)
+      ? saved.filter(
+          (message) =>
+            message &&
+            ["user", "assistant"].includes(message.role) &&
+            typeof message.content === "string",
+        )
+      : [];
+  } catch {
+    return [];
+  }
+}
 const tickerOf = (r) =>
     String(r?.normalized_ticker || r?.ticker || "")
       .toUpperCase()
@@ -113,12 +130,19 @@ export default function DigitalInvestmentTwinView({
     [plannerLoading, setPlannerLoading] = useState(true),
     [plannerError, setPlannerError] = useState(""),
     [profile, setProfile] = useState(null),
-    [chat, setChat] = useState([]),
+    [chat, setChat] = useState(loadSessionChat),
     [draft, setDraft] = useState(""),
     [chatLoading, setChatLoading] = useState(false),
     [chatError, setChatError] = useState(""),
     [custodyRows, setCustodyRows] = useState([]);
   const chatEndRef = useRef(null);
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(CHAT_KEY, JSON.stringify(chat.slice(-60)));
+    } catch {
+      // Chat persistence is best-effort; the conversation still works in memory.
+    }
+  }, [chat]);
   useEffect(() => {
     let c = false;
     (async () => {
