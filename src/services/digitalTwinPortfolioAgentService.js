@@ -34,12 +34,12 @@ function normalizePlanTaxonomy(plan={},question=""){
   }else if(/\b(crypto|cripto|criptomonedas?)\b/.test(q))normalized.filters.category="cryptocurrency";
   if(/\b(posici[oó]n|tenencia|distribu(?:ye|ci[oó]n))\b/.test(q)&&/\b(actual|actualmente|hoy)\b/.test(q)&&/\b(titular|owner|plataforma|broker)\b/.test(q)){
     normalized.datasets=["holdings"];
-    normalized.filters.owner=null;
     normalized.filters.dateFrom=null;
     normalized.filters.dateTo=null;
     normalized.calculation="group";
     normalized.metric=normalized.metric||"market_value_usd";
-    const asksOwner=/\b(titular|owner)\b/.test(q),asksPlatform=/\b(plataforma|broker)\b/.test(q);
+    const asksOwner=/\b(titular|owner|cada uno|ambos|los dos)\b/.test(q),asksPlatform=/\b(plataforma|broker)\b/.test(q);
+    if(asksOwner)normalized.filters.owner=null;
     normalized.groupBy=asksOwner&&asksPlatform?"platform_owner":asksPlatform?"platform":"owner";
   }
   if(/\b(ganamos|ganancia|ganancias|perdemos|p[eé]rdida|p[eé]rdidas|pnl)\b/.test(q)&&/\b(actual|actualmente|hoy|posici[oó]n)\b/.test(q)){
