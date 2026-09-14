@@ -6,7 +6,7 @@ const TRADING = /\b(trading|trade|trades|longs?|shorts?|fees?|apalancamiento)\b/
 const FACTUAL = /\b(cu[aá]nto|cu[aá]ntos|tengo|tenencia|posici[oó]n|saldo|total|pnl|gan[eé]|perd[ií]|resultado|liquidez|peso|porcentaje|fees?)\b/i;
 const ANALYTICAL = /\b(conviene|deber[ií]a|parece|demasiado|riesgo|mejorar|patr[oó]n|por qu[eé]|recomend|analiz)\b/i;
 const CONTRIBUTIONS = /\b(aportes?(?: netos?)?|capital (externo )?(neto )?aportado|ingresos? netos?)\b|\baport(?:e|é|aste|ó|o|amos|aron)(?=\s|[?.,!]|$)/i;
-const WITHDRAWALS = /\b(retiros?|retir(?:e|é|aste|ó|o|amos|aron)|extracciones?)\b/i;
+const WITHDRAWALS = /\b(retiros?|extracciones?)\b|\bretir(?:e|é|aste|ó|o|amos|aron)(?=\s|[?.,!]|$)/i;
 
 function latestQuestion(messages = []) {
   return String([...messages].reverse().find((message) => message?.role === "user")?.content || "").trim();
@@ -17,9 +17,16 @@ function classifyTwinRoute(messages = []) {
   const userQuestions=messages.filter(message=>message?.role==="user").map(message=>String(message.content||""));
   const previousQuestion=userQuestions.at(-2)||"";
   const contributionContext=[...userQuestions.slice(0,-1)].reverse().find(item=>CONTRIBUTIONS.test(item))||"";
+  const withdrawalContext=[...userQuestions.slice(0,-1)].reverse().find(item=>WITHDRAWALS.test(item))||"";
   const tradingFollowUp=TRADING.test(previousQuestion)&&(/\b(eso|ese|esa|total|pero|entonces|y|en\s+20\d{2})\b/i.test(question)||FACTUAL.test(question));
   const contributionsFollowUp=Boolean(contributionContext)&&/\b(y|vale|valeria|horacio|eso|ese|esa|ambos|cada uno|20\d{2}|mes)\b/i.test(question);
+  const withdrawalsFollowUp=Boolean(withdrawalContext)&&(WITHDRAWALS.test(question)||/\b(y|vale|valeria|horacio|eso|ese|esa|ambos|cada uno|20\d{2}|mes)\b/i.test(question));
   if (EXTERNAL.test(question)) return { route: "EXTERNAL_ANALYSIS", question, reason: "current_market_context" };
+  if(withdrawalsFollowUp){
+    const inheritedYear=withdrawalContext.match(/\b20\d{2}\b/)?.[0];
+    const effectiveQuestion=`${question}${inheritedYear&&!/\b20\d{2}\b/.test(question)?` en ${inheritedYear}`:""}`;
+    return{route:"WITHDRAWALS_DATA",question:effectiveQuestion,reason:"external_withdrawals_follow_up"};
+  }
   if(WITHDRAWALS.test(question) && !ANALYTICAL.test(question)) return {route:"WITHDRAWALS_DATA",question,reason:"external_withdrawals_query"};
   if(contributionsFollowUp){
     const inheritedYear=contributionContext.match(/\b20\d{2}\b/)?.[0];
