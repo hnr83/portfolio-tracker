@@ -141,12 +141,11 @@ async function answerWithdrawals(question){
   const dateFilter=Number.isInteger(year)?"AND EXTRACT(YEAR FROM fecha)=@year":"";
   const ownerFilter=owner?"AND LOWER(TRIM(owner))=LOWER(@owner)":bothOwners?"AND LOWER(TRIM(owner)) IN ('horacio','vale')":"";
   const rows=await runQuery(`SELECT COALESCE(SUM(CASE
-    WHEN movement_type IN ('SELL_ASSET') THEN ABS(SAFE_CAST(net_amount AS FLOAT64))
     WHEN movement_type IN ('SELL_USD','SELL_USDT') THEN ABS(SAFE_CAST(quantity AS FLOAT64))
     WHEN movement_type='EXPENSE_USD' THEN ABS(SAFE_CAST(net_amount AS FLOAT64))
     ELSE 0 END),0) AS withdrawals_usd
     FROM ${table("movements")} WHERE fecha IS NOT NULL ${dateFilter} ${ownerFilter}
-      AND movement_type IN ('SELL_ASSET','SELL_USD','SELL_USDT','EXPENSE_USD') AND (
+      AND movement_type IN ('SELL_USD','SELL_USDT','EXPENSE_USD') AND (
         source_table='transactions_raw' OR flow_type='EXTERNAL' OR
         (transaction_group_id IS NULL AND NOT (movement_type IN ('SELL_USDT') AND flow_type='SETTLEMENT') AND source_table NOT IN ('bingx_spot','trading_transfer'))
       )`,{...(Number.isInteger(year)?{year}:{}),...(owner?{owner}:{})});
