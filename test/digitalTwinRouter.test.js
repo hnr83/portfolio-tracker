@@ -37,6 +37,19 @@ test("inherits contribution metric and year in owner follow-ups", () => {
   assert.match(route.question,/Vale.*2026/i);
 });
 
+test("inherits monthly contribution grouping across multiple follow-ups", () => {
+  const conversation=[
+    {role:"user",content:"¿Cómo se distribuyeron nuestros aportes de 2026 por mes?"},
+    {role:"assistant",content:"Aportes por mes..."},
+    {role:"user",content:"¿Y solamente los de Vale?"},
+  ];
+  const first=classifyTwinRoute(conversation);
+  assert.equal(first.route,"CONTRIBUTIONS_DATA");
+  assert.match(first.question,/Vale.*2026.*por mes/i);
+  conversation.push({role:"assistant",content:"Vale registró..."},{role:"user",content:"¿Los de Vale mes por mes?"});
+  assert.equal(classifyTwinRoute(conversation).route,"CONTRIBUTIONS_DATA");
+});
+
 test("keeps factual trading follow-ups in trading context", () => {
   const conversation = [
     { role: "user", content: "¿Cuánto generé en trading en 2026?" },
