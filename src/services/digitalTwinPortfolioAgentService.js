@@ -185,18 +185,28 @@ async function loadOwnerHoldings(){
   `);
 }
 
+async function resolveCustodyBrokerAlias(broker){
+  if(!broker)return broker;
+  const rows=await runQuery(`SELECT canonical_broker FROM ${table("custody_broker_aliases")}
+    WHERE LOWER(TRIM(raw_broker))=LOWER(TRIM(@broker))
+    ORDER BY created_at DESC LIMIT 1`,{broker});
+  return rows[0]?.canonical_broker||broker;
+}
+
 async function executePlan(plan={},requestContext={}){
-  const selected=(plan.datasets||[]).filter(name=>DATASETS[name]).slice(0,3);
+  const effectivePlan={...plan,filters:{...(effectivePlan.filters||{})}};
+  if(effectivePlan.filters.broker)effectivePlan.filters.broker=await resolveCustodyBrokerAlias(effectivePlan.filters.broker);
+  const selected=(effectivePlan.datasets||[]).filter(name=>DATASETS[name]).slice(0,3);
   const results={};
   await Promise.all(selected.map(async name=>{
     const contextualHoldings=Array.isArray(requestContext?.portfolio?.ownerHoldings)?requestContext.portfolio.ownerHoldings:[];
-    if(name==="holdings"&&(plan.filters?.owner||text(plan.groupBy).includes("owner")||text(plan.groupBy)==="platform")){
-      const needsCost=text(plan.metric)==="pnl_usd"||/\b(pnl|cost|costo|ganancia|p[eé]rdida)\b/.test(text(plan.metric));
-      const custodyRows=contextualHoldings.filter(row=>matches(row,plan.filters));
+    if(name==="holdings"&&(effectivePlan.filters?.owner||text(effectivePlan.groupBy).includes("owner")||text(effectivePlan.groupBy)==="platform")){
+      const needsCost=text(effectivePlan.metric)==="pnl_usd"||/\b(pnl|cost|costo|ganancia|p[eé]rdida)\b/.test(text(effectivePlan.metric));
+      const custodyRows=contextualHoldings.filter(row=>matches(row,effectivePlan.filters));
       let rows=custodyRows;
       if(needsCost){
         const authoritativeHoldings=Array.isArray(requestContext?.portfolio?.holdings)?requestContext.portfolio.holdings:[];
-        const authoritative=authoritativeHoldings.find(row=>matches(row,{ticker:plan.filters?.ticker,category:plan.filters?.category}));
+        const authoritative=authoritativeHoldings.find(row=>matches(row,{ticker:effectivePlan.filters?.ticker,category:effectivePlan.filters?.category}));
         const custodyValue=custodyRows.reduce((sum,row)=>sum+Number(row.market_value_usd||row.valueUsd||0),0);
         const custodyQuantity=custodyRows.reduce((sum,row)=>sum+Number(row.quantity||0),0);
         const allocationBase=custodyValue>0?"value":"quantity";
@@ -218,7 +228,7 @@ async function executePlan(plan={},requestContext={}){
     }
     const limit=name==="movements"||name==="trading_trades"?1000:250;
     const rows=await runQuery(`SELECT * FROM ${table(DATASETS[name])} LIMIT ${limit}`);
-    results[name]=compact(rows.filter(row=>matches(row,plan.filters)));
+    results[name]=compact(rows.filter(row=>matches(row,effectivePlan.filters)));
   }));
   results.computed_summary=summarizeResults(results);
   return results;
