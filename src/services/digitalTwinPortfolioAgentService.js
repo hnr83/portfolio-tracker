@@ -139,9 +139,19 @@ async function loadOwnerHoldings(){
       SELECT ticker,SUM(quantity) located_quantity FROM located GROUP BY 1
     ), valued AS (
       SELECT UPPER(COALESCE(NULLIF(normalized_ticker,''),ticker)) ticker,
-        SUM(CAST(quantity_net AS FLOAT64)) expected_quantity,
-        SAFE_DIVIDE(SUM(CAST(market_value_usd AS FLOAT64)),NULLIF(SUM(CAST(quantity_net AS FLOAT64)),0)) unit_value_usd,
-        SAFE_DIVIDE(SUM(CAST(cost_value_usd AS FLOAT64)),NULLIF(SUM(CAST(quantity_net AS FLOAT64)),0)) unit_cost_usd
+        IF(UPPER(COALESCE(NULLIF(normalized_ticker,''),ticker)) IN ('BTC','ETH','SOL','RON'),
+          ARRAY_AGG(CAST(quantity_net AS FLOAT64) ORDER BY CAST(market_value_usd AS FLOAT64) DESC LIMIT 1)[OFFSET(0)],
+          SUM(CAST(quantity_net AS FLOAT64))) expected_quantity,
+        IF(UPPER(COALESCE(NULLIF(normalized_ticker,''),ticker)) IN ('BTC','ETH','SOL','RON'),
+          SAFE_DIVIDE(
+            ARRAY_AGG(CAST(market_value_usd AS FLOAT64) ORDER BY CAST(market_value_usd AS FLOAT64) DESC LIMIT 1)[OFFSET(0)],
+            NULLIF(ARRAY_AGG(CAST(quantity_net AS FLOAT64) ORDER BY CAST(market_value_usd AS FLOAT64) DESC LIMIT 1)[OFFSET(0)],0)),
+          SAFE_DIVIDE(SUM(CAST(market_value_usd AS FLOAT64)),NULLIF(SUM(CAST(quantity_net AS FLOAT64)),0))) unit_value_usd,
+        IF(UPPER(COALESCE(NULLIF(normalized_ticker,''),ticker)) IN ('BTC','ETH','SOL','RON'),
+          SAFE_DIVIDE(
+            ARRAY_AGG(CAST(cost_value_usd AS FLOAT64) ORDER BY CAST(market_value_usd AS FLOAT64) DESC LIMIT 1)[OFFSET(0)],
+            NULLIF(ARRAY_AGG(CAST(quantity_net AS FLOAT64) ORDER BY CAST(market_value_usd AS FLOAT64) DESC LIMIT 1)[OFFSET(0)],0)),
+          SAFE_DIVIDE(SUM(CAST(cost_value_usd AS FLOAT64)),NULLIF(SUM(CAST(quantity_net AS FLOAT64)),0))) unit_cost_usd
       FROM ${table("vw_portfolio_valued")} GROUP BY 1
     )
     SELECT l.ticker,l.owner,l.platform,
