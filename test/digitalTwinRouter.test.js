@@ -36,16 +36,31 @@ test("routes withdrawals before inherited contribution context", () => {
   assert.equal(route.route,"WITHDRAWALS_DATA");
 });
 
-test("inherits withdrawals and year before older contribution context", () => {
-  const route=classifyTwinRoute([
+test("inherits withdrawals, year and owner grouping across follow-ups", () => {
+  const conversation=[
     {role:"user",content:"¿Cómo se distribuyeron nuestros aportes de 2026 por mes?"},
     {role:"assistant",content:"Aportes..."},
     {role:"user",content:"¿Cuánto retiramos entre los dos en 2026?"},
     {role:"assistant",content:"Retiros..."},
     {role:"user",content:"¿Cuánto retiró cada uno?"},
-  ]);
+  ];
+  const grouped=classifyTwinRoute(conversation);
+  assert.equal(grouped.route,"WITHDRAWALS_DATA");
+  assert.match(grouped.question,/cada uno.*2026/i);
+
+  conversation.push(
+    {role:"assistant",content:"Vale... Horacio..."},
+    {role:"user",content:"¿Y en 2025?"}
+  );
+  const nextYear=classifyTwinRoute(conversation);
+  assert.equal(nextYear.route,"WITHDRAWALS_DATA");
+  assert.match(nextYear.question,/2025.*por titular|por titular.*2025/i);
+});
+
+test("routes monthly withdrawal distributions to withdrawal data", () => {
+  const route=classifyTwinRoute(messages("¿Cómo se distribuyeron los retiros de 2026 por mes?"));
   assert.equal(route.route,"WITHDRAWALS_DATA");
-  assert.match(route.question,/cada uno.*2026/i);
+  assert.match(route.question,/2026.*por mes/i);
 });
 
 test("inherits contribution metric and year in owner follow-ups", () => {
