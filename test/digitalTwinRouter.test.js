@@ -85,5 +85,6 @@ test("uses owner-aware holdings from the request context", async () => {
       { ticker: "BTC", owner: "Horacio", category: "PORTFOLIO", market_value_usd: 200 },
     ] },
   });
-  assert.deepEqual(data.holdings, [{ ticker: "USDT", owner: "Valeria", category: "CRYPTO", market_value_usd: 100 }]);
+  assert.deepEqual(data.holdings, [{ ticker: "USDT", owner: "Valeria", category: "CRYPTO", market_value_usd: 100, market_value: 100, value_usd: 100 }]);
+  assert.equal(data.computed_summary.holdings.market_value_usd, 100);
 });
