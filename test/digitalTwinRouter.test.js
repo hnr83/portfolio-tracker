@@ -113,6 +113,21 @@ test("does not let withdrawal history hijack a new BTC performance question", ()
   assert.equal(route.route,"TWIN_ANALYSIS");
 });
 
+test("keeps current custody distributions on internal portfolio data", () => {
+  const route=classifyTwinRoute(messages("¿Cómo se distribuye mi posición actual de TSLA por plataforma y titular?"));
+  assert.equal(route.route,"TWIN_ANALYSIS");
+  assert.equal(route.reason,"current_position_data");
+
+  const plan=normalizePlanTaxonomy({
+    datasets:["performance"],
+    filters:{ticker:"TSLA",owner:"Horacio",broker:null,category:null,side:null,dateFrom:"2026-01-01",dateTo:"2026-12-31"},
+    calculation:"summary",metric:null,groupBy:null,
+  },"¿Cómo se distribuye mi posición actual de TSLA por plataforma y titular?");
+  assert.deepEqual(plan.datasets,["holdings"]);
+  assert.equal(plan.filters.owner,null);
+  assert.equal(plan.groupBy,"platform_owner");
+});
+
 test("keeps current position PnL on internal portfolio data", () => {
   const route=classifyTwinRoute(messages("Recalculá el PnL actual de BTC por titular"));
   assert.equal(route.route,"TWIN_ANALYSIS");
