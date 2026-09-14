@@ -19,6 +19,15 @@ test("routes factual trading questions to trading data", () => {
   assert.equal(classifyTwinRoute(messages("¿Cuánto pagué de fees?")).route, "TRADING_DATA");
 });
 
+test("keeps factual trading follow-ups in trading context", () => {
+  const conversation = [
+    { role: "user", content: "¿Cuánto generé en trading en 2026?" },
+    { role: "assistant", content: "Tu resultado total..." },
+    { role: "user", content: "¿Eso es total, pero en 2026?" },
+  ];
+  assert.equal(classifyTwinRoute(conversation).route, "TRADING_DATA");
+});
+
 test("keeps judgment and current-market questions in an LLM pipeline", () => {
   assert.equal(classifyTwinRoute(messages("¿Estoy demasiado expuesto a BTC?")).route, "TWIN_ANALYSIS");
   assert.equal(classifyTwinRoute(messages("¿Conviene comprar BTC con el precio de hoy?")).route, "EXTERNAL_ANALYSIS");
