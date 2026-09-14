@@ -5,6 +5,7 @@ const EXTERNAL = /\b(hoy|ahora|actual|mercado|cotizaci[oó]n|precio|noticia|t[e�
 const TRADING = /\b(trading|trade|trades|longs?|shorts?|fees?|apalancamiento)\b/i;
 const FACTUAL = /\b(cu[aá]nto|cu[aá]ntos|tengo|tenencia|posici[oó]n|saldo|total|pnl|gan[eé]|perd[ií]|resultado|liquidez|peso|porcentaje|fees?)\b/i;
 const ANALYTICAL = /\b(conviene|deber[ií]a|parece|demasiado|riesgo|mejorar|patr[oó]n|por qu[eé]|recomend|analiz)\b/i;
+const CONTRIBUTIONS = /\b(aportes? netos?|capital (externo )?(neto )?aportado|ingresos? netos?)\b/i;
 
 function latestQuestion(messages = []) {
   return String([...messages].reverse().find((message) => message?.role === "user")?.content || "").trim();
@@ -16,6 +17,7 @@ function classifyTwinRoute(messages = []) {
   const previousQuestion=userQuestions.at(-2)||"";
   const tradingFollowUp=TRADING.test(previousQuestion)&&(/\b(eso|ese|esa|total|pero|entonces|y|en\s+20\d{2})\b/i.test(question)||FACTUAL.test(question));
   if (EXTERNAL.test(question)) return { route: "EXTERNAL_ANALYSIS", question, reason: "current_market_context" };
+  if (CONTRIBUTIONS.test(question) && !ANALYTICAL.test(question)) return { route: "CONTRIBUTIONS_DATA", question, reason: "net_contributions_query" };
   if (((TRADING.test(question)&&FACTUAL.test(question))||tradingFollowUp) && !ANALYTICAL.test(question)) return { route: "TRADING_DATA", question, reason: tradingFollowUp?"factual_trading_follow_up":"factual_trading_query" };
   if (FACTUAL.test(question) && !ANALYTICAL.test(question)) return { route: "INTERNAL_DATA", question, reason: "factual_portfolio_query" };
   return { route: "TWIN_ANALYSIS", question, reason: "reasoning_required" };
@@ -91,6 +93,27 @@ async function answerTradingQuestion(question) {
   return `Tu resultado realizado de trading es ${usd(totalPnl)} en total, sobre ${number(summary.total_trades, 0)} trades.`;
 }
 
+async function answerNetContributions(question){
+  const year=Number(question.match(/\b(20\d{2})\b/)?.[1]);
+  const requestedOwner=question.match(/\b(Horacio|Vale|Valeria)\b/i)?.[1];
+  const owner=requestedOwner?.toLowerCase()==="valeria"?"Vale":requestedOwner||null;
+  const dateFilter=Number.isInteger(year)?"AND EXTRACT(YEAR FROM fecha)=@year":"";
+  const ownerFilter=owner?"AND LOWER(TRIM(owner))=LOWER(@owner)":"";
+  const rows=await runQuery(`SELECT COALESCE(SUM(CASE
+    WHEN movement_type IN ('BUY_ASSET','BUY_USD','BUY_USDT','INCOME_USD') THEN 1
+    WHEN movement_type IN ('SELL_ASSET','SELL_USD','SELL_USDT','EXPENSE_USD') THEN -1 ELSE 0 END * CASE
+    WHEN movement_type IN ('BUY_ASSET','SELL_ASSET') THEN ABS(SAFE_CAST(net_amount AS FLOAT64))
+    WHEN movement_type IN ('BUY_USD','SELL_USD','BUY_USDT','SELL_USDT') THEN ABS(SAFE_CAST(quantity AS FLOAT64))
+    WHEN movement_type IN ('INCOME_USD','EXPENSE_USD') THEN ABS(SAFE_CAST(net_amount AS FLOAT64)) ELSE 0 END),0) AS net_contributions_usd
+    FROM ${table("movements")} WHERE fecha IS NOT NULL ${dateFilter} ${ownerFilter} AND (
+      source_table='transactions_raw' OR flow_type='EXTERNAL' OR
+      (source_table='manual' AND movement_type='BUY_ASSET' AND settlement_currency='ARS') OR
+      (transaction_group_id IS NULL AND NOT (movement_type IN ('BUY_USDT','SELL_USDT') AND flow_type='SETTLEMENT' AND NOT (source_table='cv_usdt_raw' AND movement_type='BUY_USDT' AND description='Venta BTC')) AND source_table NOT IN ('bingx_spot','trading_transfer'))
+    )`,{...(Number.isInteger(year)?{year}:{}),...(owner?{owner}: {})});
+  const amount=rows[0]?.net_contributions_usd||0;
+  return `${owner?`${owner} registró`:'Registraste'} ${usd(amount)} de aportes netos${Number.isInteger(year)?` durante ${year}`:' acumulados'}.`;
+}
+
 async function resolveRoutedQuestion(route, context = {}) {
   if (route.route === "INTERNAL_DATA") {
     const answer = answerPortfolioQuestion(route.question, context);
@@ -99,6 +122,10 @@ async function resolveRoutedQuestion(route, context = {}) {
   if (route.route === "TRADING_DATA") {
     const answer = await answerTradingQuestion(route.question);
     return { answer, route: route.route, dataSources: ["vw_trading_summary", "vw_trading_by_asset"] };
+  }
+  if(route.route==="CONTRIBUTIONS_DATA"){
+    const answer=await answerNetContributions(route.question);
+    return{answer,route:route.route,dataSources:["movements"]};
   }
   return null;
 }
