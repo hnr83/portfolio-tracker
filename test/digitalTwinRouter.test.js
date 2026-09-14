@@ -26,6 +26,8 @@ test("keeps factual trading follow-ups in trading context", () => {
     { role: "user", content: "¿Eso es total, pero en 2026?" },
   ];
   assert.equal(classifyTwinRoute(conversation).route, "TRADING_DATA");
+  conversation[2] = { role: "user", content: "¿Y en 2025?" };
+  assert.equal(classifyTwinRoute(conversation).route, "TRADING_DATA");
 });
 
 test("keeps judgment and current-market questions in an LLM pipeline", () => {
