@@ -15,12 +15,15 @@ function classifyTwinRoute(messages = []) {
   const question = latestQuestion(messages);
   const userQuestions=messages.filter(message=>message?.role==="user").map(message=>String(message.content||""));
   const previousQuestion=userQuestions.at(-2)||"";
+  const contributionContext=[...userQuestions.slice(0,-1)].reverse().find(item=>CONTRIBUTIONS.test(item))||"";
   const tradingFollowUp=TRADING.test(previousQuestion)&&(/\b(eso|ese|esa|total|pero|entonces|y|en\s+20\d{2})\b/i.test(question)||FACTUAL.test(question));
-  const contributionsFollowUp=CONTRIBUTIONS.test(previousQuestion)&&/\b(y|vale|valeria|horacio|eso|ese|esa|ambos|cada uno|20\d{2})\b/i.test(question);
+  const contributionsFollowUp=Boolean(contributionContext)&&/\b(y|vale|valeria|horacio|eso|ese|esa|ambos|cada uno|20\d{2}|mes)\b/i.test(question);
   if (EXTERNAL.test(question)) return { route: "EXTERNAL_ANALYSIS", question, reason: "current_market_context" };
   if(contributionsFollowUp){
-    const inheritedYear=previousQuestion.match(/\b20\d{2}\b/)?.[0];
-    return{route:"CONTRIBUTIONS_DATA",question:`${question}${inheritedYear&&!/\b20\d{2}\b/.test(question)?` en ${inheritedYear}`:""}`,reason:"net_contributions_follow_up"};
+    const inheritedYear=contributionContext.match(/\b20\d{2}\b/)?.[0];
+    const inheritedMonthly=/\b(por mes|mes por mes|mensual(?:es|mente)?)\b/i.test(contributionContext);
+    const effectiveQuestion=`${question}${inheritedYear&&!/\b20\d{2}\b/.test(question)?` en ${inheritedYear}`:""}${inheritedMonthly&&!/\b(por mes|mes por mes|mensual(?:es|mente)?)\b/i.test(question)?" por mes":""}`;
+    return{route:"CONTRIBUTIONS_DATA",question:effectiveQuestion,reason:"net_contributions_follow_up"};
   }
   if (CONTRIBUTIONS.test(question) && !ANALYTICAL.test(question)) return { route: "CONTRIBUTIONS_DATA", question, reason: "net_contributions_query" };
   if (((TRADING.test(question)&&FACTUAL.test(question))||tradingFollowUp) && !ANALYTICAL.test(question)) return { route: "TRADING_DATA", question, reason: tradingFollowUp?"factual_trading_follow_up":"factual_trading_query" };
@@ -103,7 +106,7 @@ async function answerNetContributions(question){
   const requestedOwner=question.match(/\b(Horacio|Vale|Valeria)\b/i)?.[1];
   const owner=/^(vale|valeria)$/i.test(requestedOwner||"")?"Vale":/^horacio$/i.test(requestedOwner||"")?"Horacio":null;
   const bothOwners=/\b(nuestros?|aportamos|entre los dos|ambos|los dos)\b/i.test(question);
-  const monthly=/\b(por mes|mensual(?:es|mente)?)\b/i.test(question);
+  const monthly=/\b(por mes|mes por mes|mensual(?:es|mente)?)\b/i.test(question);
   const dateFilter=Number.isInteger(year)?"AND EXTRACT(YEAR FROM fecha)=@year":"";
   const ownerFilter=owner?"AND LOWER(TRIM(owner))=LOWER(@owner)":bothOwners?"AND LOWER(TRIM(owner)) IN ('horacio','vale')":"";
   const amountSql=`CASE
