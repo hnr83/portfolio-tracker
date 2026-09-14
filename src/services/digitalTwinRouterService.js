@@ -70,7 +70,7 @@ function answerPortfolioQuestion(question, context = {}) {
 async function answerTradingQuestion(question) {
   const year=Number(question.match(/\b(20\d{2})\b/)?.[1]);
   if(Number.isInteger(year)){
-    const rows=await runQuery(`SELECT COUNT(*) AS total_trades,COALESCE(SUM(CAST(pnl_usd AS FLOAT64)),0) AS total_pnl_usd FROM ${table("vw_trading_trades_valued")} WHERE EXTRACT(YEAR FROM DATE(closed_at))=@year`,{year});
+    const rows=await runQuery(`SELECT COUNT(*) AS total_trades,COALESCE(SUM(CAST(pnl_usd_calculated AS FLOAT64)),0) AS total_pnl_usd FROM ${table("vw_trading_trades_valued")} WHERE EXTRACT(YEAR FROM DATE(closed_at))=@year`,{year});
     const summary=rows[0]||{};
     return `En ${year}, tu resultado realizado de trading es ${usd(summary.total_pnl_usd)} sobre ${number(summary.total_trades,0)} trades.`;
   }
