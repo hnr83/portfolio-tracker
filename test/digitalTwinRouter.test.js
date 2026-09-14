@@ -230,8 +230,8 @@ test("uses reconciled custody rows as the only source for owner PnL", async () =
     portfolio:{
       holdings:[{ticker:"TSLA",quantity:100,valueUsd:1000,costUsd:800,pnlUsd:200}],
       ownerHoldings:[
-        {ticker:"BCBA:TSLA",normalized_ticker:"TSLA",owner:"Horacio",market_value_usd:600,quantity:60},
-        {ticker:"TSLA",normalized_ticker:"TSLA",owner:"Vale",market_value_usd:400,quantity:40},
+        {ticker:"BCBA:TSLA",normalized_ticker:"TSLA",owner:"Horacio",platform:"BMB",market_value_usd:600,quantity:60},
+        {ticker:"TSLA",normalized_ticker:"TSLA",owner:"Vale",platform:"Cocos Vale",market_value_usd:400,quantity:40},
       ],
     },
   });
@@ -239,6 +239,10 @@ test("uses reconciled custody rows as the only source for owner PnL", async () =
   assert.equal(data.computed_summary.holdings.market_value_usd,1000);
   assert.equal(data.computed_summary.holdings.cost_value_usd,800);
   assert.equal(data.computed_summary.holdings.pnl_usd,200);
+  assert.deepEqual(
+    data.computed_summary.holdings.by_platform_owner.map(row=>row.name).sort(),
+    ["BMB · Horacio","Cocos Vale · Vale"],
+  );
 });
 
 test("uses owner-aware holdings from the request context", async () => {
