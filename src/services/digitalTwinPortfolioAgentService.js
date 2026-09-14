@@ -137,22 +137,29 @@ async function loadOwnerHoldings(){
       SELECT ticker,owner,platform,SUM(quantity) quantity FROM assigned GROUP BY 1,2,3
     ), located_totals AS (
       SELECT ticker,SUM(quantity) located_quantity FROM located GROUP BY 1
+    ), valued_source AS (
+      SELECT
+        UPPER(COALESCE(NULLIF(normalized_ticker,''),ticker)) ticker,
+        CAST(quantity_net AS FLOAT64) quantity_net,
+        CAST(market_value_usd AS FLOAT64) market_value_usd,
+        CAST(cost_value_usd AS FLOAT64) cost_value_usd
+      FROM ${table("vw_portfolio_valued")}
     ), valued AS (
-      SELECT UPPER(COALESCE(NULLIF(normalized_ticker,''),ticker)) ticker,
-        IF(UPPER(COALESCE(NULLIF(normalized_ticker,''),ticker)) IN ('BTC','ETH','SOL','RON'),
-          ARRAY_AGG(CAST(quantity_net AS FLOAT64) ORDER BY CAST(market_value_usd AS FLOAT64) DESC LIMIT 1)[OFFSET(0)],
-          SUM(CAST(quantity_net AS FLOAT64))) expected_quantity,
-        IF(UPPER(COALESCE(NULLIF(normalized_ticker,''),ticker)) IN ('BTC','ETH','SOL','RON'),
+      SELECT ticker,
+        IF(ticker IN ('BTC','ETH','SOL','RON'),
+          ARRAY_AGG(quantity_net ORDER BY market_value_usd DESC LIMIT 1)[OFFSET(0)],
+          SUM(quantity_net)) expected_quantity,
+        IF(ticker IN ('BTC','ETH','SOL','RON'),
           SAFE_DIVIDE(
-            ARRAY_AGG(CAST(market_value_usd AS FLOAT64) ORDER BY CAST(market_value_usd AS FLOAT64) DESC LIMIT 1)[OFFSET(0)],
-            NULLIF(ARRAY_AGG(CAST(quantity_net AS FLOAT64) ORDER BY CAST(market_value_usd AS FLOAT64) DESC LIMIT 1)[OFFSET(0)],0)),
-          SAFE_DIVIDE(SUM(CAST(market_value_usd AS FLOAT64)),NULLIF(SUM(CAST(quantity_net AS FLOAT64)),0))) unit_value_usd,
-        IF(UPPER(COALESCE(NULLIF(normalized_ticker,''),ticker)) IN ('BTC','ETH','SOL','RON'),
+            ARRAY_AGG(market_value_usd ORDER BY market_value_usd DESC LIMIT 1)[OFFSET(0)],
+            NULLIF(ARRAY_AGG(quantity_net ORDER BY market_value_usd DESC LIMIT 1)[OFFSET(0)],0)),
+          SAFE_DIVIDE(SUM(market_value_usd),NULLIF(SUM(quantity_net),0))) unit_value_usd,
+        IF(ticker IN ('BTC','ETH','SOL','RON'),
           SAFE_DIVIDE(
-            ARRAY_AGG(CAST(cost_value_usd AS FLOAT64) ORDER BY CAST(market_value_usd AS FLOAT64) DESC LIMIT 1)[OFFSET(0)],
-            NULLIF(ARRAY_AGG(CAST(quantity_net AS FLOAT64) ORDER BY CAST(market_value_usd AS FLOAT64) DESC LIMIT 1)[OFFSET(0)],0)),
-          SAFE_DIVIDE(SUM(CAST(cost_value_usd AS FLOAT64)),NULLIF(SUM(CAST(quantity_net AS FLOAT64)),0))) unit_cost_usd
-      FROM ${table("vw_portfolio_valued")} GROUP BY 1
+            ARRAY_AGG(cost_value_usd ORDER BY market_value_usd DESC LIMIT 1)[OFFSET(0)],
+            NULLIF(ARRAY_AGG(quantity_net ORDER BY market_value_usd DESC LIMIT 1)[OFFSET(0)],0)),
+          SAFE_DIVIDE(SUM(cost_value_usd),NULLIF(SUM(quantity_net),0))) unit_cost_usd
+      FROM valued_source GROUP BY ticker
     )
     SELECT l.ticker,l.owner,l.platform,
       l.quantity*SAFE_DIVIDE(v.expected_quantity,t.located_quantity) AS quantity,
