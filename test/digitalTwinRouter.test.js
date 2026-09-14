@@ -22,6 +22,8 @@ test("routes factual trading questions to trading data", () => {
 test("routes net contribution questions to the canonical calculation", () => {
   assert.equal(classifyTwinRoute(messages("¿Cuántos ingresos netos hizo Horacio este 2026?")).route, "CONTRIBUTIONS_DATA");
   assert.equal(classifyTwinRoute(messages("¿Cuáles fueron los aportes netos de Vale?")).route, "CONTRIBUTIONS_DATA");
+  assert.equal(classifyTwinRoute(messages("¿Cuánto aportamos entre los dos en 2026?")).route, "CONTRIBUTIONS_DATA");
+  assert.equal(classifyTwinRoute(messages("¿Cuánto aporté en 2026?")).route, "CONTRIBUTIONS_DATA");
 });
 
 test("inherits contribution metric and year in owner follow-ups", () => {
