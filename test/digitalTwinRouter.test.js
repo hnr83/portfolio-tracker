@@ -19,6 +19,11 @@ test("routes factual trading questions to trading data", () => {
   assert.equal(classifyTwinRoute(messages("¿Cuánto pagué de fees?")).route, "TRADING_DATA");
 });
 
+test("routes net contribution questions to the canonical calculation", () => {
+  assert.equal(classifyTwinRoute(messages("¿Cuántos ingresos netos hizo Horacio este 2026?")).route, "CONTRIBUTIONS_DATA");
+  assert.equal(classifyTwinRoute(messages("¿Cuáles fueron los aportes netos de Vale?")).route, "CONTRIBUTIONS_DATA");
+});
+
 test("keeps factual trading follow-ups in trading context", () => {
   const conversation = [
     { role: "user", content: "¿Cuánto generé en trading en 2026?" },
