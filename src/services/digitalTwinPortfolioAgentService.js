@@ -185,12 +185,17 @@ async function executePlan(plan={},requestContext={}){
       let rows;
       if(needsEnrichedCost){
         const enrichedRows=(await loadOwnerHoldings()).filter(row=>matches(row,plan.filters));
+        const allocationRows=contextualMatches.length?contextualMatches:enrichedRows;
         const authoritativeHoldings=Array.isArray(requestContext?.portfolio?.holdings)?requestContext.portfolio.holdings:[];
         const authoritative=authoritativeHoldings.find(row=>matches(row,{ticker:plan.filters?.ticker,category:plan.filters?.category}));
-        const locatedQuantity=enrichedRows.reduce((sum,row)=>sum+Number(row.quantity||0),0);
-        if(authoritative&&locatedQuantity>0){
-          rows=enrichedRows.map(row=>{
-            const share=Number(row.quantity||0)/locatedQuantity;
+        const locatedValue=allocationRows.reduce((sum,row)=>sum+Number(row.market_value_usd||row.valueUsd||0),0);
+        const locatedQuantity=allocationRows.reduce((sum,row)=>sum+Number(row.quantity||0),0);
+        const allocationBase=locatedValue>0?"value":"quantity";
+        const allocationTotal=allocationBase==="value"?locatedValue:locatedQuantity;
+        if(authoritative&&allocationTotal>0){
+          rows=allocationRows.map(row=>{
+            const basis=allocationBase==="value"?Number(row.market_value_usd||row.valueUsd||0):Number(row.quantity||0);
+            const share=basis/allocationTotal;
             return{...row,
               quantity:Number(authoritative.quantity||0)*share,
               market_value_usd:Number(authoritative.valueUsd||0)*share,
@@ -198,7 +203,7 @@ async function executePlan(plan={},requestContext={}){
               pnl_usd:Number(authoritative.pnlUsd||0)*share,
             };
           });
-        }else rows=enrichedRows;
+        }else rows=allocationRows;
       }else rows=contextualMatches.length?contextualMatches:(await loadOwnerHoldings()).filter(row=>matches(row,plan.filters));
       results[name]=compact(rows);return
     }
