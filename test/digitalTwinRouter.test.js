@@ -24,6 +24,16 @@ test("routes net contribution questions to the canonical calculation", () => {
   assert.equal(classifyTwinRoute(messages("¿Cuáles fueron los aportes netos de Vale?")).route, "CONTRIBUTIONS_DATA");
 });
 
+test("inherits contribution metric and year in owner follow-ups", () => {
+  const route=classifyTwinRoute([
+    {role:"user",content:"¿Cuántos aportes netos hizo Horacio en 2026?"},
+    {role:"assistant",content:"Horacio registró..."},
+    {role:"user",content:"¿Y Vale?"},
+  ]);
+  assert.equal(route.route,"CONTRIBUTIONS_DATA");
+  assert.match(route.question,/Vale.*2026/i);
+});
+
 test("keeps factual trading follow-ups in trading context", () => {
   const conversation = [
     { role: "user", content: "¿Cuánto generé en trading en 2026?" },
