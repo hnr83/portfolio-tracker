@@ -55,7 +55,25 @@ function scalar(value){
   if(Object.prototype.hasOwnProperty.call(value,"value"))return value.value;
   return undefined;
 }
-function compact(rows=[]){return rows.slice(0,250).map(row=>Object.fromEntries(Object.entries(row).map(([key,val])=>[key,scalar(val)]).filter(([,val])=>val!=null).slice(0,24)))}
+function compact(rows=[]){return rows.slice(0,250).map(row=>{
+  const compacted=Object.fromEntries(Object.entries(row).map(([key,val])=>[key,scalar(val)]).filter(([,val])=>val!=null).slice(0,24));
+  if(compacted.market_value_usd!=null){compacted.market_value=compacted.market_value_usd;compacted.value_usd=compacted.market_value_usd}
+  return compacted;
+})}
+function summarizeResults(results={}){
+  const summary={};
+  for(const [dataset,rows] of Object.entries(results)){
+    if(!Array.isArray(rows))continue;
+    summary[dataset]={
+      record_count:rows.length,
+      market_value_usd:rows.reduce((sum,row)=>sum+(Number(row.market_value_usd??row.value_usd??row.market_value)||0),0),
+      quantity:rows.reduce((sum,row)=>sum+(Number(row.quantity??row.quantity_net)||0),0),
+      tickers:[...new Set(rows.map(row=>value(row,"normalized_ticker","ticker","instrument")).filter(Boolean))],
+      owners:[...new Set(rows.map(row=>value(row,"owner","titular")).filter(Boolean))],
+    };
+  }
+  return summary;
+}
 
 async function loadOwnerHoldings(){
   return runQuery(`
@@ -124,11 +142,12 @@ async function executePlan(plan={},requestContext={}){
     const rows=await runQuery(`SELECT * FROM ${table(DATASETS[name])} LIMIT ${limit}`);
     results[name]=compact(rows.filter(row=>matches(row,plan.filters)));
   }));
+  results.computed_summary=summarizeResults(results);
   return results;
 }
 
 async function answerPlannedQuestion({messages,plan,data}){
-  const question=lastQuestion(messages),response=await post({model:MODEL,reasoning:{effort:"low"},instructions:`Respondé en español rioplatense una pregunta factual sobre el portfolio usando exclusivamente DATA. Hacé los cálculos solicitados con los campos disponibles. No opines, no recomiendes, no completes datos ausentes y no menciones SQL ni implementación. Si no alcanza, explicá exactamente qué dato falta. Respuesta directa y compacta.`,input:`PREGUNTA:\n${question}\n\nPLAN:\n${JSON.stringify(plan)}\n\nDATA:\n${JSON.stringify(data)}`,max_output_tokens:900,text:{verbosity:"low"},store:false});return{answer:outputText(response),usageStage:usageStage("data_answer",response)}
+  const question=lastQuestion(messages),response=await post({model:MODEL,reasoning:{effort:"low"},instructions:`Respondé en español rioplatense una pregunta factual sobre el portfolio usando exclusivamente DATA. Priorizá computed_summary, cuyos cálculos ya fueron realizados por el backend. market_value, value_usd y market_value_usd son la misma valuación expresada en USD. No opines, no recomiendes, no completes datos ausentes y no menciones SQL ni implementación. Si record_count es cero, indicá que no se encontraron posiciones conciliadas para esos filtros. Respuesta directa y compacta.`,input:`PREGUNTA:\n${question}\n\nPLAN:\n${JSON.stringify(plan)}\n\nDATA:\n${JSON.stringify(data)}`,max_output_tokens:900,text:{verbosity:"low"},store:false});return{answer:outputText(response),usageStage:usageStage("data_answer",response)}
 }
 
 async function runPortfolioDataAgent(messages=[],requestContext={}){const planned=await planPortfolioQuestion(messages);if(planned.plan.route!=="PORTFOLIO_DATA")return{handled:false,plan:planned.plan,usageStages:[planned.usageStage]};const data=await executePlan(planned.plan,requestContext),answered=await answerPlannedQuestion({messages,plan:planned.plan,data});return{handled:true,answer:answered.answer,plan:planned.plan,dataSources:planned.plan.datasets,usageStages:[planned.usageStage,answered.usageStage]}}
