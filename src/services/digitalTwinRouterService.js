@@ -19,12 +19,13 @@ function classifyTwinRoute(messages = []) {
   const contributionContext=[...userQuestions.slice(0,-1)].reverse().find(item=>CONTRIBUTIONS.test(item))||"";
   const withdrawalContext=[...userQuestions.slice(0,-1)].reverse().find(item=>WITHDRAWALS.test(item))||"";
   const currentPositionPnl=/\b(pnl|ganamos|ganancia|ganancias|perdemos|p[eé]rdida|p[eé]rdidas)\b/i.test(question)&&/\b(actual|actualmente|hoy|posici[oó]n)\b/i.test(question);
+  const currentPositionData=/\b(posici[oó]n|tenencia|distribu(?:ye|ci[oó]n))\b/i.test(question)&&/\b(actual|actualmente|hoy)\b/i.test(question)&&/\b(titular|owner|plataforma|broker)\b/i.test(question);
   const tradingFollowUp=TRADING.test(previousQuestion)&&(/\b(eso|ese|esa|total|pero|entonces|y|en\s+20\d{2})\b/i.test(question)||FACTUAL.test(question));
   const contextualFollowUp=/^(?:[¿¡]\s*)?(?:y\b|eso\b|ese\b|esa\b|vale\b|valeria\b|horacio\b|ambos\b|cada uno\b|los de\b)/i.test(question);
   const contributionsFollowUp=Boolean(contributionContext)&&(CONTRIBUTIONS.test(question)||contextualFollowUp);
   const withdrawalsFollowUp=Boolean(withdrawalContext)&&(WITHDRAWALS.test(question)||contextualFollowUp);
-  if (EXTERNAL.test(question)&&!currentPositionPnl) return { route: "EXTERNAL_ANALYSIS", question, reason: "current_market_context" };
-  if(currentPositionPnl)return{route:"TWIN_ANALYSIS",question,reason:"current_position_pnl"};
+  if (EXTERNAL.test(question)&&!currentPositionPnl&&!currentPositionData) return { route: "EXTERNAL_ANALYSIS", question, reason: "current_market_context" };
+  if(currentPositionPnl||currentPositionData)return{route:"TWIN_ANALYSIS",question,reason:currentPositionPnl?"current_position_pnl":"current_position_data"};
   if(withdrawalsFollowUp){
     const inheritedYear=withdrawalContext.match(/\b20\d{2}\b/)?.[0];
     const inheritedOwnerGrouping=/\b(cada uno|por titular|por owner)\b/i.test(withdrawalContext);
