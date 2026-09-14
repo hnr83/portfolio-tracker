@@ -182,9 +182,24 @@ async function executePlan(plan={},requestContext={}){
     if(name==="holdings"&&(plan.filters?.owner||text(plan.groupBy)==="owner")){
       const needsEnrichedCost=text(plan.metric)==="pnl_usd"||/\b(pnl|cost|costo|ganancia|p[eé]rdida)\b/.test(text(plan.metric));
       const contextualMatches=contextualHoldings.filter(row=>matches(row,plan.filters));
-      const rows=needsEnrichedCost
-        ?(await loadOwnerHoldings()).filter(row=>matches(row,plan.filters))
-        :(contextualMatches.length?contextualMatches:(await loadOwnerHoldings()).filter(row=>matches(row,plan.filters)));
+      let rows;
+      if(needsEnrichedCost){
+        const enrichedRows=(await loadOwnerHoldings()).filter(row=>matches(row,plan.filters));
+        const authoritativeHoldings=Array.isArray(requestContext?.portfolio?.holdings)?requestContext.portfolio.holdings:[];
+        const authoritative=authoritativeHoldings.find(row=>matches(row,{ticker:plan.filters?.ticker,category:plan.filters?.category}));
+        const locatedQuantity=enrichedRows.reduce((sum,row)=>sum+Number(row.quantity||0),0);
+        if(authoritative&&locatedQuantity>0){
+          rows=enrichedRows.map(row=>{
+            const share=Number(row.quantity||0)/locatedQuantity;
+            return{...row,
+              quantity:Number(authoritative.quantity||0)*share,
+              market_value_usd:Number(authoritative.valueUsd||0)*share,
+              cost_value_usd:Number(authoritative.costUsd||0)*share,
+              pnl_usd:Number(authoritative.pnlUsd||0)*share,
+            };
+          });
+        }else rows=enrichedRows;
+      }else rows=contextualMatches.length?contextualMatches:(await loadOwnerHoldings()).filter(row=>matches(row,plan.filters));
       results[name]=compact(rows);return
     }
     const limit=name==="movements"||name==="trading_trades"?1000:250;
