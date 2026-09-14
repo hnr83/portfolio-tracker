@@ -102,21 +102,30 @@ async function answerNetContributions(question){
   const year=Number(question.match(/\b(20\d{2})\b/)?.[1]);
   const requestedOwner=question.match(/\b(Horacio|Vale|Valeria)\b/i)?.[1];
   const owner=/^(vale|valeria)$/i.test(requestedOwner||"")?"Vale":/^horacio$/i.test(requestedOwner||"")?"Horacio":null;
+  const bothOwners=/\b(nuestros?|aportamos|entre los dos|ambos|los dos)\b/i.test(question);
+  const monthly=/\b(por mes|mensual(?:es|mente)?)\b/i.test(question);
   const dateFilter=Number.isInteger(year)?"AND EXTRACT(YEAR FROM fecha)=@year":"";
-  const ownerFilter=owner?"AND LOWER(TRIM(owner))=LOWER(@owner)":"";
-  const rows=await runQuery(`SELECT COALESCE(SUM(CASE
+  const ownerFilter=owner?"AND LOWER(TRIM(owner))=LOWER(@owner)":bothOwners?"AND LOWER(TRIM(owner)) IN ('horacio','vale')":"";
+  const amountSql=`CASE
     WHEN movement_type IN ('BUY_ASSET','BUY_USD','BUY_USDT','INCOME_USD') THEN 1
     WHEN movement_type IN ('SELL_ASSET','SELL_USD','SELL_USDT','EXPENSE_USD') THEN -1 ELSE 0 END * CASE
     WHEN movement_type IN ('BUY_ASSET','SELL_ASSET') THEN ABS(SAFE_CAST(net_amount AS FLOAT64))
     WHEN movement_type IN ('BUY_USD','SELL_USD','BUY_USDT','SELL_USDT') THEN ABS(SAFE_CAST(quantity AS FLOAT64))
-    WHEN movement_type IN ('INCOME_USD','EXPENSE_USD') THEN ABS(SAFE_CAST(net_amount AS FLOAT64)) ELSE 0 END),0) AS net_contributions_usd
+    WHEN movement_type IN ('INCOME_USD','EXPENSE_USD') THEN ABS(SAFE_CAST(net_amount AS FLOAT64)) ELSE 0 END`;
+  const rows=await runQuery(`SELECT ${monthly?"FORMAT_DATE('%Y-%m',fecha) AS period,":""} COALESCE(SUM(${amountSql}),0) AS net_contributions_usd
     FROM ${table("movements")} WHERE fecha IS NOT NULL ${dateFilter} ${ownerFilter} AND (
       source_table='transactions_raw' OR flow_type='EXTERNAL' OR
       (source_table='manual' AND movement_type='BUY_ASSET' AND settlement_currency='ARS') OR
       (transaction_group_id IS NULL AND NOT (movement_type IN ('BUY_USDT','SELL_USDT') AND flow_type='SETTLEMENT' AND NOT (source_table='cv_usdt_raw' AND movement_type='BUY_USDT' AND description='Venta BTC')) AND source_table NOT IN ('bingx_spot','trading_transfer'))
-    )`,{...(Number.isInteger(year)?{year}:{}),...(owner?{owner}: {})});
+    ) ${monthly?"GROUP BY period ORDER BY period":""}` ,{...(Number.isInteger(year)?{year}:{}),...(owner?{owner}: {})});
+  if(monthly){
+    const total=rows.reduce((sum,row)=>sum+Number(row.net_contributions_usd||0),0);
+    const detail=rows.map(row=>`${row.period}: ${usd(row.net_contributions_usd)}`).join("\n");
+    return `Aportes netos por mes${Number.isInteger(year)?` de ${year}`:""}:\n${detail}\n\nTotal: ${usd(total)}.`;
+  }
   const amount=rows[0]?.net_contributions_usd||0;
-  return `${owner?`${owner} registró`:'Registraste'} ${usd(amount)} de aportes netos${Number.isInteger(year)?` durante ${year}`:' acumulados'}.`;
+  const subject=owner?`${owner} registró`:bothOwners?"Entre Horacio y Vale registraron":"Registraste";
+  return `${subject} ${usd(amount)} de aportes netos${Number.isInteger(year)?` durante ${year}`:' acumulados'}.`;
 }
 
 async function resolveRoutedQuestion(route, context = {}) {
