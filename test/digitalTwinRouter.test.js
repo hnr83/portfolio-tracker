@@ -128,6 +128,25 @@ test("keeps current custody distributions on internal portfolio data", () => {
   assert.equal(plan.groupBy,"platform_owner");
 });
 
+test("inherits the asset in custody owner platform follow-ups", () => {
+  const route=classifyTwinRoute([
+    {role:"user",content:"¿Cómo se distribuye mi posición actual de TSLA por plataforma y titular?"},
+    {role:"assistant",content:"IBKR · Horacio..."},
+    {role:"user",content:"¿Y cuánto corresponde solamente a Vale y cómo se distribuye entre sus plataformas?"},
+  ]);
+  assert.equal(route.route,"TWIN_ANALYSIS");
+  assert.equal(route.reason,"current_position_follow_up");
+  assert.match(route.question,/Vale.*plataformas.*TSLA/i);
+
+  const plan=normalizePlanTaxonomy({
+    datasets:["holdings"],
+    filters:{ticker:"TSLA",owner:"Vale",broker:null,category:null,side:null,dateFrom:null,dateTo:null},
+    calculation:"group",metric:"market_value_usd",groupBy:"platform",
+  },route.question);
+  assert.equal(plan.filters.owner,"Vale");
+  assert.equal(plan.groupBy,"platform");
+});
+
 test("keeps current position PnL on internal portfolio data", () => {
   const route=classifyTwinRoute(messages("Recalculá el PnL actual de BTC por titular"));
   assert.equal(route.route,"TWIN_ANALYSIS");
