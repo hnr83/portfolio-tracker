@@ -57,10 +57,15 @@ test("inherits withdrawals, year and owner grouping across follow-ups", () => {
   assert.match(nextYear.question,/2025.*por titular|por titular.*2025/i);
 });
 
-test("routes monthly withdrawal distributions to withdrawal data", () => {
-  const route=classifyTwinRoute(messages("¿Cómo se distribuyeron los retiros de 2026 por mes?"));
+test("explicit monthly withdrawals do not inherit an earlier owner grouping", () => {
+  const route=classifyTwinRoute([
+    {role:"user",content:"¿Cuánto retiró cada uno en 2026?"},
+    {role:"assistant",content:"Horacio... Vale..."},
+    {role:"user",content:"¿Cómo se distribuyeron los retiros de 2026 por mes?"},
+  ]);
   assert.equal(route.route,"WITHDRAWALS_DATA");
   assert.match(route.question,/2026.*por mes/i);
+  assert.doesNotMatch(route.question,/por titular/i);
 });
 
 test("inherits contribution metric and year in owner follow-ups", () => {
