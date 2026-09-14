@@ -73,8 +73,8 @@ test("enforces the app taxonomy after LLM planning", () => {
   assert.deepEqual(normalizePlanTaxonomy(wrongPlan, "¿Cuánto USDT tiene Vale?").filters, { owner: "Valeria", category: "crypto", ticker: "USDT" });
 });
 
-test("normalizes Vale as Valeria in generic filters", () => {
-  assert.equal(matches({ ticker: "ETH", owner: "Valeria", category: "PORTFOLIO" }, { owner: "Vale", category: "cryptocurrency" }), true);
+test("normalizes Valeria to the canonical owner Vale", () => {
+  assert.equal(matches({ ticker: "ETH", owner: "Vale", category: "PORTFOLIO" }, { owner: "Valeria", category: "cryptocurrency" }), true);
 });
 
 test("uses owner-aware holdings from the request context", async () => {
