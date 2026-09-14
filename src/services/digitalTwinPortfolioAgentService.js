@@ -32,6 +32,16 @@ function normalizePlanTaxonomy(plan={},question=""){
     normalized.filters.ticker="USDT";
     normalized.filters.category="crypto";
   }else if(/\b(crypto|cripto|criptomonedas?)\b/.test(q))normalized.filters.category="cryptocurrency";
+  if(/\b(posici[oó]n|tenencia|distribu(?:ye|ci[oó]n))\b/.test(q)&&/\b(actual|actualmente|hoy)\b/.test(q)&&/\b(titular|owner|plataforma|broker)\b/.test(q)){
+    normalized.datasets=["holdings"];
+    normalized.filters.owner=null;
+    normalized.filters.dateFrom=null;
+    normalized.filters.dateTo=null;
+    normalized.calculation="group";
+    normalized.metric=normalized.metric||"market_value_usd";
+    const asksOwner=/\b(titular|owner)\b/.test(q),asksPlatform=/\b(plataforma|broker)\b/.test(q);
+    normalized.groupBy=asksOwner&&asksPlatform?"platform_owner":asksPlatform?"platform":"owner";
+  }
   if(/\b(ganamos|ganancia|ganancias|perdemos|p[eé]rdida|p[eé]rdidas|pnl)\b/.test(q)&&/\b(actual|actualmente|hoy|posici[oó]n)\b/.test(q)){
     normalized.datasets=["holdings"];
     normalized.filters.owner=null;
@@ -79,7 +89,7 @@ function summarizeResults(results={}){
   const summary={};
   for(const [dataset,rows] of Object.entries(results)){
     if(!Array.isArray(rows))continue;
-    const groupValue=(key)=>Object.values(rows.reduce((groups,row)=>{const name=String(value(row,key)||"Sin especificar"),current=groups[name]||{name,market_value_usd:0,cost_value_usd:0,pnl_usd:0,quantity:0};current.market_value_usd+=Number(row.market_value_usd??row.value_usd??row.market_value)||0;current.cost_value_usd+=Number(row.cost_value_usd)||0;current.pnl_usd+=Number(row.pnl_usd)||0;current.quantity+=Number(row.quantity??row.quantity_net)||0;groups[name]=current;return groups},{})).sort((a,b)=>b.market_value_usd-a.market_value_usd);
+    const groupValue=(key)=>Object.values(rows.reduce((groups,row)=>{const keys=Array.isArray(key)?key:[key],name=keys.map(item=>String(value(row,item)||"Sin especificar")).join(" · "),current=groups[name]||{name,market_value_usd:0,cost_value_usd:0,pnl_usd:0,quantity:0};current.market_value_usd+=Number(row.market_value_usd??row.value_usd??row.market_value)||0;current.cost_value_usd+=Number(row.cost_value_usd)||0;current.pnl_usd+=Number(row.pnl_usd)||0;current.quantity+=Number(row.quantity??row.quantity_net)||0;groups[name]=current;return groups},{})).sort((a,b)=>b.market_value_usd-a.market_value_usd);
     summary[dataset]={
       record_count:rows.length,
       market_value_usd:rows.reduce((sum,row)=>sum+(Number(row.market_value_usd??row.value_usd??row.market_value)||0),0),
@@ -91,6 +101,7 @@ function summarizeResults(results={}){
       by_ticker:groupValue("ticker"),
       by_platform:groupValue("platform"),
       by_owner:groupValue("owner"),
+      by_platform_owner:groupValue(["platform","owner"]),
     };
   }
   return summary;
@@ -179,7 +190,7 @@ async function executePlan(plan={},requestContext={}){
   const results={};
   await Promise.all(selected.map(async name=>{
     const contextualHoldings=Array.isArray(requestContext?.portfolio?.ownerHoldings)?requestContext.portfolio.ownerHoldings:[];
-    if(name==="holdings"&&(plan.filters?.owner||text(plan.groupBy)==="owner")){
+    if(name==="holdings"&&(plan.filters?.owner||text(plan.groupBy).includes("owner")||text(plan.groupBy)==="platform")){
       const needsCost=text(plan.metric)==="pnl_usd"||/\b(pnl|cost|costo|ganancia|p[eé]rdida)\b/.test(text(plan.metric));
       const custodyRows=contextualHoldings.filter(row=>matches(row,plan.filters));
       let rows=custodyRows;
@@ -214,7 +225,7 @@ async function executePlan(plan={},requestContext={}){
 }
 
 async function answerPlannedQuestion({messages,plan,data}){
-  const question=lastQuestion(messages),response=await post({model:MODEL,reasoning:{effort:"low"},instructions:`Respondé en español rioplatense una pregunta factual sobre el portfolio usando exclusivamente DATA. Priorizá computed_summary, cuyos cálculos ya fueron realizados por el backend. Para distribuciones usá by_ticker, by_platform o by_owner según corresponda. En preguntas de ganancia o pérdida actual, informá valor actual, costo y ganancia o pérdida; si está agrupado por titular, detallá los tres importes por cada titular que tenga una posición y el total. No inventes una fila en cero para un titular ausente: aclarale brevemente que no tiene una posición conciliada en ese activo. market_value, value_usd y market_value_usd son la misma valuación expresada en USD. Formateá moneda como US$ 99.129,89 y cantidades con un máximo razonable de decimales. Nunca muestres nombres técnicos como record_count, market_value_usd, quantity, DATA, filtros ni arrays JSON. No opines, no recomiendes, no completes datos ausentes y no menciones SQL ni implementación. Si record_count es cero, indicá que no se encontraron posiciones conciliadas para esos filtros. Respuesta natural, directa y compacta.`,input:`PREGUNTA:\n${question}\n\nPLAN:\n${JSON.stringify(plan)}\n\nDATA:\n${JSON.stringify(data)}`,max_output_tokens:900,text:{verbosity:"low"},store:false});return{answer:outputText(response),usageStage:usageStage("data_answer",response)}
+  const question=lastQuestion(messages),response=await post({model:MODEL,reasoning:{effort:"low"},instructions:`Respondé en español rioplatense una pregunta factual sobre el portfolio usando exclusivamente DATA. Priorizá computed_summary, cuyos cálculos ya fueron realizados por el backend. Para distribuciones usá by_ticker, by_platform, by_owner o by_platform_owner según corresponda; si piden plataforma y titular juntos, no omitas ninguna de las dos dimensiones. En preguntas de ganancia o pérdida actual, informá valor actual, costo y ganancia o pérdida; si está agrupado por titular, detallá los tres importes por cada titular que tenga una posición y el total. No inventes una fila en cero para un titular ausente: aclarale brevemente que no tiene una posición conciliada en ese activo. market_value, value_usd y market_value_usd son la misma valuación expresada en USD. Formateá moneda como US$ 99.129,89 y cantidades con un máximo razonable de decimales. Nunca muestres nombres técnicos como record_count, market_value_usd, quantity, DATA, filtros ni arrays JSON. No opines, no recomiendes, no completes datos ausentes y no menciones SQL ni implementación. Si record_count es cero, indicá que no se encontraron posiciones conciliadas para esos filtros. Respuesta natural, directa y compacta, en texto simple con saltos de línea. No uses Markdown: no escribas tablas, encabezados con #, asteriscos de negrita ni código.`,input:`PREGUNTA:\n${question}\n\nPLAN:\n${JSON.stringify(plan)}\n\nDATA:\n${JSON.stringify(data)}`,max_output_tokens:900,text:{verbosity:"low"},store:false});return{answer:outputText(response),usageStage:usageStage("data_answer",response)}
 }
 
 async function runPortfolioDataAgent(messages=[],requestContext={}){const planned=await planPortfolioQuestion(messages);if(planned.plan.route!=="PORTFOLIO_DATA")return{handled:false,plan:planned.plan,usageStages:[planned.usageStage]};const data=await executePlan(planned.plan,requestContext),answered=await answerPlannedQuestion({messages,plan:planned.plan,data});return{handled:true,answer:answered.answer,plan:planned.plan,dataSources:planned.plan.datasets,usageStages:[planned.usageStage,answered.usageStage]}}
