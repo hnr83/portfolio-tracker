@@ -192,25 +192,36 @@ async function loadOwnerHoldings(){
   `);
 }
 
-async function resolveCustodyBrokerAlias(broker){
+function brokerKey(value){
+  return text(value).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]/g,"");
+}
+function resolveCustodyBrokerAliasFromRows(broker,rows=[]){
   if(!broker)return broker;
-  const rows=await runQuery(`SELECT raw_broker,canonical_broker FROM ${table("custody_broker_aliases")}
-    ORDER BY created_at DESC LIMIT 250`);
-  const key=value=>text(value).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]/g,"");
-  const requested=key(broker);
-  const exact=rows.find(row=>key(row.raw_broker)===requested||key(row.canonical_broker)===requested);
+  const requested=brokerKey(broker);
+  const exact=rows.find(row=>brokerKey(row.raw_broker)===requested||brokerKey(row.canonical_broker)===requested);
   if(exact)return exact.canonical_broker;
   const compatible=rows.filter(row=>{
-    const raw=key(row.raw_broker),canonical=key(row.canonical_broker);
+    const raw=brokerKey(row.raw_broker),canonical=brokerKey(row.canonical_broker);
     return requested.length>=5&&(raw.includes(requested)||requested.includes(raw)||canonical.includes(requested)||requested.includes(canonical));
   });
   const canonical=[...new Set(compatible.map(row=>row.canonical_broker).filter(Boolean))];
   return canonical.length===1?canonical[0]:broker;
 }
+async function resolveCustodyBrokerAlias(broker){
+  if(!broker)return broker;
+  const rows=await runQuery(`SELECT raw_broker,canonical_broker FROM ${table("custody_broker_aliases")}
+    ORDER BY created_at DESC LIMIT 250`);
+  return resolveCustodyBrokerAliasFromRows(broker,rows);
+}
 
 async function executePlan(plan={},requestContext={}){
   const effectivePlan={...plan,filters:{...(plan.filters||{})}};
-  if(effectivePlan.filters.broker)effectivePlan.filters.broker=await resolveCustodyBrokerAlias(effectivePlan.filters.broker);
+  if(effectivePlan.filters.broker){
+    const contextAliases=Array.isArray(requestContext?.portfolio?.custodyBrokerAliases)?requestContext.portfolio.custodyBrokerAliases:[];
+    effectivePlan.filters.broker=contextAliases.length
+      ?resolveCustodyBrokerAliasFromRows(effectivePlan.filters.broker,contextAliases)
+      :await resolveCustodyBrokerAlias(effectivePlan.filters.broker);
+  }
   const selected=(effectivePlan.datasets||[]).filter(name=>DATASETS[name]).slice(0,3);
   const results={};
   await Promise.all(selected.map(async name=>{
