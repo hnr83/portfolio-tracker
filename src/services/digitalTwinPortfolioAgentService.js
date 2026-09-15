@@ -96,12 +96,25 @@ function summarizeResults(results={}){
   const summary={};
   for(const [dataset,rows] of Object.entries(results)){
     if(!Array.isArray(rows))continue;
-    const groupValue=(key)=>Object.values(rows.reduce((groups,row)=>{const keys=Array.isArray(key)?key:[key],groupField=(item)=>item==="platform"?value(row,"platform","broker"):item==="owner"?value(row,"owner","titular"):value(row,item),name=keys.map(item=>String(groupField(item)||"Sin especificar")).join(" · "),current=groups[name]||{name,market_value_usd:0,cost_value_usd:0,pnl_usd:0,quantity:0};current.market_value_usd+=Number(row.market_value_usd??row.value_usd??row.market_value)||0;current.cost_value_usd+=Number(row.cost_value_usd)||0;current.pnl_usd+=Number(row.pnl_usd)||0;current.quantity+=Number(row.quantity??row.quantity_net)||0;groups[name]=current;return groups},{})).sort((a,b)=>b.market_value_usd-a.market_value_usd);
+    const hasCost=rows.some(row=>row.cost_value_usd!=null);
+    const hasPnl=rows.some(row=>row.pnl_usd!=null);
+    const groupValue=(key)=>Object.values(rows.reduce((groups,row)=>{
+      const keys=Array.isArray(key)?key:[key];
+      const groupField=(item)=>item==="platform"?value(row,"platform","broker"):item==="owner"?value(row,"owner","titular"):value(row,item);
+      const name=keys.map(item=>String(groupField(item)||"Sin especificar")).join(" · ");
+      const current=groups[name]||{name,market_value_usd:0,quantity:0};
+      current.market_value_usd+=Number(row.market_value_usd??row.value_usd??row.market_value)||0;
+      if(row.cost_value_usd!=null)current.cost_value_usd=(current.cost_value_usd||0)+Number(row.cost_value_usd||0);
+      if(row.pnl_usd!=null)current.pnl_usd=(current.pnl_usd||0)+Number(row.pnl_usd||0);
+      current.quantity+=Number(row.quantity??row.quantity_net)||0;
+      groups[name]=current;
+      return groups;
+    },{})).sort((a,b)=>b.market_value_usd-a.market_value_usd);
     summary[dataset]={
       record_count:rows.length,
       market_value_usd:rows.reduce((sum,row)=>sum+(Number(row.market_value_usd??row.value_usd??row.market_value)||0),0),
-      cost_value_usd:rows.reduce((sum,row)=>sum+(Number(row.cost_value_usd)||0),0),
-      pnl_usd:rows.reduce((sum,row)=>sum+(Number(row.pnl_usd)||0),0),
+      ...(hasCost?{cost_value_usd:rows.reduce((sum,row)=>sum+Number(row.cost_value_usd||0),0)}:{}),
+      ...(hasPnl?{pnl_usd:rows.reduce((sum,row)=>sum+Number(row.pnl_usd||0),0)}:{}),
       quantity:rows.reduce((sum,row)=>sum+(Number(row.quantity??row.quantity_net)||0),0),
       tickers:[...new Set(rows.map(row=>value(row,"normalized_ticker","ticker","instrument")).filter(Boolean))],
       owners:[...new Set(rows.map(row=>value(row,"owner","titular")).filter(Boolean))],
