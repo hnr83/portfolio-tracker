@@ -18,7 +18,11 @@ function classifyTwinRoute(messages = []) {
   const previousQuestion=userQuestions.at(-2)||"";
   const contributionContext=[...userQuestions.slice(0,-1)].reverse().find(item=>CONTRIBUTIONS.test(item))||"";
   const withdrawalContext=[...userQuestions.slice(0,-1)].reverse().find(item=>WITHDRAWALS.test(item))||"";
-  const positionContext=[...userQuestions.slice(0,-1)].reverse().find(item=>/\b(posici[oó]n|tenencia|distribu(?:ye|ci[oó]n))\b/i.test(item)&&/\b(titular|owner|plataforma|broker)\b/i.test(item))||"";
+  const positionContext=[...userQuestions.slice(0,-1)].reverse().find(item=>{
+    const positionTerms=/\b(posici[oó]n|tenencia|distribu(?:ye|ci[oó]n))\b/i.test(item)&&/\b(titular|owner|plataforma|broker)\b/i.test(item);
+    const custodyDimensions=/\b(plataforma|plataformas|broker|brokers)\b/i.test(item)&&/\b(titular|titulares|owner)\b/i.test(item);
+    return positionTerms||custodyDimensions;
+  })||"";
   const positionOwnerContext=[...userQuestions.slice(0,-1)].reverse().find(item=>/\b(vale|valeria|horacio)\b/i.test(item))||"";
   const currentPositionPnl=/\b(pnl|ganamos|ganancia|ganancias|perdemos|p[eé]rdida|p[eé]rdidas)\b/i.test(question)&&/\b(actual|actualmente|hoy|posici[oó]n)\b/i.test(question);
   const currentPositionData=/\b(posici[oó]n|tenencia|distribu(?:ye|ci[oó]n))\b/i.test(question)&&/\b(actual|actualmente|hoy)\b/i.test(question)&&/\b(titular|owner|plataforma|broker)\b/i.test(question);
