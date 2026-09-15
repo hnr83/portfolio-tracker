@@ -23,7 +23,11 @@ function classifyTwinRoute(messages = []) {
   const currentPositionData=/\b(posici[oó]n|tenencia|distribu(?:ye|ci[oó]n))\b/i.test(question)&&/\b(actual|actualmente|hoy)\b/i.test(question)&&/\b(titular|owner|plataforma|broker)\b/i.test(question);
   const tradingFollowUp=TRADING.test(previousQuestion)&&(/\b(eso|ese|esa|total|pero|entonces|y|en\s+20\d{2})\b/i.test(question)||FACTUAL.test(question));
   const contextualFollowUp=/^(?:[¿¡]\s*)?(?:y\b|eso\b|ese\b|esa\b|vale\b|valeria\b|horacio\b|ambos\b|cada uno\b|los de\b)/i.test(question);
-  const positionFollowUp=Boolean(positionContext)&&contextualFollowUp&&/\b(vale|valeria|horacio|titular|owner|plataforma|broker)\b/i.test(question);
+  const percentageFollowUp=/\b(porcentaje|representa|peso)\b[\s\S]*\b(portfolio|cartera)\b/i.test(question);
+  const positionFollowUp=Boolean(positionContext)&&(
+    contextualFollowUp&&/\b(vale|valeria|horacio|titular|owner|plataforma|broker)\b/i.test(question)
+    ||percentageFollowUp
+  );
   const contributionsFollowUp=Boolean(contributionContext)&&(CONTRIBUTIONS.test(question)||contextualFollowUp);
   const withdrawalsFollowUp=Boolean(withdrawalContext)&&(WITHDRAWALS.test(question)||contextualFollowUp);
   if(positionFollowUp){
