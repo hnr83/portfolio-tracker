@@ -165,6 +165,19 @@ test("inherits the asset in custody owner platform follow-ups", () => {
   assert.equal(plan.groupBy,"platform");
 });
 
+test("inherits custody owner context for portfolio percentage follow-ups", () => {
+  const route=classifyTwinRoute([
+    {role:"user",content:"¿Cuánto tengo en cada plataforma y quién es el titular?"},
+    {role:"assistant",content:"Por plataforma..."},
+    {role:"user",content:"¿Y solamente lo de Vale?"},
+    {role:"assistant",content:"Total Vale..."},
+    {role:"user",content:"¿Qué porcentaje del portfolio representa?"},
+  ]);
+  assert.equal(route.route,"TWIN_ANALYSIS");
+  assert.equal(route.reason,"current_position_follow_up");
+  assert.match(route.question,/porcentaje.*portfolio.*Vale/i);
+});
+
 test("keeps current position PnL on internal portfolio data", () => {
   const route=classifyTwinRoute(messages("Recalculá el PnL actual de BTC por titular"));
   assert.equal(route.route,"TWIN_ANALYSIS");
