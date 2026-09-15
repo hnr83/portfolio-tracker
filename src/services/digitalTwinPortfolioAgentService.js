@@ -47,16 +47,6 @@ function normalizePlanTaxonomy(plan={},question=""){
   }
   const asksPlatformDimension=/\b(cada plataforma|por plataforma|plataformas?|brokers?)\b/.test(q);
   const asksOwnerDimension=/\b(titular|titulares|por owner)\b/.test(q);
-  const namedOwner=q.match(/\b(horacio|vale|valeria)\b/)?.[1];
-  if(asksPlatformDimension&&namedOwner&&!asksOwnerDimension){
-    normalized.datasets=["holdings"];
-    normalized.filters.owner=/^(vale|valeria)$/.test(namedOwner)?"Vale":"Horacio";
-    normalized.filters.dateFrom=null;
-    normalized.filters.dateTo=null;
-    normalized.calculation="group";
-    normalized.metric="market_value_usd";
-    normalized.groupBy="platform";
-  }
   if(asksPlatformDimension&&asksOwnerDimension){
     normalized.datasets=["holdings"];
     normalized.filters.owner=null;
