@@ -323,6 +323,7 @@ test("executes declarative custody ratios with an explicit denominator scope", a
   const data=await require("../src/services/digitalTwinPortfolioAgentService").executePlan(plan,{
     portfolio:{
       portfolioTotal:223655.09,
+      custodyBrokerAliases:[{raw_broker:"Cocos Vale",canonical_broker:"Cocos Vale"}],
       ownerHoldings:[
         {ticker:"TSLA",owner:"Vale",platform:"Cocos Vale",market_value_usd:30334.02},
         {ticker:"USDT",owner:"Vale",platform:"Galicia",market_value_usd:11920.64},
@@ -351,6 +352,7 @@ test("the same declarative ratio can use the complete portfolio as denominator",
   const data=await require("../src/services/digitalTwinPortfolioAgentService").executePlan(plan,{
     portfolio:{
       portfolioTotal:223655.09,
+      custodyBrokerAliases:[{raw_broker:"Cocos Vale",canonical_broker:"Cocos Vale"}],
       ownerHoldings:[{ticker:"TSLA",owner:"Vale",platform:"Cocos Vale",market_value_usd:30334.02}],
     },
   });
