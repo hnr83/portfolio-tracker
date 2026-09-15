@@ -187,10 +187,18 @@ async function loadOwnerHoldings(){
 
 async function resolveCustodyBrokerAlias(broker){
   if(!broker)return broker;
-  const rows=await runQuery(`SELECT canonical_broker FROM ${table("custody_broker_aliases")}
-    WHERE LOWER(TRIM(raw_broker))=LOWER(TRIM(@broker))
-    ORDER BY created_at DESC LIMIT 1`,{broker});
-  return rows[0]?.canonical_broker||broker;
+  const rows=await runQuery(`SELECT raw_broker,canonical_broker FROM ${table("custody_broker_aliases")}
+    ORDER BY created_at DESC LIMIT 250`);
+  const key=value=>text(value).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]/g,"");
+  const requested=key(broker);
+  const exact=rows.find(row=>key(row.raw_broker)===requested||key(row.canonical_broker)===requested);
+  if(exact)return exact.canonical_broker;
+  const compatible=rows.filter(row=>{
+    const raw=key(row.raw_broker),canonical=key(row.canonical_broker);
+    return requested.length>=5&&(raw.includes(requested)||requested.includes(raw)||canonical.includes(requested)||requested.includes(canonical));
+  });
+  const canonical=[...new Set(compatible.map(row=>row.canonical_broker).filter(Boolean))];
+  return canonical.length===1?canonical[0]:broker;
 }
 
 async function executePlan(plan={},requestContext={}){
