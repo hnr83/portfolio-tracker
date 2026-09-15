@@ -120,7 +120,7 @@ test("keeps factual trading follow-ups in trading context", () => {
   assert.equal(classifyTwinRoute(conversation).route, "TRADING_DATA");
 });
 
-test("does not let withdrawal history hijack a new BTC performance question", () => {
+test("does not let withdrawal history hijack a new BTC factual question", () => {
   const route=classifyTwinRoute([
     {role:"user",content:"¿Cuánto retiró cada uno en 2026?"},
     {role:"assistant",content:"Horacio... Vale..."},
@@ -128,7 +128,8 @@ test("does not let withdrawal history hijack a new BTC performance question", ()
     {role:"assistant",content:"Horacio... Vale..."},
     {role:"user",content:"¿Cuánto ganamos o perdimos con BTC en 2026 y cómo se distribuye entre Horacio y Vale?"},
   ]);
-  assert.equal(route.route,"TWIN_ANALYSIS");
+  assert.equal(route.route,"INTERNAL_DATA");
+  assert.notEqual(route.route,"WITHDRAWALS_DATA");
 });
 
 test("keeps current custody distributions on internal portfolio data", () => {
