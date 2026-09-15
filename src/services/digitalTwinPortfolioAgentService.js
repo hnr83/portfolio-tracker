@@ -28,6 +28,17 @@ function normalizePlanTaxonomy(plan={},question=""){
     normalized.calculation="group";
     normalized.groupBy="owner";
   }
+  const asksPlatformDimension=/\b(cada plataforma|por plataforma|plataformas?|brokers?)\b/.test(q);
+  const asksOwnerDimension=/\b(titular|titulares|por owner)\b/.test(q);
+  if(asksPlatformDimension&&asksOwnerDimension){
+    normalized.datasets=["holdings"];
+    normalized.filters.owner=null;
+    normalized.filters.dateFrom=null;
+    normalized.filters.dateTo=null;
+    normalized.calculation="group";
+    normalized.metric="market_value_usd";
+    normalized.groupBy="platform_owner";
+  }
   if(/\busdt\b|d[oó]lares? digitales?/.test(q)){
     normalized.filters.ticker="USDT";
     normalized.filters.category="crypto";
@@ -239,7 +250,7 @@ async function executePlan(plan={},requestContext={}){
   const results={};
   await Promise.all(selected.map(async name=>{
     const contextualHoldings=Array.isArray(requestContext?.portfolio?.ownerHoldings)?requestContext.portfolio.ownerHoldings:[];
-    if(name==="holdings"&&(effectivePlan.filters?.owner||text(effectivePlan.groupBy).includes("owner")||text(effectivePlan.groupBy)==="platform")){
+    if(name==="holdings"&&(effectivePlan.filters?.owner||text(effectivePlan.groupBy).includes("owner")||text(effectivePlan.groupBy).includes("platform")||text(effectivePlan.groupBy).includes("broker"))){
       const needsCost=text(effectivePlan.metric)==="pnl_usd"||/\b(pnl|cost|costo|ganancia|p[eé]rdida)\b/.test(text(effectivePlan.metric));
       const custodyRows=contextualHoldings.filter(row=>matches(row,effectivePlan.filters));
       let rows=custodyRows;
