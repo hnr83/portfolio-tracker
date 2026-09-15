@@ -346,6 +346,12 @@ export default function DigitalInvestmentTwinView({
       setChatLoading(false);
     }
   }
+  function startNewConversation() {
+    setChat([]);
+    setDraft("");
+    setChatError("");
+    window.sessionStorage.removeItem(CHAT_KEY);
+  }
   const tabs = [
     ["chat", "Chat"],
     ["insights", "Insights"],
@@ -404,9 +410,20 @@ export default function DigitalInvestmentTwinView({
                     </p>
                   </div>
                 </div>
-                <div className="twin-status">
-                  <span />
-                  Contexto conectado
+                <div className="flex items-center gap-2">
+                  {chat.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={startNewConversation}
+                      className="twin-chip cursor-pointer transition hover:border-indigo-400/40 hover:text-white"
+                    >
+                      Nueva conversación
+                    </button>
+                  )}
+                  <div className="twin-status">
+                    <span />
+                    Contexto conectado
+                  </div>
                 </div>
               </div>
               {!profile?.investor_narrative ? (
