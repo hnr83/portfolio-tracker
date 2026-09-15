@@ -201,15 +201,13 @@ test("answers a holding question from deterministic context", () => {
   assert.match(answer, /32%/);
 });
 
-test("answers ownership with value and distinct asset count", () => {
-  const answer = answerPortfolioQuestion("¿Cuántos activos están a nombre de Horacio y cuántos de Valeria?", {
-    ownership: [
-      { owner: "Horacio", valueUsd: 180000, assetCount: 14, weightPct: 75 },
-      { owner: "Valeria", valueUsd: 60000, assetCount: 6, weightPct: 25 },
-    ],
-  });
-  assert.match(answer, /Horacio: US\$.*180\.000,00 en 14 activos \(75%\)/);
-  assert.match(answer, /Valeria: US\$.*60\.000,00 en 6 activos \(25%\)/);
+test("routes every owner-aware answer past the deterministic fast path", () => {
+  const context={ownership:[
+    {owner:"Horacio",valueUsd:180000,assetCount:14,weightPct:75},
+    {owner:"Valeria",valueUsd:60000,assetCount:6,weightPct:25},
+  ]};
+  assert.equal(answerPortfolioQuestion("¿Cuántos activos están a nombre de Horacio y cuántos de Valeria?",context),null);
+  assert.equal(answerPortfolioQuestion("¿Cuánto tiene Horacio en total y cómo se distribuye entre sus plataformas?",context),null);
 });
 
 test("does not use the ownership fast path when another filter is requested", () => {
