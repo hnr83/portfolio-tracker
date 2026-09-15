@@ -266,4 +266,4 @@ async function answerPlannedQuestion({messages,plan,data}){
 
 async function runPortfolioDataAgent(messages=[],requestContext={}){const planned=await planPortfolioQuestion(messages);if(planned.plan.route!=="PORTFOLIO_DATA")return{handled:false,plan:planned.plan,usageStages:[planned.usageStage]};const data=await executePlan(planned.plan,requestContext),answered=await answerPlannedQuestion({messages,plan:planned.plan,data});return{handled:true,answer:answered.answer,plan:planned.plan,dataSources:planned.plan.datasets,usageStages:[planned.usageStage,answered.usageStage]}}
 
-module.exports={executePlan,matches,normalizePlanTaxonomy,planPortfolioQuestion,runPortfolioDataAgent};
+module.exports={executePlan,matches,normalizePlanTaxonomy,planPortfolioQuestion,resolveCustodyBrokerAliasFromRows,runPortfolioDataAgent};
