@@ -16,6 +16,17 @@ test("resolves custody aliases from the same catalog used by the UI", () => {
   assert.equal(resolveCustodyBrokerAliasFromRows("¿Qué tiene Valeria en Cocos Capital VA?",aliases),"Cocos Vale");
 });
 
+test("forces global platform and owner questions through custody holdings", () => {
+  const plan=normalizePlanTaxonomy({
+    datasets:["performance"],
+    filters:{ticker:null,owner:null,broker:null,category:null,side:null,dateFrom:null,dateTo:null},
+    calculation:"summary",metric:"pnl_usd",groupBy:"broker",
+  },"¿Cuánto tengo en cada plataforma y quién es el titular?");
+  assert.deepEqual(plan.datasets,["holdings"]);
+  assert.equal(plan.groupBy,"platform_owner");
+  assert.equal(plan.metric,"market_value_usd");
+});
+
 test("routes factual portfolio questions without an LLM", () => {
   assert.equal(classifyTwinRoute(messages("¿Cuánto BTC tengo?")).route, "INTERNAL_DATA");
   assert.equal(classifyTwinRoute(messages("¿Cuál es mi liquidez?")).route, "INTERNAL_DATA");
