@@ -334,7 +334,7 @@ test("executes declarative custody ratios with an explicit denominator scope", a
   });
   assert.equal(data.ratio.numerator_usd,30334.02);
   assert.equal(data.ratio.denominator_usd,47411.29);
-  assert.ok(Math.abs(data.ratio.percentage-63.9816)<0.001);
+  assert.ok(Math.abs(data.ratio.percentage-63.98058)<0.001);
 });
 
 test("the same declarative ratio can use the complete portfolio as denominator", async () => {
