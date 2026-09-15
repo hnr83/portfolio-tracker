@@ -12,7 +12,20 @@ const DATASETS = {
   trading_trades: "vw_trading_trades_valued",
   performance: "vw_asset_performance",
 };
-const PLAN_SCHEMA={type:"object",additionalProperties:false,properties:{route:{type:"string",enum:["PORTFOLIO_DATA","TWIN_ANALYSIS"]},datasets:{type:"array",maxItems:3,items:{type:"string",enum:Object.keys(DATASETS)}},filters:{type:"object",additionalProperties:false,properties:{ticker:{type:["string","null"]},owner:{type:["string","null"]},broker:{type:["string","null"]},category:{type:["string","null"]},side:{type:["string","null"]},dateFrom:{type:["string","null"]},dateTo:{type:["string","null"]}},required:["ticker","owner","broker","category","side","dateFrom","dateTo"]},calculation:{type:"string",enum:["summary","list","count","sum","compare","group"]},metric:{type:["string","null"]},groupBy:{type:["string","null"]},reason:{type:"string"}},required:["route","datasets","filters","calculation","metric","groupBy","reason"]};
+const FILTER_PROPERTIES={ticker:{type:["string","null"]},owner:{type:["string","null"]},broker:{type:["string","null"]},category:{type:["string","null"]},side:{type:["string","null"]},dateFrom:{type:["string","null"]},dateTo:{type:["string","null"]}};
+const FILTER_REQUIRED=Object.keys(FILTER_PROPERTIES);
+const FILTER_SCHEMA={type:"object",additionalProperties:false,properties:FILTER_PROPERTIES,required:FILTER_REQUIRED};
+const PLAN_SCHEMA={type:"object",additionalProperties:false,properties:{
+  route:{type:"string",enum:["PORTFOLIO_DATA","TWIN_ANALYSIS"]},
+  intent:{type:"string",enum:["summary","list","count","sum","compare","distribution","ratio","analysis"]},
+  datasets:{type:"array",maxItems:3,items:{type:"string",enum:Object.keys(DATASETS)}},
+  filters:FILTER_SCHEMA,
+  denominatorFilters:{anyOf:[FILTER_SCHEMA,{type:"null"}]},
+  calculation:{type:"string",enum:["summary","list","count","sum","compare","group"]},
+  metric:{type:["string","null"]},
+  groupBy:{type:["string","null"]},
+  reason:{type:"string"}
+},required:["route","intent","datasets","filters","denominatorFilters","calculation","metric","groupBy","reason"]};
 
 function outputText(response){if(response?.output_text)return response.output_text;const parts=[];for(const item of response?.output||[])for(const content of item?.content||[])if(content?.type==="output_text"&&content?.text)parts.push(content.text);return parts.join("\n").trim()}
 function parseJson(text){return JSON.parse(String(text||"").trim().replace(/^```json\s*/i,"").replace(/```$/i,"").trim())}
@@ -21,8 +34,12 @@ function usageStage(stage,data){return{stage,model:data?.model||MODEL,apiRequest
 function lastQuestion(messages=[]){return String([...messages].reverse().find(x=>x?.role==="user")?.content||"").trim()}
 function planningConversation(messages=[]){return messages.slice(-8).map(message=>`${message.role==="assistant"?"TWIN":"USUARIO"}: ${String(message.content||"").slice(0,1200)}`).join("\n")}
 function normalizePlanTaxonomy(plan={},question=""){
-  const normalized={...plan,filters:{...(plan.filters||{})}};
+  const normalized={...plan,filters:{...(plan.filters||{})},denominatorFilters:plan.denominatorFilters?{...plan.denominatorFilters}:null};
   const q=text(question);
+  if(!normalized.intent)normalized.intent=normalized.calculation==="group"?"distribution":normalized.calculation||"summary";
+  if(normalized.intent==="distribution")normalized.calculation="group";
+  if(normalized.intent==="ratio")normalized.calculation="sum";
+  if(normalized.denominatorFilters?.owner&&ownerText(normalized.denominatorFilters.owner)==="vale")normalized.denominatorFilters.owner="Vale";
   if(/\b(cada uno|cada titular|por titular|por owner|ambos|ambas|los dos|las dos)\b/.test(q)){
     normalized.filters.owner=null;
     normalized.calculation="group";
@@ -76,7 +93,7 @@ function normalizePlanTaxonomy(plan={},question=""){
 }
 
 async function planPortfolioQuestion(messages=[]){
-  const question=lastQuestion(messages),data=await post({model:MODEL,reasoning:{effort:"low"},instructions:`Clasificá la última pregunta de una conversación para una app personal de inversiones. Conservá de los turnos anteriores los filtros implícitos en continuaciones como "¿y Vale?", "¿cómo está distribuido?", "¿y por plataforma?" o "¿cuánto representa?". PORTFOLIO_DATA si puede responderse exclusivamente con datos propios: holdings, movimientos, titulares, brokers/plataformas, aportes, compras/ventas, PnL/performance histórica o trading. TWIN_ANALYSIS si pide opinión, recomendación, explicación causal, patrones, riesgo cualitativo o qué debería hacer. Vocabulario del usuario: "crypto", "cripto" y "criptomonedas" significan criptomonedas económicas como BTC, ETH, SOL y RON, aunque estén registradas como category=PORTFOLIO e instrument_type=ASSET; usá category=cryptocurrency. Sólo cuando mencione USDT o dólares digitales usá ticker=USDT y category=crypto, que es su categoría técnica. Para una moneda concreta usá ticker. Para distribución por broker/plataforma usá holdings y agrupá por broker. Elegí sólo los datasets mínimos. metric y groupBy deben ser nombres conceptuales breves; nunca generes SQL. Fechas en YYYY-MM-DD; resolvé referencias como "agosto" usando fecha actual ${new Date().toISOString().slice(0,10)}.`,input:planningConversation(messages),max_output_tokens:700,text:{verbosity:"low",format:{type:"json_schema",name:"portfolio_query_plan",strict:true,schema:PLAN_SCHEMA}},store:false});
+  const question=lastQuestion(messages),data=await post({model:MODEL,reasoning:{effort:"low"},instructions:`Clasificá la última pregunta de una conversación para una app personal de inversiones. Interpretá la conversación semánticamente y conservá filtros implícitos de turnos anteriores. Generá un plan declarativo, no dependiente de frases exactas. Usá intent=distribution cuando pidan un desglose y groupBy con la dimensión solicitada. Usá intent=ratio cuando pidan una proporción: filters define el numerador y denominatorFilters define exactamente el universo del denominador. Ejemplos: "Cocos Vale sobre todo el portfolio" usa filters.owner=Vale + filters.broker=Cocos Vale y denominatorFilters con todos los campos null; "qué porcentaje de lo de Vale está en Cocos Vale" usa el mismo numerador y denominatorFilters.owner=Vale. Para preguntas que no sean ratios, denominatorFilters=null. PORTFOLIO_DATA si puede responderse exclusivamente con datos propios: holdings, movimientos, titulares, brokers/plataformas, aportes, compras/ventas, PnL/performance histórica o trading. TWIN_ANALYSIS si pide opinión, recomendación, explicación causal, patrones, riesgo cualitativo o qué debería hacer. Vocabulario del usuario: "crypto", "cripto" y "criptomonedas" significan criptomonedas económicas como BTC, ETH, SOL y RON, aunque estén registradas como category=PORTFOLIO e instrument_type=ASSET; usá category=cryptocurrency. Sólo cuando mencione USDT o dólares digitales usá ticker=USDT y category=crypto, que es su categoría técnica. Para una moneda concreta usá ticker. Para distribución por broker/plataforma usá holdings y agrupá por broker. Elegí sólo los datasets mínimos. metric y groupBy deben ser nombres conceptuales breves; nunca generes SQL. Fechas en YYYY-MM-DD; resolvé referencias como "agosto" usando fecha actual ${new Date().toISOString().slice(0,10)}.`,input:planningConversation(messages),max_output_tokens:700,text:{verbosity:"low",format:{type:"json_schema",name:"portfolio_query_plan",strict:true,schema:PLAN_SCHEMA}},store:false});
   const plan=normalizePlanTaxonomy(parseJson(outputText(data)),question);
   if(plan.filters?.broker){
     plan.filters.broker=await resolveCustodyBrokerAlias(plan.filters.broker);
@@ -292,17 +309,30 @@ async function executePlan(plan={},requestContext={}){
   }));
   results.computed_summary=summarizeResults(results);
   results.portfolio_total_usd=Number(requestContext?.portfolio?.portfolioTotal||0);
+  const contextualHoldings=Array.isArray(requestContext?.portfolio?.ownerHoldings)?requestContext.portfolio.ownerHoldings:[];
   if(effectivePlan.filters?.owner){
-    const contextualHoldings=Array.isArray(requestContext?.portfolio?.ownerHoldings)?requestContext.portfolio.ownerHoldings:[];
     results.owner_total_usd=contextualHoldings
       .filter(row=>matches(row,{owner:effectivePlan.filters.owner}))
       .reduce((sum,row)=>sum+Number(row.market_value_usd||row.valueUsd||0),0);
+  }
+  if(effectivePlan.intent==="ratio"){
+    const denominatorFilters=effectivePlan.denominatorFilters||{};
+    const hasDenominatorScope=Object.values(denominatorFilters).some(value=>value!=null&&value!=="");
+    results.ratio={
+      numerator_usd:Number(results.computed_summary?.holdings?.market_value_usd||0),
+      denominator_usd:hasDenominatorScope
+        ?contextualHoldings.filter(row=>matches(row,denominatorFilters)).reduce((sum,row)=>sum+Number(row.market_value_usd||row.valueUsd||0),0)
+        :Number(requestContext?.portfolio?.portfolioTotal||0),
+    };
+    results.ratio.percentage=results.ratio.denominator_usd
+      ?results.ratio.numerator_usd/results.ratio.denominator_usd*100
+      :null;
   }
   return results;
 }
 
 async function answerPlannedQuestion({messages,plan,data}){
-  const question=lastQuestion(messages),response=await post({model:MODEL,reasoning:{effort:"low"},instructions:`Respondé en español rioplatense una pregunta factual sobre el portfolio usando exclusivamente DATA. Priorizá computed_summary, cuyos cálculos ya fueron realizados por el backend. Para distribuciones usá by_ticker, by_platform, by_owner o by_platform_owner según corresponda; si piden plataforma y titular juntos, no omitas ninguna de las dos dimensiones. Si preguntan qué porcentaje representa la selección anterior respecto del portfolio completo, calculá (market_value_usd de esa selección / portfolio_total_usd) * 100. Pero si preguntan qué porcentaje de lo de un titular está en una plataforma, por ejemplo "del total de Vale" o "de lo de Horacio", calculá (market_value_usd de la selección / owner_total_usd) * 100. Respondé el porcentaje sin sustituir el denominador solicitado por el total global. En preguntas de ganancia o pérdida actual, informá valor actual, costo y ganancia o pérdida; si está agrupado por titular, detallá los tres importes por cada titular que tenga una posición y el total. No inventes una fila en cero para un titular ausente: aclarale brevemente que no tiene una posición conciliada en ese activo. market_value, value_usd y market_value_usd son la misma valuación expresada en USD. Formateá moneda como US$ 99.129,89 y cantidades con un máximo razonable de decimales. Nunca muestres nombres técnicos como record_count, market_value_usd, quantity, DATA, filtros ni arrays JSON. No opines, no recomiendes, no completes datos ausentes y no menciones SQL ni implementación. Si record_count es cero, indicá que no se encontraron posiciones conciliadas para esos filtros. Respuesta natural, directa y compacta, en texto simple con saltos de línea. No uses Markdown: no escribas tablas, encabezados con #, asteriscos de negrita ni código.`,input:`PREGUNTA:\n${question}\n\nPLAN:\n${JSON.stringify(plan)}\n\nDATA:\n${JSON.stringify(data)}`,max_output_tokens:900,text:{verbosity:"low"},store:false});return{answer:outputText(response),usageStage:usageStage("data_answer",response)}
+  const question=lastQuestion(messages),response=await post({model:MODEL,reasoning:{effort:"low"},instructions:`Respondé en español rioplatense una pregunta factual sobre el portfolio usando exclusivamente DATA. Priorizá computed_summary, cuyos cálculos ya fueron realizados por el backend. Para distribuciones usá by_ticker, by_platform, by_owner o by_platform_owner según corresponda; si piden plataforma y titular juntos, no omitas ninguna de las dos dimensiones. Para intent=ratio usá exclusivamente DATA.ratio.percentage, cuyo numerador y denominador fueron calculados por el backend según los alcances declarados en el plan. Explicá brevemente ambos importes si ayuda a evitar ambigüedad. En preguntas de ganancia o pérdida actual, informá valor actual, costo y ganancia o pérdida; si está agrupado por titular, detallá los tres importes por cada titular que tenga una posición y el total. No inventes una fila en cero para un titular ausente: aclarale brevemente que no tiene una posición conciliada en ese activo. market_value, value_usd y market_value_usd son la misma valuación expresada en USD. Formateá moneda como US$ 99.129,89 y cantidades con un máximo razonable de decimales. Nunca muestres nombres técnicos como record_count, market_value_usd, quantity, DATA, filtros ni arrays JSON. No opines, no recomiendes, no completes datos ausentes y no menciones SQL ni implementación. Si record_count es cero, indicá que no se encontraron posiciones conciliadas para esos filtros. Respuesta natural, directa y compacta, en texto simple con saltos de línea. No uses Markdown: no escribas tablas, encabezados con #, asteriscos de negrita ni código.`,input:`PREGUNTA:\n${question}\n\nPLAN:\n${JSON.stringify(plan)}\n\nDATA:\n${JSON.stringify(data)}`,max_output_tokens:900,text:{verbosity:"low"},store:false});return{answer:outputText(response),usageStage:usageStage("data_answer",response)}
 }
 
 async function runPortfolioDataAgent(messages=[],requestContext={}){
