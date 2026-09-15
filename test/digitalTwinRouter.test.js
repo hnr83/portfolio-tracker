@@ -5,9 +5,16 @@ process.env.BIGQUERY_PROJECT_ID ||= "test-project";
 process.env.BIGQUERY_DATASET_ID ||= "test-dataset";
 
 const { answerPortfolioQuestion, classifyTwinRoute } = require("../src/services/digitalTwinRouterService");
-const { matches, normalizePlanTaxonomy } = require("../src/services/digitalTwinPortfolioAgentService");
+const { matches, normalizePlanTaxonomy, resolveCustodyBrokerAliasFromRows } = require("../src/services/digitalTwinPortfolioAgentService");
 
 const messages = (content) => [{ role: "user", content }];
+
+test("resolves custody aliases from the same catalog used by the UI", () => {
+  const aliases=[{raw_broker:"Cocos Capital VA",canonical_broker:"Cocos Vale"}];
+  assert.equal(resolveCustodyBrokerAliasFromRows("Cocos Capital VA",aliases),"Cocos Vale");
+  assert.equal(resolveCustodyBrokerAliasFromRows("Cocos Capital V.A.",aliases),"Cocos Vale");
+  assert.equal(resolveCustodyBrokerAliasFromRows("¿Qué tiene Valeria en Cocos Capital VA?",aliases),"Cocos Vale");
+});
 
 test("routes factual portfolio questions without an LLM", () => {
   assert.equal(classifyTwinRoute(messages("¿Cuánto BTC tengo?")).route, "INTERNAL_DATA");
