@@ -56,7 +56,14 @@ function normalizePlanTaxonomy(plan={},question=""){
 
 async function planPortfolioQuestion(messages=[]){
   const question=lastQuestion(messages),data=await post({model:MODEL,reasoning:{effort:"low"},instructions:`Clasificá la última pregunta de una conversación para una app personal de inversiones. Conservá de los turnos anteriores los filtros implícitos en continuaciones como "¿y Vale?", "¿cómo está distribuido?", "¿y por plataforma?" o "¿cuánto representa?". PORTFOLIO_DATA si puede responderse exclusivamente con datos propios: holdings, movimientos, titulares, brokers/plataformas, aportes, compras/ventas, PnL/performance histórica o trading. TWIN_ANALYSIS si pide opinión, recomendación, explicación causal, patrones, riesgo cualitativo o qué debería hacer. Vocabulario del usuario: "crypto", "cripto" y "criptomonedas" significan criptomonedas económicas como BTC, ETH, SOL y RON, aunque estén registradas como category=PORTFOLIO e instrument_type=ASSET; usá category=cryptocurrency. Sólo cuando mencione USDT o dólares digitales usá ticker=USDT y category=crypto, que es su categoría técnica. Para una moneda concreta usá ticker. Para distribución por broker/plataforma usá holdings y agrupá por broker. Elegí sólo los datasets mínimos. metric y groupBy deben ser nombres conceptuales breves; nunca generes SQL. Fechas en YYYY-MM-DD; resolvé referencias como "agosto" usando fecha actual ${new Date().toISOString().slice(0,10)}.`,input:planningConversation(messages),max_output_tokens:700,text:{verbosity:"low",format:{type:"json_schema",name:"portfolio_query_plan",strict:true,schema:PLAN_SCHEMA}},store:false});
-  return{plan:normalizePlanTaxonomy(parseJson(outputText(data)),question),usageStage:usageStage("data_planner",data)};
+  const plan=normalizePlanTaxonomy(parseJson(outputText(data)),question);
+  if(plan.filters?.broker){
+    plan.filters.broker=await resolveCustodyBrokerAlias(plan.filters.broker);
+  }else if(/\b(en|plataforma|broker)\b/i.test(question)){
+    const brokerFromQuestion=await resolveCustodyBrokerAlias(question);
+    if(brokerFromQuestion!==question)plan.filters.broker=brokerFromQuestion;
+  }
+  return{plan,usageStage:usageStage("data_planner",data)};
 }
 
 function value(row,...keys){for(const key of keys)if(row?.[key]!=null)return row[key];return null}
