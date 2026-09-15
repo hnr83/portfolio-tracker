@@ -138,7 +138,8 @@ export default function DigitalInvestmentTwinView({
     [draft, setDraft] = useState(""),
     [chatLoading, setChatLoading] = useState(false),
     [chatError, setChatError] = useState(""),
-    [custodyRows, setCustodyRows] = useState([]);
+    [custodyRows, setCustodyRows] = useState([]),
+    [custodyBrokerAliases, setCustodyBrokerAliases] = useState([]);
   const chatEndRef = useRef(null);
   useEffect(() => {
     try {
@@ -197,8 +198,12 @@ export default function DigitalInvestmentTwinView({
         const response = await apiFetch("/api/portfolio/custody-audit");
         if (!response.ok) return;
         const data = await response.json();
-        if (!cancelled)
+        if (!cancelled) {
           setCustodyRows(Array.isArray(data?.rows) ? data.rows : []);
+          setCustodyBrokerAliases(
+            Array.isArray(data?.brokerAliases) ? data.brokerAliases : [],
+          );
+        }
       } catch {}
     })();
     return () => {
@@ -250,12 +255,13 @@ export default function DigitalInvestmentTwinView({
       holdings,
       ownership,
       ownerHoldings,
+      custodyBrokerAliases,
       economicExposures: exposures,
       topExposures: exposures.slice(0, 10),
       topTicker: exposures[0]?.ticker || "",
       topWeight: exposures[0]?.weight || 0,
     };
-  }, [summary, positions, investments, custodyRows]);
+  }, [summary, positions, investments, custodyRows, custodyBrokerAliases]);
   const planner = useMemo(
     () =>
       scenario
