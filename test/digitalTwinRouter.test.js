@@ -306,3 +306,71 @@ test("uses owner-aware holdings from the request context", async () => {
   assert.deepEqual(data.holdings, [{ ticker: "USDT", owner: "Valeria", category: "CRYPTO", market_value_usd: 100, market_value: 100, value_usd: 100 }]);
   assert.equal(data.computed_summary.holdings.market_value_usd, 100);
 });
+
+
+test("executes declarative custody ratios with an explicit denominator scope", async () => {
+  const plan={
+    route:"PORTFOLIO_DATA",
+    intent:"ratio",
+    datasets:["holdings"],
+    filters:{ticker:null,owner:"Vale",broker:"Cocos Vale",category:null,side:null,dateFrom:null,dateTo:null},
+    denominatorFilters:{ticker:null,owner:"Vale",broker:null,category:null,side:null,dateFrom:null,dateTo:null},
+    calculation:"sum",
+    metric:"market_value_usd",
+    groupBy:null,
+    reason:"platform share within owner",
+  };
+  const data=await require("../src/services/digitalTwinPortfolioAgentService").executePlan(plan,{
+    portfolio:{
+      portfolioTotal:223655.09,
+      ownerHoldings:[
+        {ticker:"TSLA",owner:"Vale",platform:"Cocos Vale",market_value_usd:30334.02},
+        {ticker:"USDT",owner:"Vale",platform:"Galicia",market_value_usd:11920.64},
+        {ticker:"TSLA",owner:"Vale",platform:"BMB Vale",market_value_usd:5156.63},
+        {ticker:"BTC",owner:"Horacio",platform:"Ledger 1",market_value_usd:100000},
+      ],
+    },
+  });
+  assert.equal(data.ratio.numerator_usd,30334.02);
+  assert.equal(data.ratio.denominator_usd,47411.29);
+  assert.ok(Math.abs(data.ratio.percentage-63.9816)<0.001);
+});
+
+test("the same declarative ratio can use the complete portfolio as denominator", async () => {
+  const plan={
+    route:"PORTFOLIO_DATA",
+    intent:"ratio",
+    datasets:["holdings"],
+    filters:{ticker:null,owner:"Vale",broker:"Cocos Vale",category:null,side:null,dateFrom:null,dateTo:null},
+    denominatorFilters:{ticker:null,owner:null,broker:null,category:null,side:null,dateFrom:null,dateTo:null},
+    calculation:"sum",
+    metric:"market_value_usd",
+    groupBy:null,
+    reason:"platform share of portfolio",
+  };
+  const data=await require("../src/services/digitalTwinPortfolioAgentService").executePlan(plan,{
+    portfolio:{
+      portfolioTotal:223655.09,
+      ownerHoldings:[{ticker:"TSLA",owner:"Vale",platform:"Cocos Vale",market_value_usd:30334.02}],
+    },
+  });
+  assert.equal(data.ratio.denominator_usd,223655.09);
+  assert.ok(Math.abs(data.ratio.percentage-13.56285)<0.001);
+});
+
+test("preserves a generic AI plan that distributes one owner by platform", () => {
+  const plan=normalizePlanTaxonomy({
+    route:"PORTFOLIO_DATA",
+    intent:"distribution",
+    datasets:["holdings"],
+    filters:{ticker:null,owner:"Horacio",broker:null,category:null,side:null,dateFrom:null,dateTo:null},
+    denominatorFilters:null,
+    calculation:"group",
+    metric:"market_value_usd",
+    groupBy:"platform",
+    reason:"owner distribution",
+  },"¿Cuánto tiene Horacio en total y cómo se distribuye entre sus plataformas?");
+  assert.equal(plan.filters.owner,"Horacio");
+  assert.equal(plan.groupBy,"platform");
+  assert.equal(plan.intent,"distribution");
+});
