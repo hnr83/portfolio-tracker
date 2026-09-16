@@ -385,7 +385,7 @@ test("normalizes collective owner scopes before executing a custody ratio", asyn
 
 test("calculates portfolio goal progress without treating the goal as cash", () => {
   const progress=goalProgress(
-    {portfolio:{totalValueUsd:223655.09}},
+    {portfolio:{portfolioTotal:223655.09}},
     {goalTargetUsd:500000,goalTargetYear:2033,currentInvestableCashUsd:null},
   );
   assert.equal(progress.currentValueUsd,223655.09);
