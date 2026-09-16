@@ -18,7 +18,7 @@ test("resolves custody aliases from the same catalog used by the UI", () => {
 
 test("never collapses distinct numbered custody platforms through fuzzy aliases", () => {
   const aliases=[{raw_broker:"Ledger",canonical_broker:"Ledger 1"}];
-  assert.equal(resolveCustodyBrokerAliasFromRows("Ledger","Ledger" && aliases),"Ledger 1");
+  assert.equal(resolveCustodyBrokerAliasFromRows("Ledger",aliases),"Ledger 1");
   assert.equal(resolveCustodyBrokerAliasFromRows("Ledger 1",aliases),"Ledger 1");
   assert.equal(resolveCustodyBrokerAliasFromRows("Ledger 2",aliases),"Ledger 2");
 });
