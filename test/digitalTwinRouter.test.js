@@ -16,6 +16,13 @@ test("resolves custody aliases from the same catalog used by the UI", () => {
   assert.equal(resolveCustodyBrokerAliasFromRows("¿Qué tiene Valeria en Cocos Capital VA?",aliases),"Cocos Vale");
 });
 
+test("never collapses distinct numbered custody platforms through fuzzy aliases", () => {
+  const aliases=[{raw_broker:"Ledger",canonical_broker:"Ledger 1"}];
+  assert.equal(resolveCustodyBrokerAliasFromRows("Ledger","Ledger" && aliases),"Ledger 1");
+  assert.equal(resolveCustodyBrokerAliasFromRows("Ledger 1",aliases),"Ledger 1");
+  assert.equal(resolveCustodyBrokerAliasFromRows("Ledger 2",aliases),"Ledger 2");
+});
+
 test("forces global platform and owner questions through custody holdings", () => {
   const plan=normalizePlanTaxonomy({
     datasets:["performance"],
