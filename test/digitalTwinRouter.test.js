@@ -390,7 +390,7 @@ test("calculates portfolio goal progress without treating the goal as cash", () 
   );
   assert.equal(progress.currentValueUsd,223655.09);
   assert.equal(progress.targetValueUsd,500000);
-  assert.equal(progress.goalGapUsd,276344.91);
+  assert.ok(Math.abs(progress.goalGapUsd-276344.91)<0.001);
   assert.ok(Math.abs(progress.goalProgressPct-44.7318)<0.001);
   assert.ok(Math.abs(progress.requiredAnnualReturnPctWithoutContributions-12.179)<0.01);
   assert.equal(Object.hasOwn(progress,"currentInvestableCashUsd"),false);
