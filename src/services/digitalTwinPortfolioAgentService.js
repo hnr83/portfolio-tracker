@@ -274,7 +274,7 @@ async function executePlan(plan={},requestContext={}){
   const results={};
   await Promise.all(selected.map(async name=>{
     const contextualHoldings=Array.isArray(requestContext?.portfolio?.ownerHoldings)?requestContext.portfolio.ownerHoldings:[];
-    if(name==="holdings"&&(effectivePlan.filters?.owner||text(effectivePlan.groupBy).includes("owner")||text(effectivePlan.groupBy).includes("platform")||text(effectivePlan.groupBy).includes("broker"))){
+    if(name==="holdings"&&(effectivePlan.filters?.owner||effectivePlan.filters?.broker||text(effectivePlan.groupBy).includes("owner")||text(effectivePlan.groupBy).includes("platform")||text(effectivePlan.groupBy).includes("broker"))){
       const needsCost=text(effectivePlan.metric)==="pnl_usd"||/\b(pnl|cost|costo|ganancia|p[eé]rdida)\b/.test(text(effectivePlan.metric));
       const custodyRows=contextualHoldings.filter(row=>matches(row,effectivePlan.filters));
       let rows=custodyRows;
