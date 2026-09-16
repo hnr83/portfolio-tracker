@@ -6,6 +6,7 @@ process.env.BIGQUERY_DATASET_ID ||= "test-dataset";
 
 const { classifyTwinRoute } = require("../src/services/digitalTwinRouterService");
 const { matches, normalizePlanTaxonomy, resolveCustodyBrokerAliasFromRows } = require("../src/services/digitalTwinPortfolioAgentService");
+const { goalProgress } = require("../src/services/digitalTwinDecisionPipeline");
 
 const messages = (content) => [{ role: "user", content }];
 
@@ -379,4 +380,18 @@ test("normalizes collective owner scopes before executing a custody ratio", asyn
   assert.equal(data.ratio.numerator_usd,65530.07);
   assert.equal(data.ratio.denominator_usd,98562.57);
   assert.ok(Math.abs(data.ratio.percentage-66.486)<0.001);
+});
+
+
+test("calculates portfolio goal progress without treating the goal as cash", () => {
+  const progress=goalProgress(
+    {portfolio:{totalValueUsd:223655.09}},
+    {goalTargetUsd:500000,goalTargetYear:2033,currentInvestableCashUsd:null},
+  );
+  assert.equal(progress.currentValueUsd,223655.09);
+  assert.equal(progress.targetValueUsd,500000);
+  assert.equal(progress.goalGapUsd,276344.91);
+  assert.ok(Math.abs(progress.goalProgressPct-44.7318)<0.001);
+  assert.ok(Math.abs(progress.requiredAnnualReturnPctWithoutContributions-12.200)<0.01);
+  assert.equal(Object.hasOwn(progress,"currentInvestableCashUsd"),false);
 });
