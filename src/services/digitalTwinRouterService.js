@@ -84,6 +84,8 @@ function findHolding(question, portfolio = {}) {
 
 function answerPortfolioQuestion(question, context = {}) {
   const portfolio = context.portfolio || context || {};
+  const requiresSemanticPlan=/\b(porcentaje|representa|peso|compar(?:á|a|ar)|distribu(?:ye|ci[oó]n)|titular|titulares|owner|plataforma|plataformas|broker|brokers)\b/i.test(question);
+  if(requiresSemanticPlan)return null;
   const groupedQuestion=/\b(cada uno|cada titular|por titular|por owner|ambos|ambas|los dos|las dos|entre\s+(horacio|vale|valeria))\b/i.test(question);
   if(groupedQuestion)return null;
   const ownershipQuestion=/\b(titular|titulares|nombre de|horacio|valeria|vale|owner)\b/i.test(question);
