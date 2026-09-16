@@ -1,0 +1,181 @@
+const { runQuery } = require("./bigQueryService");
+const { table } = require("../utils/bigqueryHelper");
+
+const EXTERNAL = /\b(hoy|ahora|actual|mercado|cotizaci[oó]n|precio|noticia|t[eé]cnico|fundamental|valuaci[oó]n)\b/i;
+const TRADING = /\b(trading|trade|trades|longs?|shorts?|fees?|apalancamiento)\b/i;
+const FACTUAL = /\b(cu[aá]nto|cu[aá]ntos|tengo|tenencia|posici[oó]n|saldo|total|pnl|gan[eé]|perd[ií]|resultado|liquidez|peso|porcentaje|fees?)\b/i;
+const ANALYTICAL = /\b(conviene|deber[ií]a|parece|demasiado|riesgo|mejorar|patr[oó]n|por qu[eé]|recomend|analiz)\b/i;
+const CONTRIBUTIONS = /\b(aportes?(?: netos?)?|capital (externo )?(neto )?aportado|ingresos? netos?)\b|\baport(?:e|é|aste|ó|o|amos|aron)(?=\s|[?.,!]|$)/i;
+const WITHDRAWALS = /\b(retiros?|extracciones?)\b|\bretir(?:e|é|aste|ó|o|amos|aron)(?=\s|[?.,!]|$)/i;
+
+function latestQuestion(messages = []) {
+  return String([...messages].reverse().find((message) => message?.role === "user")?.content || "").trim();
+}
+
+function classifyTwinRoute(messages = []) {
+  const question = latestQuestion(messages);
+  const userQuestions=messages.filter(message=>message?.role==="user").map(message=>String(message.content||""));
+  const previousQuestion=userQuestions.at(-2)||"";
+  const contributionContext=[...userQuestions.slice(0,-1)].reverse().find(item=>CONTRIBUTIONS.test(item))||"";
+  const withdrawalContext=[...userQuestions.slice(0,-1)].reverse().find(item=>WITHDRAWALS.test(item))||"";
+  const positionContext=[...userQuestions.slice(0,-1)].reverse().find(item=>{
+    const positionTerms=/\b(posici[oó]n|tenencia|distribu(?:ye|ci[oó]n))\b/i.test(item)&&/\b(titular|owner|plataforma|broker)\b/i.test(item);
+    const custodyDimensions=/\b(plataforma|plataformas|broker|brokers)\b/i.test(item)&&/\b(titular|titulares|owner)\b/i.test(item);
+    return positionTerms||custodyDimensions;
+  })||"";
+  const positionOwnerContext=[...userQuestions.slice(0,-1)].reverse().find(item=>/\b(vale|valeria|horacio)\b/i.test(item))||"";
+  const currentPositionPnl=/\b(pnl|ganamos|ganancia|ganancias|perdemos|p[eé]rdida|p[eé]rdidas)\b/i.test(question)&&/\b(actual|actualmente|hoy|posici[oó]n)\b/i.test(question);
+  const currentPositionData=/\b(posici[oó]n|tenencia|distribu(?:ye|ci[oó]n))\b/i.test(question)&&/\b(actual|actualmente|hoy)\b/i.test(question)&&/\b(titular|owner|plataforma|broker)\b/i.test(question);
+  const tradingFollowUp=TRADING.test(previousQuestion)&&(/\b(eso|ese|esa|total|pero|entonces|y|en\s+20\d{2})\b/i.test(question)||FACTUAL.test(question));
+  const contextualFollowUp=/^(?:[¿¡]\s*)?(?:y\b|eso\b|ese\b|esa\b|vale\b|valeria\b|horacio\b|ambos\b|cada uno\b|los de\b)/i.test(question);
+  const percentageFollowUp=/\b(porcentaje|representa|peso)\b[\s\S]*\b(portfolio|cartera)\b/i.test(question);
+  const positionFollowUp=Boolean(positionContext)&&(
+    contextualFollowUp&&/\b(vale|valeria|horacio|titular|owner|plataforma|broker)\b/i.test(question)
+    ||percentageFollowUp
+  );
+  const contributionsFollowUp=Boolean(contributionContext)&&(CONTRIBUTIONS.test(question)||contextualFollowUp);
+  const withdrawalsFollowUp=Boolean(withdrawalContext)&&(WITHDRAWALS.test(question)||contextualFollowUp);
+  if(positionFollowUp){
+    const inheritedTicker=positionContext.match(/\b(?:BTC|ETH|SOL|RON|TSLA|GOOGL|MELI|ARKG|ARKK|SPY|QQQ)\b/i)?.[0]||"";
+    const inheritedOwner=positionOwnerContext.match(/\b(vale|valeria|horacio)\b/i)?.[0]||"";
+    const effectiveQuestion=`${question}${inheritedTicker&&!new RegExp(`\\b${inheritedTicker}\\b`,"i").test(question)?` sobre la posición actual de ${inheritedTicker}`:""}${inheritedOwner&&!/\\b(vale|valeria|horacio)\\b/i.test(question)?` para ${inheritedOwner}`:""}`;
+    return{route:"TWIN_ANALYSIS",question:effectiveQuestion,reason:"current_position_follow_up"};
+  }
+  if (EXTERNAL.test(question)&&!currentPositionPnl&&!currentPositionData) return { route: "EXTERNAL_ANALYSIS", question, reason: "current_market_context" };
+  if(currentPositionPnl||currentPositionData)return{route:"TWIN_ANALYSIS",question,reason:currentPositionPnl?"current_position_pnl":"current_position_data"};
+  if(withdrawalsFollowUp){
+    const inheritedYear=withdrawalContext.match(/\b20\d{2}\b/)?.[0];
+    const inheritedOwnerGrouping=/\b(cada uno|por titular|por owner)\b/i.test(withdrawalContext);
+    const effectiveQuestion=`${question}${inheritedYear&&!/\b20\d{2}\b/.test(question)?` en ${inheritedYear}`:""}${inheritedOwnerGrouping&&!WITHDRAWALS.test(question)&&!/\b(cada uno|por titular|por owner)\b/i.test(question)?" por titular":""}`;
+    return{route:"WITHDRAWALS_DATA",question:effectiveQuestion,reason:"external_withdrawals_follow_up"};
+  }
+  if(WITHDRAWALS.test(question) && !ANALYTICAL.test(question)) return {route:"WITHDRAWALS_DATA",question,reason:"external_withdrawals_query"};
+  if(contributionsFollowUp){
+    const inheritedYear=contributionContext.match(/\b20\d{2}\b/)?.[0];
+    const inheritedMonthly=/\b(por mes|mes por mes|mensual(?:es|mente)?)\b/i.test(contributionContext);
+    const effectiveQuestion=`${question}${inheritedYear&&!/\b20\d{2}\b/.test(question)?` en ${inheritedYear}`:""}${inheritedMonthly&&!/\b(por mes|mes por mes|mensual(?:es|mente)?)\b/i.test(question)?" por mes":""}`;
+    return{route:"CONTRIBUTIONS_DATA",question:effectiveQuestion,reason:"net_contributions_follow_up"};
+  }
+  if (CONTRIBUTIONS.test(question) && !ANALYTICAL.test(question)) return { route: "CONTRIBUTIONS_DATA", question, reason: "net_contributions_query" };
+  if (((TRADING.test(question)&&FACTUAL.test(question))||tradingFollowUp) && !ANALYTICAL.test(question)) return { route: "TRADING_DATA", question, reason: tradingFollowUp?"factual_trading_follow_up":"factual_trading_query" };
+  if (FACTUAL.test(question) && !ANALYTICAL.test(question)) return { route: "TWIN_ANALYSIS", question, reason: "factual_portfolio_query" };
+  return { route: "TWIN_ANALYSIS", question, reason: "reasoning_required" };
+}
+
+function usd(value) {
+  return new Intl.NumberFormat("es-AR", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(Number(value) || 0);
+}
+
+function number(value, digits = 6) {
+  return new Intl.NumberFormat("es-AR", { maximumFractionDigits: digits }).format(Number(value) || 0);
+}
+
+function percent(value) {
+  return `${number(value, 2)}%`;
+}
+
+async function answerTradingQuestion(question) {
+  const year=Number(question.match(/\b(20\d{2})\b/)?.[1]);
+  if(Number.isInteger(year)){
+    const rows=await runQuery(`SELECT COUNT(*) AS total_trades,COALESCE(SUM(CAST(pnl_usd_calculated AS FLOAT64)),0) AS total_pnl_usd FROM ${table("vw_trading_trades_valued")} WHERE EXTRACT(YEAR FROM DATE(closed_at))=@year`,{year});
+    const summary=rows[0]||{};
+    return `En ${year}, tu resultado realizado de trading es ${usd(summary.total_pnl_usd)} sobre ${number(summary.total_trades,0)} trades.`;
+  }
+  const [summaryRows, assetRows] = await Promise.all([
+    runQuery(`SELECT * FROM ${table("vw_trading_summary")} LIMIT 1`),
+    runQuery(`SELECT * FROM ${table("vw_trading_by_asset")} ORDER BY pnl_usd DESC`),
+  ]);
+  const summary = summaryRows[0] || {};
+  const totalPnl = Number(summary.total_pnl_usd ?? summary.pnl_usd ?? 0);
+  if (/\b(asset|activo|instrumento|btc|eth|sol|ada)\b/i.test(question) && assetRows.length) {
+    const requested = question.match(/\b(BTC|ETH|SOL|ADA)\b/i)?.[1]?.toUpperCase();
+    const rows = requested ? assetRows.filter((row) => String(row.instrument || row.asset || "").toUpperCase() === requested) : assetRows;
+    if (requested && rows[0]) return `En ${requested}, tu resultado realizado de trading es ${usd(rows[0].pnl_usd ?? rows[0].total_pnl_usd)} en ${number(rows[0].total_trades ?? rows[0].trades, 0)} trades.`;
+    const best = rows[0];
+    return `Tu activo con mayor PnL registrado es ${best.instrument || best.asset}: ${usd(best.pnl_usd ?? best.total_pnl_usd)}.`;
+  }
+  if (/\b(fee|fees|comisiones?)\b/i.test(question)) return `Tus fees registrados de trading suman ${usd(summary.total_fees_usd ?? summary.fees_usd)}.`;
+  return `Tu resultado realizado de trading es ${usd(totalPnl)} en total, sobre ${number(summary.total_trades, 0)} trades.`;
+}
+
+async function answerNetContributions(question){
+  const year=Number(question.match(/\b(20\d{2})\b/)?.[1]);
+  const requestedOwner=question.match(/\b(Horacio|Vale|Valeria)\b/i)?.[1];
+  const owner=/^(vale|valeria)$/i.test(requestedOwner||"")?"Vale":/^horacio$/i.test(requestedOwner||"")?"Horacio":null;
+  const bothOwners=/\b(nuestros?|aportamos|entre los dos|ambos|los dos)\b/i.test(question);
+  const monthly=/\b(por mes|mes por mes|mensual(?:es|mente)?)\b/i.test(question);
+  const dateFilter=Number.isInteger(year)?"AND EXTRACT(YEAR FROM fecha)=@year":"";
+  const ownerFilter=owner?"AND LOWER(TRIM(owner))=LOWER(@owner)":bothOwners?"AND LOWER(TRIM(owner)) IN ('horacio','vale')":"";
+  const amountSql=`CASE
+    WHEN movement_type IN ('BUY_ASSET','BUY_USD','BUY_USDT','INCOME_USD') THEN 1
+    WHEN movement_type IN ('SELL_ASSET','SELL_USD','SELL_USDT','EXPENSE_USD') THEN -1 ELSE 0 END * CASE
+    WHEN movement_type IN ('BUY_ASSET','SELL_ASSET') THEN ABS(SAFE_CAST(net_amount AS FLOAT64))
+    WHEN movement_type IN ('BUY_USD','SELL_USD','BUY_USDT','SELL_USDT') THEN ABS(SAFE_CAST(quantity AS FLOAT64))
+    WHEN movement_type IN ('INCOME_USD','EXPENSE_USD') THEN ABS(SAFE_CAST(net_amount AS FLOAT64)) ELSE 0 END`;
+  const rows=await runQuery(`SELECT ${monthly?"FORMAT_DATE('%Y-%m',fecha) AS period,":""} COALESCE(SUM(${amountSql}),0) AS net_contributions_usd
+    FROM ${table("movements")} WHERE fecha IS NOT NULL ${dateFilter} ${ownerFilter} AND (
+      source_table='transactions_raw' OR flow_type='EXTERNAL' OR
+      (source_table='manual' AND movement_type='BUY_ASSET' AND settlement_currency='ARS') OR
+      (transaction_group_id IS NULL AND NOT (movement_type IN ('BUY_USDT','SELL_USDT') AND flow_type='SETTLEMENT' AND NOT (source_table='cv_usdt_raw' AND movement_type='BUY_USDT' AND description='Venta BTC')) AND source_table NOT IN ('bingx_spot','trading_transfer'))
+    ) ${monthly?"GROUP BY period ORDER BY period":""}` ,{...(Number.isInteger(year)?{year}:{}),...(owner?{owner}: {})});
+  if(monthly){
+    const total=rows.reduce((sum,row)=>sum+Number(row.net_contributions_usd||0),0);
+    const detail=rows.map(row=>`${row.period}: ${usd(row.net_contributions_usd)}`).join("\n");
+    return `Aportes netos por mes${Number.isInteger(year)?` de ${year}`:""}:\n${detail}\n\nTotal: ${usd(total)}.`;
+  }
+  const amount=rows[0]?.net_contributions_usd||0;
+  const subject=owner?`${owner} registró`:bothOwners?"Entre Horacio y Vale registraron":"Registraste";
+  return `${subject} ${usd(amount)} de aportes netos${Number.isInteger(year)?` durante ${year}`:' acumulados'}.`;
+}
+
+async function answerWithdrawals(question){
+  const year=Number(question.match(/\b(20\d{2})\b/)?.[1]);
+  const requestedOwner=question.match(/\b(Horacio|Vale|Valeria)\b/i)?.[1];
+  const owner=/^(vale|valeria)$/i.test(requestedOwner||"")?"Vale":/^horacio$/i.test(requestedOwner||"")?"Horacio":null;
+  const groupedOwners=/\b(cada uno|por titular|por owner)\b/i.test(question);
+  const monthly=/\b(por mes|mes por mes|mensual(?:es|mente)?)\b/i.test(question);
+  const dateFilter=Number.isInteger(year)?"AND EXTRACT(YEAR FROM fecha)=@year":"";
+  const ownerFilter=owner?"AND LOWER(TRIM(owner))=LOWER(@owner)":"AND LOWER(TRIM(owner)) IN (\'horacio\',\'vale\')";
+  const dimensions=[groupedOwners?"CASE WHEN LOWER(TRIM(owner))=\'horacio\' THEN \'Horacio\' WHEN LOWER(TRIM(owner)) IN (\'vale\',\'valeria\') THEN \'Vale\' ELSE COALESCE(NULLIF(TRIM(owner),\'\'),\'Sin titular\') END AS owner":null,monthly?"FORMAT_DATE(\'%Y-%m\',fecha) AS period":null].filter(Boolean);
+  const groups=[groupedOwners?"owner":null,monthly?"period":null].filter(Boolean);
+  const rows=await runQuery(`SELECT ${dimensions.length?`${dimensions.join(",")},`:""} COALESCE(SUM(CASE
+    WHEN movement_type IN ('SELL_USD','SELL_USDT') THEN ABS(SAFE_CAST(quantity AS FLOAT64))
+    WHEN movement_type='EXPENSE_USD' THEN ABS(SAFE_CAST(net_amount AS FLOAT64))
+    ELSE 0 END),0) AS withdrawals_usd
+    FROM ${table("movements")} WHERE fecha IS NOT NULL ${dateFilter} ${ownerFilter}
+      AND movement_type IN ('SELL_USD','SELL_USDT','EXPENSE_USD') AND (
+        source_table='transactions_raw' OR flow_type='EXTERNAL' OR
+        (transaction_group_id IS NULL AND NOT (movement_type='SELL_USDT' AND flow_type='SETTLEMENT') AND source_table NOT IN ('bingx_spot','trading_transfer'))
+      ) ${groups.length?`GROUP BY ${groups.join(",")} ORDER BY ${groups.join(",")}`:""}`,{...(Number.isInteger(year)?{year}:{}),...(owner?{owner}:{})});
+  if(monthly){
+    const detail=rows.map(row=>`${groupedOwners?`${row.owner} · `:""}${row.period}: ${usd(row.withdrawals_usd)}`).join("\n");
+    const total=rows.reduce((sum,row)=>sum+Number(row.withdrawals_usd||0),0);
+    return `Retiros externos por mes${Number.isInteger(year)?` de ${year}`:""}:\n${detail}\n\nTotal: ${usd(total)}.`;
+  }
+  if(groupedOwners){
+    const detail=rows.map(row=>`${row.owner}: ${usd(row.withdrawals_usd)}`).join(" · ");
+    const total=rows.reduce((sum,row)=>sum+Number(row.withdrawals_usd||0),0);
+    return `${detail}. Total: ${usd(total)} de retiros externos${Number.isInteger(year)?` durante ${year}`:""}.`;
+  }
+  const amount=rows[0]?.withdrawals_usd||0;
+  const subject=owner?owner:"Horacio y Vale";
+  return `${subject}: ${usd(amount)} de retiros externos${Number.isInteger(year)?` durante ${year}`:" acumulados"}.`;
+}
+
+async function resolveRoutedQuestion(route, context = {}) {
+  if (route.route === "TRADING_DATA") {
+    const answer = await answerTradingQuestion(route.question);
+    return { answer, route: route.route, dataSources: ["vw_trading_summary", "vw_trading_by_asset"] };
+  }
+  if(route.route==="CONTRIBUTIONS_DATA"){
+    const answer=await answerNetContributions(route.question);
+    return{answer,route:route.route,dataSources:["movements"]};
+  }
+  if(route.route==="WITHDRAWALS_DATA"){
+    const answer=await answerWithdrawals(route.question);
+    return{answer,route:route.route,dataSources:["movements"]};
+  }
+  return null;
+}
+
+module.exports = { classifyTwinRoute, resolveRoutedQuestion };

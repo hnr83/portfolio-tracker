@@ -77,7 +77,7 @@ function portfolioUniverse(context = {}) {
 function portfolioAssetIds(context = {}) { return portfolioUniverse(context).map(x => x.asset); }
 function compactDecisionContext(context = {}, { includePlanner = true } = {}) {
   const p = context?.portfolio || {}; const planner = context?.planner || {};
-  const result = { portfolio: { totalValueUsd: p.totalValueUsd, cryptoExposurePct: p.cryptoExposurePct, liquidityPct: p.liquidityPct,
+  const result = { portfolio: { totalValueUsd: firstFinite(p.totalValueUsd,p.portfolioTotal,p.total_value_usd), cryptoExposurePct: p.cryptoExposurePct, liquidityPct: p.liquidityPct,
     topExposures: p.topExposures || p.exposures } };
   if (includePlanner) {
     result.planner = {
@@ -90,34 +90,12 @@ function compactDecisionContext(context = {}, { includePlanner = true } = {}) {
   }
   return compact(result);
 }
-function userText(messages = []) { return (messages || []).filter(m=>m?.role==="user").map(m=>String(m.content||"")).join("\n"); }
-function looksLikeOpenAllocation(messages = []) {
-  const text = userText(messages).toLowerCase();
-  return /(ahorro|aporte|disponible|invertir|invierto|inversi[oó]n).*(mes|aporte|cartera|asignaci[oó]n)|asignaci[oó]n.*(aporte|ahorro|mes)/i.test(text);
-}
-function explicitUsdAmount(messages = []) {
-  const users = (messages || []).filter(m=>m?.role==="user");
-  for (let i=users.length-1;i>=0;i--) {
-    const raw=String(users[i]?.content||"");
-    const match=raw.match(/(?:us\$|usd|u\$s|d[oó]lares?)\s*([\d.,]+)|([\d.,]+)\s*(?:us\$|usd|u\$s|d[oó]lares?)/i);
-    if (match) {
-      const value=Number(String(match[1]||match[2]).replace(/\./g,"").replace(",","."));
-      if (Number.isFinite(value)&&value>0) return value;
-    }
-  }
-  const last=String(users.at(-1)?.content||"").trim();
-  if (users.length>1 && /^\$?\s*[\d.,]+\s*$/.test(last)) {
-    const value=Number(last.replace("$","").trim().replace(/\./g,"").replace(",","."));
-    if(Number.isFinite(value)&&value>0)return value;
-  }
-  return null;
-}
 async function post(body, timeout=120000) {
   return (await axios.post(OPENAI_RESPONSES_URL,body,{headers:{Authorization:`Bearer ${process.env.OPENAI_API_KEY}`,"Content-Type":"application/json"},timeout})).data;
 }
 
 const SCREEN_ITEM={type:"object",additionalProperties:false,properties:{asset:{type:"string"},status:{type:"string",enum:["research_now","defer"]},reason:{type:"string"}},required:["asset","status","reason"]};
-const PREFLIGHT_SCHEMA={type:"object",additionalProperties:false,properties:{decisionType:{type:"string",enum:["allocation","asset_question","portfolio_risk","sell_hold","plan_progress","other"]},screenedAssets:{type:"array",maxItems:MAX_SCREENED_ASSETS,items:SCREEN_ITEM},researchAssets:{type:"array",maxItems:MAX_RESEARCH_ASSETS,items:{type:"string"}},researchQuestion:{type:"string"}},required:["decisionType","screenedAssets","researchAssets","researchQuestion"]};
+const PREFLIGHT_SCHEMA={type:"object",additionalProperties:false,properties:{decisionType:{type:"string",enum:["allocation","asset_question","portfolio_risk","sell_hold","plan_progress","other"]},currentInvestableCashUsd:{type:["number","null"]},goalTargetUsd:{type:["number","null"]},goalTargetYear:{type:["integer","null"]},screenedAssets:{type:"array",maxItems:MAX_SCREENED_ASSETS,items:SCREEN_ITEM},researchAssets:{type:"array",maxItems:MAX_RESEARCH_ASSETS,items:{type:"string"}},researchQuestion:{type:"string"}},required:["decisionType","currentInvestableCashUsd","goalTargetUsd","goalTargetYear","screenedAssets","researchAssets","researchQuestion"]};
 const EVIDENCE_ITEM={type:"object",additionalProperties:false,properties:{asset:{type:"string"},thesis:{type:"string",enum:["stronger","intact","mixed","weaker","unknown"]},valuation:{type:"string",enum:["attractive","neutral","stretched","unknown"]},keyFacts:{type:"array",maxItems:3,items:{type:"string"}},quality:{type:"string",enum:["high","medium","low"]},limitation:{type:"string"}},required:["asset","thesis","valuation","keyFacts","quality","limitation"]};
 const RESEARCH_SCHEMA={type:"object",additionalProperties:false,properties:{assets:{type:"array",maxItems:MAX_RESEARCH_ASSETS,items:EVIDENCE_ITEM},limitation:{type:"string"}},required:["assets","limitation"]};
 
@@ -131,10 +109,10 @@ function normalizeScreening(screenedAssets=[],context={}) {
 }
 function fallbackAssets(context={}) { return portfolioAssetIds(context).slice(0,MAX_RESEARCH_ASSETS); }
 
-async function runPreflight({messages,context,currentProfile,amount}) {
+async function runPreflight({messages,context,currentProfile}) {
   const recent=(messages||[]).slice(-3).map(m=>`${m.role}: ${String(m.content||"").slice(0,700)}`).join("\n"); const universe=portfolioUniverse(context);
-  const input=`Monto actual confirmado por el usuario: ${amount==null?"no informado":`USD ${amount}`}\nPerfil: ${JSON.stringify(compactProfile(currentProfile))}\nCartera/plan agregado: ${JSON.stringify(compactDecisionContext(context))}\nUNIVERSO COMPLETO DE CARTERA (screening obligatorio, ${universe.length} activos): ${JSON.stringify(universe)}\nConsulta: ${recent}`;
-  const body={model:RESEARCH_MODEL,reasoning:{effort:"low"},instructions:`Planificá la decisión, sin responderla ni investigar. Hacé un screening EXPLÍCITO de TODOS los activos del universo. screenedAssets debe contener exactamente un registro por activo, con research_now o defer y razón breve basada sólo en cartera, consulta e Investor Model; no inventes fundamentales actuales. Elegí máximo ${MAX_RESEARCH_ASSETS} activos actuales para research profundo y sólo entre research_now. No propongas externos. Screening no es ranking ni evaluación fundamental. IMPORTANTE: peso, valor, tamaño o ser una posición principal son ESTADO ACTUAL, no evidencia de atractivo ni preferencia; sólo pueden justificar que un activo sea material para revisar, nunca que sea mejor/peor compra. La razón de research_now/defer debe expresar relevancia para investigar, no atractivo esperado. Planner es un escenario de planificación, no efectivo disponible ni target de asignación.`,input,max_output_tokens:1600,text:{verbosity:"low",format:{type:"json_schema",name:"twin_preflight",strict:true,schema:PREFLIGHT_SCHEMA}},store:false};
+  const input=`Perfil: ${JSON.stringify(compactProfile(currentProfile))}\nCartera/plan agregado: ${JSON.stringify(compactDecisionContext(context))}\nUNIVERSO COMPLETO DE CARTERA (screening obligatorio, ${universe.length} activos): ${JSON.stringify(universe)}\nConsulta: ${recent}`;
+  const body={model:RESEARCH_MODEL,reasoning:{effort:"low"},instructions:`Planificá la decisión, sin responderla ni investigar. Hacé un screening EXPLÍCITO de TODOS los activos del universo. screenedAssets debe contener exactamente un registro por activo, con research_now o defer y razón breve basada sólo en cartera, consulta e Investor Model; no inventes fundamentales actuales. Elegí máximo ${MAX_RESEARCH_ASSETS} activos actuales para research profundo y sólo entre research_now. No propongas externos. Screening no es ranking ni evaluación fundamental. IMPORTANTE: peso, valor, tamaño o ser una posición principal son ESTADO ACTUAL, no evidencia de atractivo ni preferencia; sólo pueden justificar que un activo sea material para revisar, nunca que sea mejor/peor compra. La razón de research_now/defer debe expresar relevancia para investigar, no atractivo esperado. Planner es un escenario de planificación, no efectivo disponible ni target de asignación. currentInvestableCashUsd sólo puede contener un monto que el usuario identifique explícitamente como dinero disponible AHORA para invertir/asignar en esta decisión. Objetivos futuros, metas FIRE, valor deseado del portfolio, aportes futuros y cifras del Planner deben producir currentInvestableCashUsd=null. Para consultas de progreso, extraé la meta explícita y su año en goalTargetUsd y goalTargetYear; si no existen, usá null.`,input,max_output_tokens:1600,text:{verbosity:"low",format:{type:"json_schema",name:"twin_preflight",strict:true,schema:PREFLIGHT_SCHEMA}},store:false};
   let data;
   try {
     data=await post(body,60000);
@@ -147,10 +125,10 @@ async function runPreflight({messages,context,currentProfile,amount}) {
     researchAssets=researchAssets.filter(asset=>marked.has(asset.toUpperCase()));
     if(!researchAssets.length&&screeningComplete)researchAssets=screenedAssets.filter(x=>x.status==="research_now").map(x=>x.asset).slice(0,MAX_RESEARCH_ASSETS);
     if(!researchAssets.length)researchAssets=fallbackAssets(context);
-    return {plan:{...parsed,screenedAssets,screeningComplete,researchAssets,portfolioUniverseAssets:portfolioAssetIds(context),screenedPortfolioCount:screenedAssets.length,allocationAmountUsd:amount},attempt:data};
+    return {plan:{...parsed,screenedAssets,screeningComplete,researchAssets,portfolioUniverseAssets:portfolioAssetIds(context),screenedPortfolioCount:screenedAssets.length,allocationAmountUsd:parsed.currentInvestableCashUsd},attempt:data};
   } catch(error) {
     console.warn("Digital Twin preflight unavailable; using deterministic fallback",{message:error?.message,usage:data?.usage});
-    return {plan:{decisionType:looksLikeOpenAllocation(messages)?"allocation":"other",screenedAssets:[],screeningComplete:false,researchAssets:fallbackAssets(context),researchQuestion:"Comparar tesis/fundamentales y valuación actual con evidencia reciente.",portfolioUniverseAssets:portfolioAssetIds(context),screenedPortfolioCount:0,allocationAmountUsd:amount,preflightFallback:true},attempt:data||null};
+    return {plan:{decisionType:"other",currentInvestableCashUsd:null,goalTargetUsd:null,goalTargetYear:null,screenedAssets:[],screeningComplete:false,researchAssets:fallbackAssets(context),researchQuestion:"Comparar tesis/fundamentales y valuación actual con evidencia reciente.",portfolioUniverseAssets:portfolioAssetIds(context),screenedPortfolioCount:0,allocationAmountUsd:null,preflightFallback:true},attempt:data||null};
   }
 }
 
@@ -181,6 +159,25 @@ async function researchBatch(plan){
   }
 }
 
+function goalProgress(context={},plan={}){
+  const current=firstFinite(context?.portfolio?.totalValueUsd,context?.portfolio?.portfolioTotal,context?.portfolio?.total_value_usd);
+  const target=Number(plan?.goalTargetUsd);
+  const targetYear=Number(plan?.goalTargetYear);
+  const currentYear=new Date().getUTCFullYear();
+  if(!Number.isFinite(current)||current<=0||!Number.isFinite(target)||target<=0)return null;
+  const years=Number.isInteger(targetYear)&&targetYear>currentYear?targetYear-currentYear:null;
+  return{
+    currentValueUsd:current,
+    targetValueUsd:target,
+    targetYear:Number.isInteger(targetYear)?targetYear:null,
+    goalProgressPct:current/target*100,
+    goalGapUsd:Math.max(target-current,0),
+    yearsRemaining:years,
+    requiredAnnualReturnPctWithoutContributions:years?((target/current)**(1/years)-1)*100:null,
+    semantics:"required return excludes future contributions; it is a reference, not a forecast",
+  };
+}
+
 function decisionContext(context, plan, memoryItems=[]) {
   const decisionType = plan?.decisionType || "other";
   const plannerRelevant = decisionType === "allocation" || decisionType === "plan_progress";
@@ -188,6 +185,7 @@ function decisionContext(context, plan, memoryItems=[]) {
   return {
     ...base,
     currentInvestableCashUsd: plan?.allocationAmountUsd == null ? null : plan.allocationAmountUsd,
+    goalProgress: goalProgress(context,plan),
     plannerSemantics: plannerRelevant
       ? "Planner values are scenario assumptions only; they are not current cash unless currentInvestableCashUsd is explicitly present."
       : "Planner omitted because it is not material to this decision.",
@@ -200,12 +198,13 @@ function decisionContext(context, plan, memoryItems=[]) {
 
 async function runDecisionPipeline({messages=[],context={},currentProfile={}}){
   if(!process.env.OPENAI_API_KEY){const error=new Error("OPENAI_API_KEY is not configured");error.code="OPENAI_NOT_CONFIGURED";throw error;}
-  const openAllocation=looksLikeOpenAllocation(messages);
-  const amount=openAllocation?explicitUsdAmount(messages):null;
-  if(openAllocation&&amount==null)return{answer:"¿Cuánto tenés disponible para invertir este mes?",preflight:{decisionType:"allocation",researchAssets:[],allocationAmountUsd:null},evidenceMatrix:null,decisionMemory:[],usage:null,usageStages:[],apiRequests:0,model:null,responseId:null,tools:{webSearchCalls:0,outputTypes:[]},pipeline:"hybrid_sol_v1"};
+  const {plan,attempt:preflightAttempt}=await runPreflight({messages,context,currentProfile});
+  if(plan.decisionType==="allocation"&&plan.allocationAmountUsd==null){
+    const preflightStage=stageUsage("preflight",preflightAttempt,0);
+    return{answer:"¿Cuánto tenés disponible para invertir en esta decisión?",preflight:plan,evidenceMatrix:null,decisionMemory:[],usage:preflightAttempt?.usage||null,usageStages:[preflightStage].filter(Boolean),apiRequests:preflightStage?1:0,model:preflightAttempt?.model||RESEARCH_MODEL,responseId:preflightAttempt?.id||null,tools:{webSearchCalls:0,outputTypes:[]},pipeline:"hybrid_sol_v1"};
+  }
 
   const memory=await selectRelevantDecisionMemory({messages,context,currentProfile});
-  const {plan,attempt:preflightAttempt}=await runPreflight({messages,context,currentProfile,amount});
   const research=await researchBatch(plan);
   const contextForDecision=decisionContext(context, plan, memory.items);
   const decision=await runSolDecision({messages,context:contextForDecision,currentProfile,preflight:plan,evidenceMatrix:research.matrix});
@@ -235,4 +234,4 @@ async function runDecisionPipeline({messages=[],context={},currentProfile={}}){
   };
 }
 
-module.exports={runDecisionPipeline};
+module.exports={goalProgress,runDecisionPipeline};
