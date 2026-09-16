@@ -77,7 +77,7 @@ function portfolioUniverse(context = {}) {
 function portfolioAssetIds(context = {}) { return portfolioUniverse(context).map(x => x.asset); }
 function compactDecisionContext(context = {}, { includePlanner = true } = {}) {
   const p = context?.portfolio || {}; const planner = context?.planner || {};
-  const result = { portfolio: { totalValueUsd: p.totalValueUsd, cryptoExposurePct: p.cryptoExposurePct, liquidityPct: p.liquidityPct,
+  const result = { portfolio: { totalValueUsd: firstFinite(p.totalValueUsd,p.portfolioTotal,p.total_value_usd), cryptoExposurePct: p.cryptoExposurePct, liquidityPct: p.liquidityPct,
     topExposures: p.topExposures || p.exposures } };
   if (includePlanner) {
     result.planner = {
@@ -160,7 +160,7 @@ async function researchBatch(plan){
 }
 
 function goalProgress(context={},plan={}){
-  const current=Number(context?.portfolio?.totalValueUsd);
+  const current=firstFinite(context?.portfolio?.totalValueUsd,context?.portfolio?.portfolioTotal,context?.portfolio?.total_value_usd);
   const target=Number(plan?.goalTargetUsd);
   const targetYear=Number(plan?.goalTargetYear);
   const currentYear=new Date().getUTCFullYear();
