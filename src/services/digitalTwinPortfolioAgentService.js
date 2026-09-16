@@ -248,6 +248,9 @@ function resolveCustodyBrokerAliasFromRows(broker,rows=[]){
   const requested=brokerKey(broker);
   const exact=rows.find(row=>brokerKey(row.raw_broker)===requested||brokerKey(row.canonical_broker)===requested);
   if(exact)return exact.canonical_broker;
+  // Numbered custody locations are distinct identities (for example Ledger 1 vs Ledger 2).
+  // Never resolve them through a shorter fuzzy alias such as "Ledger".
+  if(/\d/.test(requested))return broker;
   const compatible=rows.filter(row=>{
     const raw=brokerKey(row.raw_broker),canonical=brokerKey(row.canonical_broker);
     return requested.length>=5&&(raw.includes(requested)||requested.includes(raw)||canonical.includes(requested)||requested.includes(canonical));
