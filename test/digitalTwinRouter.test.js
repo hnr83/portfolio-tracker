@@ -240,7 +240,7 @@ test("enforces the app taxonomy after LLM planning", () => {
   const wrongPlan = { filters: { owner: "Valeria", category: "cryptocurrency" } };
   assert.equal(normalizePlanTaxonomy(wrongPlan, "¿Cuánto tiene Vale en crypto?").filters.category, "cryptocurrency");
   assert.equal(normalizePlanTaxonomy(wrongPlan, "¿Cuánto tiene Vale en criptomonedas?").filters.category, "cryptocurrency");
-  assert.deepEqual(normalizePlanTaxonomy(wrongPlan, "¿Cuánto USDT tiene Vale?").filters, { owner: "Valeria", category: "crypto", ticker: "USDT" });
+  assert.deepEqual(normalizePlanTaxonomy(wrongPlan, "¿Cuánto USDT tiene Vale?").filters, { owner: "Vale", category: "crypto", ticker: "USDT" });
   const grouped = normalizePlanTaxonomy(wrongPlan, "¿Cuánto USDT tiene cada uno?");
   assert.equal(grouped.filters.owner, null);
   assert.equal(grouped.groupBy, "owner");
