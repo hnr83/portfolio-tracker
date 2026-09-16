@@ -385,3 +385,33 @@ test("does not let a simple crypto fast path swallow a platform ratio", () => {
   );
   assert.match(answerPortfolioQuestion("¿Cuánto tengo en crypto?",context),/98\.562,57/);
 });
+
+
+test("normalizes collective owner scopes before executing a custody ratio", async () => {
+  const plan=normalizePlanTaxonomy({
+    route:"PORTFOLIO_DATA",
+    intent:"ratio",
+    datasets:["holdings"],
+    filters:{ticker:null,owner:"Horacio y Vale",broker:"Ledger 2",category:"cryptocurrency",side:null,dateFrom:null,dateTo:null},
+    denominatorFilters:{ticker:null,owner:"Horacio y Vale",broker:null,category:"cryptocurrency",side:null,dateFrom:null,dateTo:null},
+    calculation:"sum",
+    metric:"market_value_usd",
+    groupBy:null,
+    reason:"platform share of household crypto",
+  },"¿Qué porcentaje de toda nuestra posición en crypto está en Ledger 2?");
+  assert.equal(plan.filters.owner,null);
+  assert.equal(plan.denominatorFilters.owner,null);
+  const data=await require("../src/services/digitalTwinPortfolioAgentService").executePlan(plan,{
+    portfolio:{
+      portfolioTotal:222000,
+      custodyBrokerAliases:[{raw_broker:"Ledger 2",canonical_broker:"Ledger 2"}],
+      ownerHoldings:[
+        {ticker:"BTC",owner:"Horacio",platform:"Ledger 2",category:"PORTFOLIO",market_value_usd:65530.07},
+        {ticker:"ETH",owner:"Horacio",platform:"Ledger 1",category:"PORTFOLIO",market_value_usd:33032.50},
+      ],
+    },
+  });
+  assert.equal(data.ratio.numerator_usd,65530.07);
+  assert.equal(data.ratio.denominator_usd,98562.57);
+  assert.ok(Math.abs(data.ratio.percentage-66.486)<0.001);
+});
