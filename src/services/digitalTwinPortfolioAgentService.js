@@ -39,7 +39,14 @@ function normalizePlanTaxonomy(plan={},question=""){
   if(!normalized.intent)normalized.intent=normalized.calculation==="group"?"distribution":normalized.calculation||"summary";
   if(normalized.intent==="distribution")normalized.calculation="group";
   if(normalized.intent==="ratio")normalized.calculation="sum";
-  if(normalized.denominatorFilters?.owner&&ownerText(normalized.denominatorFilters.owner)==="vale")normalized.denominatorFilters.owner="Vale";
+  const canonicalOwner=(owner)=>{
+    const value=ownerText(owner);
+    if(value==="horacio")return "Horacio";
+    if(value==="vale")return "Vale";
+    return null;
+  };
+  if(normalized.filters.owner)normalized.filters.owner=canonicalOwner(normalized.filters.owner);
+  if(normalized.denominatorFilters?.owner)normalized.denominatorFilters.owner=canonicalOwner(normalized.denominatorFilters.owner);
   if(/\b(cada uno|cada titular|por titular|por owner|ambos|ambas|los dos|las dos)\b/.test(q)){
     normalized.filters.owner=null;
     normalized.calculation="group";
