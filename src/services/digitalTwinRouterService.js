@@ -58,7 +58,7 @@ function classifyTwinRoute(messages = []) {
   }
   if (CONTRIBUTIONS.test(question) && !ANALYTICAL.test(question)) return { route: "CONTRIBUTIONS_DATA", question, reason: "net_contributions_query" };
   if (((TRADING.test(question)&&FACTUAL.test(question))||tradingFollowUp) && !ANALYTICAL.test(question)) return { route: "TRADING_DATA", question, reason: tradingFollowUp?"factual_trading_follow_up":"factual_trading_query" };
-  if (FACTUAL.test(question) && !ANALYTICAL.test(question)) return { route: "INTERNAL_DATA", question, reason: "factual_portfolio_query" };
+  if (FACTUAL.test(question) && !ANALYTICAL.test(question)) return { route: "TWIN_ANALYSIS", question, reason: "factual_portfolio_query" };
   return { route: "TWIN_ANALYSIS", question, reason: "reasoning_required" };
 }
 
@@ -72,37 +72,6 @@ function number(value, digits = 6) {
 
 function percent(value) {
   return `${number(value, 2)}%`;
-}
-
-function findHolding(question, portfolio = {}) {
-  const holdings = Array.isArray(portfolio.holdings) ? portfolio.holdings : [];
-  return holdings.find((holding) => {
-    const ticker = String(holding.ticker || "").toUpperCase();
-    return ticker && new RegExp(`\\b${ticker.replace(/[^A-Z0-9]/g, "")}\\b`, "i").test(question);
-  });
-}
-
-function answerPortfolioQuestion(question, context = {}) {
-  const portfolio = context.portfolio || context || {};
-  const requiresSemanticPlan=/\b(porcentaje|representa|peso|compar(?:á|a|ar)|distribu(?:ye|ci[oó]n)|titular|titulares|owner|plataforma|plataformas|broker|brokers)\b/i.test(question);
-  if(requiresSemanticPlan)return null;
-  const groupedQuestion=/\b(cada uno|cada titular|por titular|por owner|ambos|ambas|los dos|las dos|entre\s+(horacio|vale|valeria))\b/i.test(question);
-  if(groupedQuestion)return null;
-  const ownershipQuestion=/\b(titular|titulares|nombre de|horacio|valeria|vale|owner)\b/i.test(question);
-  // Owner-aware answers must use the AI planner plus reconciled Custody data.
-  if(ownershipQuestion)return null;
-  const holding = findHolding(question, portfolio);
-  if (holding) {
-    const parts = [`Tenés ${number(holding.quantity)} ${holding.ticker}`];
-    if (holding.valueUsd != null) parts.push(`con un valor actual de ${usd(holding.valueUsd)}`);
-    if (holding.weightPct != null) parts.push(`y representa ${percent(holding.weightPct)} de la cartera`);
-    return `${parts.join(" ")}.`;
-  }
-  if (/\b(usdt)\b/i.test(question)) return `Tenés ${usd(portfolio.usdt)} en USDT.`;
-  if (/\b(liquidez|cash|efectivo|disponible)\b/i.test(question)) return `Tu liquidez registrada es ${usd(portfolio.investableLiquidity)}, equivalente al ${percent(portfolio.liquidityWeight)} de la cartera.`;
-  if (/\b(crypto|criptomonedas?)\b/i.test(question)) return `Tu exposición a crypto es ${usd(portfolio.crypto)}, equivalente al ${percent(portfolio.cryptoWeight)} de la cartera.`;
-  if (/\b(total|cartera|portfolio)\b/i.test(question)) return `El valor total registrado de tu portfolio es ${usd(portfolio.portfolioTotal)}.`;
-  return null;
 }
 
 async function answerTradingQuestion(question) {
@@ -194,10 +163,6 @@ async function answerWithdrawals(question){
 }
 
 async function resolveRoutedQuestion(route, context = {}) {
-  if (route.route === "INTERNAL_DATA") {
-    const answer = answerPortfolioQuestion(route.question, context);
-    return answer ? { answer, route: route.route, dataSources: ["portfolio_context"] } : null;
-  }
   if (route.route === "TRADING_DATA") {
     const answer = await answerTradingQuestion(route.question);
     return { answer, route: route.route, dataSources: ["vw_trading_summary", "vw_trading_by_asset"] };
@@ -213,4 +178,4 @@ async function resolveRoutedQuestion(route, context = {}) {
   return null;
 }
 
-module.exports = { answerPortfolioQuestion, classifyTwinRoute, resolveRoutedQuestion };
+module.exports = { classifyTwinRoute, resolveRoutedQuestion };
