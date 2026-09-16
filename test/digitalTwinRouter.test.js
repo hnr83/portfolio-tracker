@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 process.env.BIGQUERY_PROJECT_ID ||= "test-project";
 process.env.BIGQUERY_DATASET_ID ||= "test-dataset";
 
-const { answerPortfolioQuestion, classifyTwinRoute } = require("../src/services/digitalTwinRouterService");
+const { classifyTwinRoute } = require("../src/services/digitalTwinRouterService");
 const { matches, normalizePlanTaxonomy, resolveCustodyBrokerAliasFromRows } = require("../src/services/digitalTwinPortfolioAgentService");
 
 const messages = (content) => [{ role: "user", content }];
@@ -27,9 +27,9 @@ test("forces global platform and owner questions through custody holdings", () =
   assert.equal(plan.metric,"market_value_usd");
 });
 
-test("routes factual portfolio questions without an LLM", () => {
-  assert.equal(classifyTwinRoute(messages("¿Cuánto BTC tengo?")).route, "INTERNAL_DATA");
-  assert.equal(classifyTwinRoute(messages("¿Cuál es mi liquidez?")).route, "INTERNAL_DATA");
+test("routes factual portfolio questions through the AI data planner", () => {
+  assert.equal(classifyTwinRoute(messages("¿Cuánto BTC tengo?")).route, "TWIN_ANALYSIS");
+  assert.equal(classifyTwinRoute(messages("¿Cuál es mi liquidez?")).route, "TWIN_ANALYSIS");
 });
 
 test("routes factual trading questions to trading data", () => {
@@ -128,7 +128,7 @@ test("does not let withdrawal history hijack a new BTC factual question", () => 
     {role:"assistant",content:"Horacio... Vale..."},
     {role:"user",content:"¿Cuánto ganamos o perdimos con BTC en 2026 y cómo se distribuye entre Horacio y Vale?"},
   ]);
-  assert.equal(route.route,"INTERNAL_DATA");
+  assert.equal(route.route,"TWIN_ANALYSIS");
   assert.notEqual(route.route,"WITHDRAWALS_DATA");
 });
 
@@ -189,38 +189,6 @@ test("keeps judgment and current-market questions in an LLM pipeline", () => {
   assert.equal(classifyTwinRoute(messages("¿Estoy demasiado expuesto a BTC?")).route, "TWIN_ANALYSIS");
   assert.equal(classifyTwinRoute(messages("¿Conviene comprar BTC con el precio de hoy?")).route, "EXTERNAL_ANALYSIS");
   assert.equal(classifyTwinRoute(messages("¿Qué patrón ves en mis trades perdedores?")).route, "TWIN_ANALYSIS");
-});
-
-test("answers a holding question from deterministic context", () => {
-  const answer = answerPortfolioQuestion("¿Cuánto BTC tengo?", {
-    portfolioTotal: 200000,
-    holdings: [{ ticker: "BTC", quantity: 0.81, valueUsd: 64000, weightPct: 32 }],
-  });
-  assert.match(answer, /0,81 BTC/);
-  assert.match(answer, /US\$\s?64\.000/);
-  assert.match(answer, /32%/);
-});
-
-test("routes every owner-aware answer past the deterministic fast path", () => {
-  const context={ownership:[
-    {owner:"Horacio",valueUsd:180000,assetCount:14,weightPct:75},
-    {owner:"Valeria",valueUsd:60000,assetCount:6,weightPct:25},
-  ]};
-  assert.equal(answerPortfolioQuestion("¿Cuántos activos están a nombre de Horacio y cuántos de Valeria?",context),null);
-  assert.equal(answerPortfolioQuestion("¿Cuánto tiene Horacio en total y cómo se distribuye entre sus plataformas?",context),null);
-});
-
-test("does not use the ownership fast path when another filter is requested", () => {
-  const answer = answerPortfolioQuestion("¿Cuánto tiene Valeria en crypto?", {
-    ownership: [{ owner: "Valeria", valueUsd: 60000, assetCount: 6, weightPct: 25 }],
-  });
-  assert.equal(answer, null);
-});
-
-test("does not use a total holding fast path for grouped owner questions", () => {
-  const context = { holdings: [{ ticker: "USDT", quantity: 8000, valueUsd: 7990 }] };
-  assert.equal(answerPortfolioQuestion("¿Cuánto USDT tiene cada uno?", context), null);
-  assert.equal(answerPortfolioQuestion("¿Cómo se distribuye USDT por titular?", context), null);
 });
 
 test("generic data tools combine owner, asset, broker and dates", () => {
@@ -374,16 +342,6 @@ test("preserves a generic AI plan that distributes one owner by platform", () =>
   assert.equal(plan.filters.owner,"Horacio");
   assert.equal(plan.groupBy,"platform");
   assert.equal(plan.intent,"distribution");
-});
-
-
-test("does not let a simple crypto fast path swallow a platform ratio", () => {
-  const context={portfolioTotal:222000,crypto:98562.57,cryptoWeight:44.33};
-  assert.equal(
-    answerPortfolioQuestion("¿Qué porcentaje de toda nuestra posición en crypto está en Ledger 2?",context),
-    null,
-  );
-  assert.match(answerPortfolioQuestion("¿Cuánto tengo en crypto?",context),/98\.562,57/);
 });
 
 
