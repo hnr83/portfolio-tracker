@@ -375,3 +375,13 @@ test("preserves a generic AI plan that distributes one owner by platform", () =>
   assert.equal(plan.groupBy,"platform");
   assert.equal(plan.intent,"distribution");
 });
+
+
+test("does not let a simple crypto fast path swallow a platform ratio", () => {
+  const context={portfolioTotal:222000,crypto:98562.57,cryptoWeight:44.33};
+  assert.equal(
+    answerPortfolioQuestion("¿Qué porcentaje de toda nuestra posición en crypto está en Ledger 2?",context),
+    null,
+  );
+  assert.match(answerPortfolioQuestion("¿Cuánto tengo en crypto?",context),/98\.562,57/);
+});
