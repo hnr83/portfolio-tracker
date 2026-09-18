@@ -453,10 +453,46 @@ async function getAssetDetail(req, res) {
     if (!ticker) return res.status(400).json({ error: "Ticker is required" });
 
     const currentQuery = `
+      WITH matched_positions AS (
+        SELECT
+          CAST(quantity_net AS FLOAT64) AS quantity_net,
+          CAST(cost_value_usd AS FLOAT64) AS cost_value_usd,
+          category,
+          underlying_ticker,
+          CAST(ratio_numerator AS FLOAT64) AS ratio_numerator,
+          CAST(ratio_denominator AS FLOAT64) AS ratio_denominator
+        FROM ${table('vw_portfolio_valued')}
+        WHERE ticker = @ticker OR normalized_ticker = @ticker
+      ),
+      holding_reference AS (
+        SELECT
+          CASE
+            WHEN ANY_VALUE(category) = 'PORTFOLIO'
+                 AND ANY_VALUE(underlying_ticker) IS NOT NULL
+                 AND ANY_VALUE(ratio_numerator) IS NOT NULL
+                 AND ANY_VALUE(ratio_denominator) IS NOT NULL
+                 AND ANY_VALUE(ratio_denominator) != 0
+            THEN SAFE_DIVIDE(SUM(cost_value_usd), NULLIF(SUM(quantity_net), 0))
+                 * SAFE_DIVIDE(ANY_VALUE(ratio_numerator), ANY_VALUE(ratio_denominator))
+            WHEN ANY_VALUE(category) = 'PORTFOLIO'
+            THEN SAFE_DIVIDE(SUM(cost_value_usd), NULLIF(SUM(quantity_net), 0))
+            ELSE NULL
+          END AS reference_value,
+          CASE
+            WHEN ANY_VALUE(category) = 'PORTFOLIO'
+                 AND ANY_VALUE(underlying_ticker) IS NOT NULL
+            THEN 'PPC Underlying'
+            WHEN ANY_VALUE(category) = 'PORTFOLIO'
+            THEN 'PPC USD'
+            ELSE NULL
+          END AS reference_type
+        FROM matched_positions
+      )
       SELECT
         ticker, normalized_ticker, category, quantity_net, market_price,
         price_currency, underlying_ticker, ratio_numerator, ratio_denominator,
         market_value_usd, cost_value_usd, pnl_usd, pnl_pct,
+        holding_reference.reference_value, holding_reference.reference_type,
         (
           SELECT MIN(m.fecha)
           FROM ${table('movements')} m
@@ -467,6 +503,7 @@ async function getAssetDetail(req, res) {
           (SELECT SUM(CAST(market_value_usd AS FLOAT64)) FROM ${table('vw_portfolio_valued')})
         ) * 100 AS current_weight_pct
       FROM ${table('vw_portfolio_valued')} vp
+      CROSS JOIN holding_reference
       WHERE vp.ticker = @ticker OR vp.normalized_ticker = @ticker
       ORDER BY market_value_usd DESC
       LIMIT 1

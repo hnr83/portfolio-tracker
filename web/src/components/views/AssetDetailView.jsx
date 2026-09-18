@@ -67,6 +67,8 @@ export default function AssetDetailView({ selectedAsset, onBack, onTransactions 
   const last = quantityRows[quantityRows.length - 1];
   const quantityDelta = first && last ? last.quantity - first.quantity : 0;
   const quantityDeltaPct = first?.quantity ? quantityDelta / first.quantity * 100 : null;
+  const currentValueDetail = `${formatNumber(asset?.quantity_net, 6)} ${displayTicker}`
+    + (asset?.reference_value == null ? "" : ` · PPC ${formatCurrency(asset.reference_value, "USD")}`);
 
   if (loading) return <div className="rounded-[22px] border border-slate-800 bg-slate-950/70 p-8 text-slate-300">Cargando evolución del activo...</div>;
   if (error || !asset) return <div className="space-y-4"><button onClick={onBack} className="text-sm text-slate-400 hover:text-white">← Volver</button><div className="rounded-2xl border border-red-900 bg-red-950/40 p-5 text-red-300">{error || "Activo no encontrado"}</div></div>;
@@ -84,7 +86,7 @@ export default function AssetDetailView({ selectedAsset, onBack, onTransactions 
     </div>
 
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      <Metric label="Valor actual" value={formatCurrency(asset.market_value_usd, "USD")} detail={`${formatNumber(asset.quantity_net, 6)} ${displayTicker}`} />
+      <Metric label="Valor actual" value={formatCurrency(asset.market_value_usd, "USD")} detail={currentValueDetail} />
       <Metric label="Peso en cartera" value={formatPortfolioPercent(data.summary.current_weight_pct)} detail="Sobre el portfolio total" />
       <Metric label="PnL acumulado" value={formatCurrency(asset.pnl_usd, "USD")} detail={formatPortfolioPercent(Number(asset.pnl_pct || 0) * 100)} positive={Number(asset.pnl_usd) >= 0} />
       <Metric label={`Acumulación ${range}`} value={`${quantityDelta >= 0 ? "+" : ""}${formatNumber(quantityDelta, 6)}`} detail={quantityDeltaPct == null ? "Sin base comparable" : `${quantityDeltaPct >= 0 ? "+" : ""}${formatPortfolioPercent(quantityDeltaPct)} nominal`} positive={quantityDelta >= 0} />
