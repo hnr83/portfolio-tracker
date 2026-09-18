@@ -80,8 +80,7 @@ export default function AssetDetailView({ selectedAsset, onBack, onTransactions 
   const hasOneYearHistory = hasAtLeastOneYear(data?.summary?.price_history_start_date, latestPriceDate);
   const availableRanges = hasOneYearHistory ? RANGES : RANGES.filter((item) => item !== "1Y" && item !== "MAX");
   const visiblePeriods = (data?.periods || []).filter((item) => hasOneYearHistory || (item.period !== "1Y" && item.period !== "MAX"));
-  const currentValueDetail = `${formatNumber(asset?.quantity_net, 6)} ${displayTicker}`
-    + (asset?.reference_value == null ? "" : ` · PPC ${formatCurrency(asset.reference_value, "USD")}`);
+  const currentValueDetail = `${formatNumber(asset?.quantity_net, 6)} ${displayTicker}`;
 
   useEffect(() => {
     if (data && !availableRanges.includes(range)) setRange("YTD");
@@ -139,7 +138,7 @@ export default function AssetDetailView({ selectedAsset, onBack, onTransactions 
       <h2 className="text-lg font-semibold text-white">Detalle de tu posición</h2>
       <div className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
         <div className="rounded-2xl border border-slate-800/70 bg-slate-900/30 p-4"><span className="text-slate-500">Precio actual</span><div className="mt-1.5 font-medium tabular-nums text-white">{formatCurrency(asset.market_price, asset.price_currency || "USD")}</div></div>
-        <div className="rounded-2xl border border-slate-800/70 bg-slate-900/30 p-4"><span className="text-slate-500">Costo total</span><div className="mt-1.5 font-medium tabular-nums text-white">{formatCurrency(asset.cost_value_usd, "USD")}</div></div>
+        <div className="rounded-2xl border border-slate-800/70 bg-slate-900/30 p-4"><span className="text-slate-500">Costo de posición</span><div className="mt-1.5 font-medium tabular-nums text-white">{formatCurrency(asset.cost_value_usd, "USD")}</div>{asset.reference_value != null && <div className="mt-1 text-xs tabular-nums text-slate-400">PPC · {formatCurrency(asset.reference_value, "USD")}</div>}</div>
         <div className="rounded-2xl border border-slate-800/70 bg-slate-900/30 p-4"><span className="text-slate-500">Primera posición</span><div className="mt-1.5 font-medium tabular-nums text-white">{data.summary.first_position_date || "-"}</div></div>
       </div>
     </div>
