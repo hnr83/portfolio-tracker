@@ -137,11 +137,10 @@ export default function AssetDetailView({ selectedAsset, onBack, onTransactions 
 
     <div className="rounded-[22px] border border-slate-800/80 bg-slate-950/70 p-5">
       <h2 className="text-lg font-semibold text-white">Detalle de tu posición</h2>
-      <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-        <div><span className="text-slate-500">Precio actual</span><div className="mt-1 text-white">{formatCurrency(asset.market_price, asset.price_currency || "USD")}</div></div>
-        <div><span className="text-slate-500">Costo total</span><div className="mt-1 text-white">{formatCurrency(asset.cost_value_usd, "USD")}</div></div>
-        <div><span className="text-slate-500">Primera posición</span><div className="mt-1 text-white">{data.summary.first_position_date || "-"}</div></div>
-        <button onClick={() => onTransactions(asset)} className="text-left"><span className="text-slate-500">Operaciones</span><div className="mt-1 font-medium text-indigo-400">Ver transacciones →</div></button>
+      <div className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
+        <div className="rounded-2xl border border-slate-800/70 bg-slate-900/30 p-4"><span className="text-slate-500">Precio actual</span><div className="mt-1.5 font-medium tabular-nums text-white">{formatCurrency(asset.market_price, asset.price_currency || "USD")}</div></div>
+        <div className="rounded-2xl border border-slate-800/70 bg-slate-900/30 p-4"><span className="text-slate-500">Costo total</span><div className="mt-1.5 font-medium tabular-nums text-white">{formatCurrency(asset.cost_value_usd, "USD")}</div></div>
+        <div className="rounded-2xl border border-slate-800/70 bg-slate-900/30 p-4"><span className="text-slate-500">Primera posición</span><div className="mt-1.5 font-medium tabular-nums text-white">{data.summary.first_position_date || "-"}</div></div>
       </div>
     </div>
   </div>;
