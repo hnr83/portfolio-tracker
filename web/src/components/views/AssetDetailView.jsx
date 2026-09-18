@@ -7,6 +7,15 @@ import { usePortfolioData } from "../../context/PortfolioDataContext";
 
 const RANGES = ["30D", "YTD", "1Y", "MAX"];
 
+function hasAtLeastOneYear(startDate, endDate) {
+  if (!startDate || !endDate) return false;
+  const anniversary = new Date(`${startDate}T00:00:00Z`);
+  const end = new Date(`${endDate}T00:00:00Z`);
+  if (Number.isNaN(anniversary.getTime()) || Number.isNaN(end.getTime())) return false;
+  anniversary.setUTCFullYear(anniversary.getUTCFullYear() + 1);
+  return end >= anniversary;
+}
+
 function dateForRange(range) {
   const date = new Date();
   if (range === "30D") date.setUTCDate(date.getUTCDate() - 30);
@@ -67,8 +76,15 @@ export default function AssetDetailView({ selectedAsset, onBack, onTransactions 
   const last = quantityRows[quantityRows.length - 1];
   const quantityDelta = first && last ? last.quantity - first.quantity : 0;
   const quantityDeltaPct = first?.quantity ? quantityDelta / first.quantity * 100 : null;
-  const currentValueDetail = `${formatNumber(asset?.quantity_net, 6)} ${displayTicker}`
-    + (asset?.reference_value == null ? "" : ` · PPC ${formatCurrency(asset.reference_value, "USD")}`);
+  const latestPriceDate = data?.series?.[data.series.length - 1]?.date;
+  const hasOneYearHistory = hasAtLeastOneYear(data?.summary?.price_history_start_date, latestPriceDate);
+  const availableRanges = hasOneYearHistory ? RANGES : RANGES.filter((item) => item !== "1Y" && item !== "MAX");
+  const visiblePeriods = (data?.periods || []).filter((item) => hasOneYearHistory || (item.period !== "1Y" && item.period !== "MAX"));
+  const currentValueDetail = `${formatNumber(asset?.quantity_net, 6)} ${displayTicker}`;
+
+  useEffect(() => {
+    if (data && !availableRanges.includes(range)) setRange("YTD");
+  }, [availableRanges, data, range]);
 
   if (loading) return <div className="rounded-[22px] border border-slate-800 bg-slate-950/70 p-8 text-slate-300">Cargando evolución del activo...</div>;
   if (error || !asset) return <div className="space-y-4"><button onClick={onBack} className="text-sm text-slate-400 hover:text-white">← Volver</button><div className="rounded-2xl border border-red-900 bg-red-950/40 p-5 text-red-300">{error || "Activo no encontrado"}</div></div>;
@@ -93,7 +109,7 @@ export default function AssetDetailView({ selectedAsset, onBack, onTransactions 
     </div>
 
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-      {(data.periods || []).map((item) => <div key={item.period} className="rounded-2xl border border-slate-800/80 bg-slate-950/70 p-3">
+      {visiblePeriods.map((item) => <div key={item.period} className="rounded-2xl border border-slate-800/80 bg-slate-950/70 p-3">
         <div className="text-xs font-medium text-slate-400">{item.period}</div>
         <div className={`mt-2 text-base font-semibold tabular-nums ${Number(item.pnl_usd) >= 0 ? "text-emerald-400" : "text-red-400"}`}>{item.pnl_usd == null ? "-" : formatCurrency(item.pnl_usd, "USD")}</div>
         <div className={`mt-1 text-xs tabular-nums ${Number(item.pnl_pct) >= 0 ? "text-emerald-400" : "text-red-400"}`}>{item.pnl_pct == null ? "-" : `${item.pnl_pct >= 0 ? "+" : ""}${formatPortfolioPercent(item.pnl_pct)}`}</div>
@@ -105,7 +121,7 @@ export default function AssetDetailView({ selectedAsset, onBack, onTransactions 
         <div><h2 className="text-lg font-semibold text-white">Evolución en tu cartera</h2><p className="mt-1 text-xs text-slate-400">{chartMetric === "quantity" ? `Acumulación nominal desde tu primera operación${data.summary.first_position_date ? ` · ${data.summary.first_position_date}` : ""}` : `Valor y peso histórico${data.summary.price_history_start_date ? ` · Precios disponibles desde ${data.summary.price_history_start_date}` : ""}`}</p></div>
         <div className="flex flex-wrap gap-2">
           {[{ key: "market_value_usd", label: "Valor" }, { key: "quantity", label: "Cantidad" }, { key: "portfolio_weight_pct", label: "Peso" }].map((item) => <button key={item.key} onClick={() => setChartMetric(item.key)} className={`rounded-xl px-3 py-2 text-xs ${chartMetric === item.key ? "bg-indigo-500 text-white" : "bg-slate-900 text-slate-400"}`}>{item.label}</button>)}
-          {RANGES.map((item) => <button key={item} onClick={() => setRange(item)} className={`rounded-xl px-3 py-2 text-xs ${range === item ? "bg-slate-700 text-white" : "text-slate-500 hover:text-white"}`}>{item}</button>)}
+          {availableRanges.map((item) => <button key={item} onClick={() => setRange(item)} className={`rounded-xl px-3 py-2 text-xs ${range === item ? "bg-slate-700 text-white" : "text-slate-500 hover:text-white"}`}>{item}</button>)}
         </div>
       </div>
       <div className="mt-5 h-[310px] w-full">
@@ -120,11 +136,10 @@ export default function AssetDetailView({ selectedAsset, onBack, onTransactions 
 
     <div className="rounded-[22px] border border-slate-800/80 bg-slate-950/70 p-5">
       <h2 className="text-lg font-semibold text-white">Detalle de tu posición</h2>
-      <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-        <div><span className="text-slate-500">Precio actual</span><div className="mt-1 text-white">{formatCurrency(asset.market_price, asset.price_currency || "USD")}</div></div>
-        <div><span className="text-slate-500">Costo total</span><div className="mt-1 text-white">{formatCurrency(asset.cost_value_usd, "USD")}</div></div>
-        <div><span className="text-slate-500">Primera posición</span><div className="mt-1 text-white">{data.summary.first_position_date || "-"}</div></div>
-        <button onClick={() => onTransactions(asset)} className="text-left"><span className="text-slate-500">Operaciones</span><div className="mt-1 font-medium text-indigo-400">Ver transacciones →</div></button>
+      <div className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
+        <div className="rounded-2xl border border-slate-800/70 bg-slate-900/30 p-4"><span className="text-slate-500">Precio actual</span><div className="mt-1.5 font-medium tabular-nums text-white">{formatCurrency(asset.market_price, asset.price_currency || "USD")}</div></div>
+        <div className="rounded-2xl border border-slate-800/70 bg-slate-900/30 p-4"><span className="text-slate-500">Costo de posición</span><div className="mt-1.5 font-medium tabular-nums text-white">{formatCurrency(asset.cost_value_usd, "USD")}</div>{asset.reference_value != null && <div className="mt-1 text-xs tabular-nums text-slate-400">PPC · {formatCurrency(asset.reference_value, "USD")}</div>}</div>
+        <div className="rounded-2xl border border-slate-800/70 bg-slate-900/30 p-4"><span className="text-slate-500">Primera posición</span><div className="mt-1.5 font-medium tabular-nums text-white">{data.summary.first_position_date || "-"}</div></div>
       </div>
     </div>
   </div>;
