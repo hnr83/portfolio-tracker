@@ -1,7 +1,5 @@
 const { runQuery } = require('../services/bigQueryService');
 const { table } = require('../utils/bigqueryHelper');
-const { buildDecisionMaker } = require("../services/decisionMakerService");
-const investmentThesis = require("../config/investmentThesis");
 const { getBingxSpotHistoryOrders, getBingxSpotMyTrades, } = require("../services/providers/bingxService");
 const crypto = require("crypto");
 
@@ -1508,64 +1506,6 @@ async function getVintageReturns(req, res) {
   }
 }
 
-async function getDecisionMaker(req, res) {
-  try {
-    const holdingsQuery = `
-      SELECT
-        ticker,
-        normalized_ticker,
-        market_price,
-        market_value_usd,
-        cost_value_usd
-      FROM ${table('vw_portfolio_valued')}
-      WHERE market_value_usd IS NOT NULL
-    `;
-
-    const marketQuery = `
-      SELECT *
-      FROM ${table('vw_market_watch')}
-    `;
-
-    const tradingBalancesQuery = `
-      SELECT
-        asset,
-        quantity,
-        price_usd,
-        market_value_usd
-      FROM ${table('vw_trading_balances_valued')}
-    `;
-
-    const [holdingsRows, marketRows, tradingBalancesRows] = await Promise.all([
-      runQuery(holdingsQuery),
-      runQuery(marketQuery),
-      runQuery(tradingBalancesQuery),
-    ]);
-
-    const holdings = normalizeBigQueryRows(holdingsRows);
-    const marketData = normalizeBigQueryRows(marketRows);
-    const tradingBalances = normalizeBigQueryRows(tradingBalancesRows);
-
-    const tradingUsd = tradingBalances.reduce((sum, row) => {
-      return sum + Number(row.market_value_usd || 0);
-    }, 0);
-
-    const result = await buildDecisionMaker({
-      holdings,
-      marketData,
-      tradingUsd,
-    });
-
-    res.json(result);
-  } catch (error) {
-    console.error("Error in getDecisionMaker:", error);
-
-    res.status(500).json({
-      error: "Error building decision maker",
-      details: error.message,
-    });
-  }
-}
-
 async function getBingxSpotDebug(req, res) {
   try {
     const { symbol = "BTC-USDT", lookbackDays = 7, limit = 100 } = req.query;
@@ -2155,7 +2095,6 @@ module.exports = {
   getAssetPerformance,
   getHistoricalPerformance,
   getVintageReturns,
-  getDecisionMaker,
   getBingxSpotDebug,
   getBingxSpotSyncPreview,
   syncBingxSpotConfirm,

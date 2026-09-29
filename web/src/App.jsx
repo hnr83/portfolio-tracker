@@ -7,7 +7,6 @@ import TransactionsView from "./components/views/TransactionsView";
 import HoldingsView from "./components/views/HoldingsView";
 import DashboardView from "./components/views/DashboardView";
 import TradingView from "./components/views/TradingView";
-import DecisionMaker from "./components/views/DecisionMaker";
 import DigitalInvestmentTwinView from "./components/views/DigitalInvestmentTwinView";
 import SortableHeader from "./components/shared/SortableHeader";
 import SectionShell from "./components/layout/SectionShell";
@@ -202,7 +201,6 @@ function AppContent() {
           {activeView === "history" && <HistoryView />}
           {activeView === "capital" && <CapitalView summary={summary} positions={positions} />}
           {activeView === "trading" && <TradingView />}
-          {activeView === "decision-maker" && <DecisionMaker />}
           {activeView === "custody" && <CustodyAuditView />}
           {activeView === "settings" && <SettingsView />}
         </div>
