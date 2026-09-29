@@ -23,7 +23,6 @@ const {
   getAssetPerformance,
   getHistoricalPerformance,
   getVintageReturns,
-  getDecisionMaker,
   getBingxSpotDebug,
   getBingxSpotSyncPreview,
   syncBingxSpotConfirm,
@@ -51,7 +50,6 @@ router.get("/benchmark", getBenchmarkComparison);
 router.get("/performance",getAssetPerformance);
 router.get("/historical-performance", getHistoricalPerformance);
 router.get("/vintage-returns", getVintageReturns);
-router.get("/decision-maker", getDecisionMaker);
 router.get("/bingx-spot/debug", getBingxSpotDebug);
 router.get("/bingx-spot/sync-preview", getBingxSpotSyncPreview);
 router.post("/bingx-spot/sync-confirm", syncBingxSpotConfirm);
